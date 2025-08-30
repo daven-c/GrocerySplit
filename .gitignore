@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+.venv.bak/
+
+# Flask instance and uploads
+instance/
+uploads/
+
+# Environment variables
+.env
+.env.*
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React build
+frontend/build/
+frontend/.cache/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# Coverage reports
+coverage/
+*.cover
+*.coverage
+*.lcov
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# IDE/editor folders
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs
+*.log
+
+# Misc
+*.bak
+*.swp
+*.tmp
+*.temp
+*.orig
+
+# Mac system files
+.AppleDouble
+.LSOverride
+
+# Windows system files
+$RECYCLE.BIN/
+
+# Test output
+junit.xml
+test-results/
