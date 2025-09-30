@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 # Load environment variables
 load_dotenv()
 
+# Load central configuration
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+with open(CONFIG_FILE, 'r') as f:
+    config = json.load(f)
+
 # Point static_folder to the root of the build directory, template_folder remains the same
 app = Flask(__name__, static_folder='../frontend/build',
             template_folder='../frontend/build')
@@ -814,4 +819,4 @@ def process_receipt_with_ocr(image_path):
 if __name__ == '__main__':
     load_data()
     load_sessions_from_disk()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=config['ports']['backend'])

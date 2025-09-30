@@ -1,451 +1,172 @@
 {
     "items": {
-        "98275405-ee31-4575-b16b-83ab8496ab60": {
-            "name": "Smoked Salmon",
-            "price": 3.99,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "4d258090-5a55-455b-af9b-cbce84540c84": {
-            "name": "Smoked Salmon",
-            "price": 3.99,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "826e3834-9035-4580-b3e3-1aade1ef8e84": {
-            "name": "POST Oat Cereal",
-            "price": 4.93,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "dd94d44e-416c-4543-9245-7af31a7d9a61": {
-            "name": "Barilla Penne",
-            "price": 1.84,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "189fb666-3e07-44b3-9734-7a6913f1e0b8": {
-            "name": "Barilla Penne",
-            "price": 1.84,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "cbc2d63f-69da-4a14-ba92-003a93df4006": {
-            "name": "Barilla Penne",
-            "price": 1.84,
+        "24d35714-5e1a-4a18-931b-56f8d8a04631": {
+            "name": "Description",
+            "price": 17.76,
             "assigned_users": [
                 "andy"
             ]
         },
-        "d766c12b-816d-4af3-b272-272e7894ba39": {
-            "name": "Chicken Stock",
-            "price": 1.35,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "2e37ea87-3656-4d6b-9ae5-23123246780d": {
-            "name": "Chicken Stock",
-            "price": 1.35,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "924cfc33-03bc-4189-b7c9-e2254c20db1f": {
-            "name": "Whipping Cream",
-            "price": 4.99,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "f2e96bfa-a21b-4391-a8bd-bc60b7cadb41": {
-            "name": "Tyson Ground Beef",
-            "price": 6.59,
-            "assigned_users": [
-                "daven"
-            ]
-        },
-        "e22acad1-c056-4537-a00b-d9c4dec38076": {
-            "name": "Tyson Ground Beef",
-            "price": 6.59,
-            "assigned_users": [
-                "justin"
-            ]
-        },
-        "87da70f4-e60e-412d-98c3-0126b6ac3617": {
-            "name": "Tyson Ground Beef",
-            "price": 6.59,
-            "assigned_users": [
-                "justin"
-            ]
-        },
-        "9b0945fe-7b6a-400d-b9df-25bedefcac05": {
-            "name": "Butternut Squash",
-            "price": 1.79,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "11be5550-4b77-468e-b30a-117c0add866a": {
-            "name": "Butternut Squash",
-            "price": 1.79,
+        "f9315951-26c8-4f23-9f87-fade61edf39e": {
+            "name": "Me 31 Ib @",
+            "price": 7.69,
             "assigned_users": [
                 "andy"
             ]
         },
-        "a5087aac-52aa-4979-8912-89a3bf53d2bc": {
-            "name": "Italian Cheese",
-            "price": 4.22,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "8df544a5-4f3f-49ba-bd48-a03b8847aaf5": {
-            "name": "Broccoli Florets FZ",
-            "price": 2.74,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "964b9872-8efb-4a0d-ad70-950e621450b6": {
-            "name": "Bnless Skinless Chicken",
-            "price": 11.49,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "23832303-43c3-40ce-b0f4-93ef5e4d98d7": {
-            "name": "Alaska Pollock",
-            "price": 4.39,
-            "assigned_users": [
-                "daven"
-            ]
-        },
-        "22ba0448-2e5c-4e06-9b9f-0faf37dd73bc": {
-            "name": "Broccoli Florets FZ",
-            "price": 2.74,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "f3b39de9-d559-4687-8a5e-91def2173d46": {
-            "name": "Tyson Ground Beef",
-            "price": 6.59,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "db107d44-3304-4e99-81ed-ba2935085e47": {
-            "name": "Tyson Ground Beef",
-            "price": 6.59,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "7e1e42f7-f652-4a4f-9de0-35e0ab9da2fa": {
-            "name": "Jasmine Rice",
-            "price": 6.19,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "b56e6416-dd1b-483e-aabb-31d6c8efc5cc": {
-            "name": "Jasmine Rice",
-            "price": 6.19,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "f4fd59ce-7494-4985-a5c6-009c80bc54aa": {
-            "name": "Everything Bagels",
-            "price": 1.98,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "3c5ebebb-db84-47f6-ab19-e6ea708cb4f1": {
-            "name": "Everything Bagels",
-            "price": 1.98,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "20c18d99-ecf6-4220-a908-8770776c3a2d": {
-            "name": "Corn Tortillas",
-            "price": 1.69,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "061f72a1-999d-4ba3-a7d5-ddfd6c040ed1": {
-            "name": "Bnless Skinless Chicken",
-            "price": 12.89,
-            "assigned_users": [
-                "justin",
-                "andy"
-            ]
-        },
-        "ff3f409c-5f55-426e-9ade-525ba8c31ade": {
-            "name": "Almond Granola Bar",
-            "price": 1.99,
-            "assigned_users": [
-                "daven"
-            ]
-        },
-        "708502f2-9eb3-4c20-8665-c713c5975651": {
-            "name": "Almond Granola Bar",
-            "price": 1.99,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "16d9755a-0fff-45ad-93bf-dc44e9072bd8": {
-            "name": "Mint Ice Cream",
-            "price": 2.99,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "9678afb3-01c7-4901-91c6-a55647878990": {
-            "name": "Sweet Kernel Corn",
-            "price": 0.64,
-            "assigned_users": [
-                "ritz"
-            ]
-        },
-        "f0901621-8c25-4d40-b7b3-fad866ea5aea": {
-            "name": "Sweet Kernel Corn",
-            "price": 0.64,
-            "assigned_users": [
-                "justin"
-            ]
-        },
-        "46f6ffea-f29d-4631-9441-3b1691a884cb": {
-            "name": "Crunchy Granola",
-            "price": 2.09,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "48e25d0d-c59e-4478-912f-3c29201a16af": {
-            "name": "Homestyle Coleslaw",
-            "price": 2.99,
-            "assigned_users": [
-                "daven"
-            ]
-        },
-        "35a9c316-bcab-4e81-942e-39b5d8747be9": {
-            "name": "Soy Sauce",
-            "price": 1.55,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "20eb5227-c3ae-437f-bbd0-77f59c225ea2": {
-            "name": "Soy Sauce",
-            "price": 1.55,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "1f21b3e9-896f-4e86-bd02-c180e4e22c24": {
-            "name": "Greek Yogurt",
-            "price": 3.49,
-            "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "a80efeef-3e3d-46f9-83c0-86c22a327817": {
-            "name": "Marinara Pasta Sauce",
-            "price": 1.45,
-            "assigned_users": [
-                "ritz",
-                "andy"
-            ]
-        },
-        "a158ff10-1e7a-45dd-b546-a47647d5e218": {
-            "name": "Unsalted Butter",
-            "price": 3.79,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "0b5cc8ce-d08c-4798-a004-b19bd13503f1": {
-            "name": "Marinara Pasta Sauce",
-            "price": 1.45,
-            "assigned_users": [
-                "andy"
-            ]
-        },
-        "2edee5d2-e401-4924-9cb9-822431c655da": {
-            "name": "Large Shredded Cheese",
-            "price": 7.99,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "3f6cf4da-65a3-4282-95ce-d461c4e84ada": {
-            "name": "Lemon Pepper",
-            "price": 1.99,
-            "assigned_users": [
-                "ritz",
-                "andy",
-                "daven"
-            ]
-        },
-        "b1a227c2-2867-4573-8fa3-e6fed359fc75": {
-            "name": "Ground Cumin",
-            "price": 0.99,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "27de1943-0091-4f50-b434-1551624d33b9": {
-            "name": "Crushed Red Pepper",
-            "price": 0.99,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "bd8ffb54-fd88-49bd-a98d-d3c9849aa95e": {
-            "name": "Yellow Onions",
-            "price": 2.25,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "eec2c804-bd98-497d-9220-6ff5ee62c4a3": {
-            "name": "Garlic",
-            "price": 1.29,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "0651388e-6074-4fe6-8926-6927a23c257c": {
-            "name": "Green Onion 1ct",
-            "price": 0.96,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
-        },
-        "039e02a8-1562-4dd5-8c8a-3c15b774dfa7": {
-            "name": "3.25% Milk Gallon",
+        "37e23638-4211-4187-af9f-0b79e99f7f51": {
+            "name": "Gyos tier Savings",
             "price": 4.49,
             "assigned_users": [
-                "andy",
-                "daven"
-            ]
-        },
-        "4c48eeb4-a01c-4932-8a5b-19f91cbe054c": {
-            "name": "Cilantro Bunch",
-            "price": 0.83,
-            "assigned_users": [
-                "justin",
                 "andy"
             ]
         },
-        "3c57ae57-9673-4f3d-91a0-b048d25e8b97": {
-            "name": "Tomato on Vine",
-            "price": 2.65,
+        "94844251-bf32-41d9-b1e6-cd9a1ff7f775": {
+            "name": "Nhe, Savings",
+            "price": 0.98,
             "assigned_users": [
-                "ritz",
                 "andy"
             ]
         },
-        "cbf9c357-f203-46f7-a33c-9a23c4bb2eda": {
-            "name": "Mandarins 5lb",
-            "price": 6.59,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "andy",
-                "daven"
-            ]
+        "a5bbdb96-de0a-4b3f-bfa1-998a036b1052": {
+            "name": "B spe tng Cream",
+            "price": 4.99,
+            "assigned_users": []
         },
-        "09e9227a-36fb-4140-b333-3f27e88069d5": {
-            "name": "Wonder Bread",
-            "price": 2.92,
-            "assigned_users": [
-                "justin",
-                "andy",
-                "daven"
-            ]
+        "e026955c-ec86-43bd-8f5e-37529428391a": {
+            "name": "! Bibigo Wontons ;",
+            "price": 6.99,
+            "assigned_users": []
         },
-        "507208e8-aecb-4dd9-a99f-dac7edad5efe": {
-            "name": "Hamburger Buns",
-            "price": 1.29,
-            "assigned_users": [
-                "ritz",
-                "andy"
-            ]
+        "ec8ee5db-6104-4a24-8c78-88de36ee437d": {
+            "name": "Sweet nerne Corn :",
+            "price": 2.28,
+            "assigned_users": []
         },
-        "b07eaa7b-dc39-4a1a-a12a-0441274c4000": {
-            "name": "Green Valley Eggs",
-            "price": 7.3,
-            "assigned_users": [
-                "ritz",
-                "justin",
-                "daven"
-            ]
+        "256fb946-bbed-49ee-b084-f6276fa08048": {
+            "name": "nf",
+            "price": 0.76,
+            "assigned_users": []
+        },
+        "fcceae06-08d5-40b8-aebe-7f0de1642423": {
+            "name": "Hexen end Cheese f",
+            "price": 4.22,
+            "assigned_users": []
+        },
+        "e5e8d419-a75b-4bc4-bfc0-2b38c6c5a3e0": {
+            "name": "reece\u2019 tons",
+            "price": 1.15,
+            "assigned_users": []
+        },
+        "6593433d-af01-4624-ab17-be57a6953797": {
+            "name": "Green Val jey Eggs",
+            "price": 3.98,
+            "assigned_users": []
+        },
+        "21b12fb4-9fa5-4984-9303-b3615c3b1689": {
+            "name": "Five Cheese Torte) 1 irri",
+            "price": 5.55,
+            "assigned_users": []
+        },
+        "ec4b7d0f-2977-48e0-86ab-cbf53da2d94e": {
+            "name": "Arizona Green Tea Tal]",
+            "price": 0.88,
+            "assigned_users": []
+        },
+        "f11a1ff8-bfeb-4647-b06f-9909bfeb2a0e": {
+            "name": "Beef Shaved Steak \u2018",
+            "price": 6.99,
+            "assigned_users": []
+        },
+        "eb348248-b03c-400a-bde5-f12a4ae54ed7": {
+            "name": "Plain Greek Yogurt",
+            "price": 10.47,
+            "assigned_users": []
+        },
+        "40a89da3-6039-4738-b14f-65319f66e398": {
+            "name": "cs 3.0 @",
+            "price": 3.49,
+            "assigned_users": []
+        },
+        "efe0add2-e93f-4f89-ae08-a87bd46e5deb": {
+            "name": ", Vanilla Ice Cream",
+            "price": 2.99,
+            "assigned_users": []
+        },
+        "220bcf91-7e9a-4161-9316-7ab4ed7d477b": {
+            "name": "'Ttalian Cheese",
+            "price": 4.22,
+            "assigned_users": []
+        },
+        "7f04d792-a708-4455-a3eb-cfd23fdcd861": {
+            "name": "Fairlife Milk",
+            "price": 9.94,
+            "assigned_users": []
+        },
+        "de3b545f-577d-4734-8a85-1bccaa4712a6": {
+            "name": "0 @",
+            "price": 4.97,
+            "assigned_users": []
+        },
+        "3e34b55a-7786-4865-bd09-74af1823fbaa": {
+            "name": "Ground Beef 316",
+            "price": 31.98,
+            "assigned_users": []
+        },
+        "de15e295-5ee9-4a77-b127-7ef6ae4e93b0": {
+            "name": "0 @",
+            "price": 15.99,
+            "assigned_users": []
+        },
+        "196c43db-cdb3-440a-b641-fbb8aa659de0": {
+            "name": "Salmon Fillet -",
+            "price": 25.45,
+            "assigned_users": []
+        },
+        "59ca1428-eb5f-4997-8377-ff438eb0f39b": {
+            "name": "Organic Arugula ;",
+            "price": 2.98,
+            "assigned_users": []
+        },
+        "35008381-dd50-46b4-a927-641ff70677df": {
+            "name": "Tomato Pasta Sauce",
+            "price": 1.89,
+            "assigned_users": []
+        },
+        "109b977a-06c7-4119-978f-559015e6d975": {
+            "name": "StarKist Tuna",
+            "price": 6.52,
+            "assigned_users": []
+        },
+        "47701a93-d79b-4c48-b303-b43b38ed9a6d": {
+            "name": "0 @",
+            "price": 1.63,
+            "assigned_users": []
+        },
+        "678bb3a4-9bd3-44a2-8728-c5d3f7232320": {
+            "name": "Tomato Pasta Sauce iA",
+            "price": 2.9,
+            "assigned_users": []
+        },
+        "617bb315-61f4-4a4e-b394-78a4740d9407": {
+            "name": "0 8",
+            "price": 1.45,
+            "assigned_users": []
+        },
+        "e2d6f518-0da5-4adf-9d87-b248b70bb1a6": {
+            "name": "Mar inarg Pasta Sailce i \u00a3",
+            "price": 1.46,
+            "assigned_users": []
+        },
+        "319404ff-2b12-405f-86ef-d06beab9c702": {
+            "name": "Bniees Seint eee Chiclcen :",
+            "price": 17.78,
+            "assigned_users": []
         }
     },
     "users": [
-        "ritz",
-        "justin",
         "andy",
-        "daven"
+        "daven",
+        "justin"
     ]
 }

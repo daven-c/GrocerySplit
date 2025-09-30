@@ -19,6 +19,15 @@ A React and Flask application for splitting grocery expenses among friends, with
 -   Tesseract OCR (for OCR fallback)
 -   Google Gemini API key (for advanced receipt scanning)
 
+## Configuration
+
+Port settings can be configured in `config.json`:
+
+-   Frontend runs on port 3000 by default
+-   Backend runs on port 6000 by default
+
+To change ports, edit the `config.json` file in the root directory.
+
 ## Setup Instructions
 
 ### Get a Google Gemini API Key
@@ -27,7 +36,7 @@ A React and Flask application for splitting grocery expenses among friends, with
 2. Sign in with your Google account and create a new project
 3. Navigate to the API Keys section and create a new API key
 4. Copy your API key
-5. Open the file `backend/.env` and replace `your-gemini-api-key-here` with your actual API key
+5. Open the file `backend/.env` and set `GEMINI-API-KEY` to your API key
 
 ### Install Tesseract OCR (For OCR fallback)
 
@@ -99,7 +108,7 @@ This script will:
 
 ## Usage
 
-1. Open your browser and navigate to http://localhost:3000
+1. Open your browser and navigate to the configured frontend port (default: http://localhost:3000)
 2. Upload a receipt image using the upload section
 3. The app will use Google's Gemini Vision AI to analyze the receipt and extract items with prices
 4. Add users to split expenses with
@@ -133,4 +142,5 @@ This script will:
 ### API connection issues?
 
 1. Make sure both frontend and backend servers are running
-2. The frontend expects the backend to be available at http://localhost:5000
+2. Check that the ports in `config.json` match your running services
+3. The frontend expects the backend to be available at the port specified in `config.json` (default: http://localhost:6000)
