@@ -529,6 +529,45 @@ def scan_receipt():
         return jsonify({'error': 'Invalid file type. Please upload a JPG, JPEG or PNG image'}), 400
 
 
+@app.route('/api/scan-receipt-json', methods=['POST'])
+def scan_receipt_json():
+    """Process receipt data from JSON input."""
+    data = request.json
+
+    if not data or 'items' not in data:
+        return jsonify({'error': 'Missing items array in JSON'}), 400
+
+    items_array = data.get('items', [])
+
+    if not isinstance(items_array, list):
+        return jsonify({'error': 'Items must be an array'}), 400
+
+    extracted_items = []
+
+    for item_data in items_array:
+        # Support both 'item'/'cost' and 'name'/'price' formats
+        name = item_data.get('item') or item_data.get('name')
+        price = item_data.get('cost') or item_data.get('price')
+
+        if not name or price is None:
+            continue
+
+        try:
+            price = float(price)
+            if price >= 0 and name.strip():
+                extracted_items.append({
+                    'name': name.strip(),
+                    'price': price
+                })
+        except (ValueError, TypeError):
+            continue
+
+    if not extracted_items:
+        return jsonify({'error': 'No valid items found in JSON'}), 400
+
+    return jsonify({'items': extracted_items})
+
+
 def get_datetime_from_session(session_data):
     """Safely gets a timezone-aware datetime object from session data."""
     updated_at_str = session_data.get('updated_at')

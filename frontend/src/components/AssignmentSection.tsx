@@ -75,11 +75,13 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 		if (
 			editItemName.trim() &&
 			!isNaN(parseFloat(editItemPrice)) &&
-			parseFloat(editItemPrice) >= 0 && // Allow 0 price
+			parseFloat(editItemPrice) >= 0 &&
 			onEditItem
 		) {
 			onEditItem(id, editItemName.trim(), parseFloat(editItemPrice));
 			setEditingItemId(null);
+			setEditItemName("");
+			setEditItemPrice("");
 		}
 	};
 
@@ -272,8 +274,7 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 										{editingItemId === item.id ? (
 											<>
 												{/* Inline edit cells */}
-												<td colSpan={2}>
-													{/* Span Item and Price */}
+												<td>
 													<input
 														type="text"
 														value={editItemName}
@@ -283,11 +284,10 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 															)
 														}
 														className="inline-edit-input"
+														placeholder="Item name"
 													/>
 												</td>
-
 												<td>
-													{/* Price input needs its own cell now */}
 													<input
 														type="number"
 														value={editItemPrice}
@@ -298,6 +298,8 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 														}
 														className="inline-edit-input price-input"
 														step="0.01"
+														min="0"
+														placeholder="Price"
 													/>
 												</td>
 												{/* Span across user columns */}
@@ -309,12 +311,14 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 															saveEdit(item.id)
 														}
 														className="save-inline-button"
+														type="button"
 													>
 														Save
 													</button>
 													<button
 														onClick={cancelEditing}
 														className="cancel-inline-button"
+														type="button"
 													>
 														Cancel
 													</button>
@@ -354,6 +358,7 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 															startEditing(item)
 														}
 														className="edit-button"
+														type="button"
 													>
 														Edit
 													</button>
@@ -365,8 +370,9 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 																)
 															}
 															className="remove-button"
+															type="button"
 														>
-															Remove
+															Delete
 														</button>
 													)}
 												</td>

@@ -18,6 +18,8 @@ const ReceiptUpload: React.FC<ReceiptUploadProps> = ({
 	const [previewURL, setPreviewURL] = useState<string | null>(null);
 	const [scanningStatus, setScanningStatus] = useState<string>("");
 	const [processingMethod, setProcessingMethod] = useState<string>("");
+	const [jsonInput, setJsonInput] = useState<string>("");
+	const [activeTab, setActiveTab] = useState<"image" | "json">("image");
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,71 +103,157 @@ const ReceiptUpload: React.FC<ReceiptUploadProps> = ({
 		}
 	};
 
+	const handleJsonSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+
+		if (!jsonInput.trim()) {
+			setError("Please enter JSON data");
+			return;
+		}
+
+		setLoading(true);
+		setError(null);
+
+		try {
+			// Parse and validate JSON
+			const parsedData = JSON.parse(jsonInput);
+
+			if (!parsedData.items || !Array.isArray(parsedData.items)) {
+				throw new Error(
+					"Invalid JSON format. Expected an object with 'items' array"
+				);
+			}
+
+			// Transform to expected format
+			const items = parsedData.items
+				.map((item: any) => ({
+					name: item.item || item.name,
+					price: parseFloat(item.cost || item.price),
+				}))
+				.filter((item: any) => item.name && !isNaN(item.price));
+
+			if (items.length === 0) {
+				throw new Error("No valid items found in JSON");
+			}
+
+			await onReceiptProcessed(items);
+			setJsonInput("");
+			setError(null);
+		} catch (err: any) {
+			console.error("Error processing JSON:", err);
+			setError(err.message || "Failed to process JSON data");
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	return (
-		<div className="section">
-			<h2>Upload Receipt</h2>
-			<p className="feature-note">
-				Using Google Gemini Vision AI for advanced receipt scanning
-			</p>
-			<div
-				className="upload-area"
-				onDrop={handleDrop}
-				onDragOver={handleDragOver}
-				onClick={() => fileInputRef.current?.click()}
-			>
-				<input
-					type="file"
-					ref={fileInputRef}
-					onChange={handleFileChange}
-					accept="image/*"
-					style={{ display: "none" }}
-				/>
-				<p>Click to browse or drop receipt image here</p>
-				{previewURL && (
-					<img
-						src={previewURL}
-						alt="Receipt preview"
-						className="receipt-preview"
-					/>
-				)}
-			</div>
+		<div className="section receipt-upload">
+			<h2>Import Items</h2>
 
-			<div style={{ marginTop: "15px", textAlign: "center" }}>
+			<div className="upload-tabs">
 				<button
-					onClick={handleProcessClick}
-					disabled={!uploadedImage || loading}
+					className={activeTab === "image" ? "active" : ""}
+					onClick={() => setActiveTab("image")}
 				>
-					Scan Receipt
+					Upload Image
 				</button>
-				{uploadedImage && (
-					<button
-						onClick={() => {
-							setUploadedImage(null);
-							setPreviewURL(null);
-							setScanningStatus("");
-							setProcessingMethod("");
-						}}
-						disabled={loading}
-					>
-						Clear
-					</button>
-				)}
+				<button
+					className={activeTab === "json" ? "active" : ""}
+					onClick={() => setActiveTab("json")}
+				>
+					Paste JSON
+				</button>
 			</div>
 
-			{loading && (
-				<div className="loading">
-					<div className="loading-spinner"></div>
-					<p>{scanningStatus}</p>
-					{processingMethod && (
-						<p className="processing-method">{processingMethod}</p>
+			{activeTab === "image" ? (
+				<div>
+					<div
+						className="upload-area"
+						onDrop={handleDrop}
+						onDragOver={handleDragOver}
+						onClick={() => fileInputRef.current?.click()}
+					>
+						<input
+							type="file"
+							ref={fileInputRef}
+							onChange={handleFileChange}
+							accept="image/*"
+							style={{ display: "none" }}
+						/>
+						<p>Click to browse or drop receipt image here</p>
+						{previewURL && (
+							<img
+								src={previewURL}
+								alt="Receipt preview"
+								className="receipt-preview"
+							/>
+						)}
+					</div>
+
+					<div style={{ marginTop: "15px", textAlign: "center" }}>
+						<button
+							onClick={handleProcessClick}
+							disabled={!uploadedImage || loading}
+						>
+							Scan Receipt
+						</button>
+						{uploadedImage && (
+							<button
+								onClick={() => {
+									setUploadedImage(null);
+									setPreviewURL(null);
+									setScanningStatus("");
+									setProcessingMethod("");
+								}}
+								disabled={loading}
+							>
+								Clear
+							</button>
+						)}
+					</div>
+
+					{loading && (
+						<div className="loading">
+							<div className="loading-spinner"></div>
+							<p>{scanningStatus}</p>
+							{processingMethod && (
+								<p className="processing-method">
+									{processingMethod}
+								</p>
+							)}
+						</div>
+					)}
+
+					{scanningStatus && !loading && (
+						<p style={{ color: "green", textAlign: "center" }}>
+							{scanningStatus}
+						</p>
 					)}
 				</div>
-			)}
-
-			{scanningStatus && !loading && (
-				<p style={{ color: "green", textAlign: "center" }}>
-					{scanningStatus}
-				</p>
+			) : (
+				<form onSubmit={handleJsonSubmit}>
+					<textarea
+						value={jsonInput}
+						onChange={(e) => setJsonInput(e.target.value)}
+						placeholder={`Paste JSON here, e.g.:
+{
+  "items": [
+    {"item": "THAI JASMINE", "cost": 19.89},
+    {"item": "PREMIER CHOC", "cost": 31.99}
+  ]
+}`}
+						rows={10}
+						disabled={loading}
+						className="json-input"
+					/>
+					<button
+						type="submit"
+						disabled={!jsonInput.trim() || loading}
+					>
+						{loading ? "Processing..." : "Import Items"}
+					</button>
+				</form>
 			)}
 		</div>
 	);

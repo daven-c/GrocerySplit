@@ -53,9 +53,8 @@ const AddItemForm: React.FC<AddItemFormProps> = ({
 						type="button"
 						className="clear-all-button"
 						onClick={onClearItems}
-						style={{ marginLeft: "auto" }} // Push clear button to the right
 					>
-						Clear List
+						Clear All Items
 					</button>
 				)}
 			</form>
