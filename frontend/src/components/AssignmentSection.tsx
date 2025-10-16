@@ -69,6 +69,8 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 
 	const cancelEditing = () => {
 		setEditingItemId(null);
+		setEditItemName("");
+		setEditItemPrice("");
 	};
 
 	const saveEdit = (id: number) => {
@@ -237,7 +239,8 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 								{users.map((user) => (
 									<col key={user} className="user-col" />
 								))}
-								<col className="actions-col" />
+								<col className="edit-col" />
+								<col className="delete-col" />
 							</colgroup>
 							<thead>
 								<tr>
@@ -258,7 +261,8 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 											{user}
 										</th>
 									))}
-									<th>Actions</th>
+									<th className="action-header">Edit</th>
+									<th className="action-header">Delete</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -273,8 +277,7 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 									>
 										{editingItemId === item.id ? (
 											<>
-												{/* Inline edit cells */}
-												<td>
+												<td className="inline-edit-cell">
 													<input
 														type="text"
 														value={editItemName}
@@ -285,9 +288,25 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 														}
 														className="inline-edit-input"
 														placeholder="Item name"
+														onKeyDown={(e) => {
+															if (
+																e.key ===
+																"Enter"
+															) {
+																saveEdit(
+																	item.id
+																);
+															} else if (
+																e.key ===
+																"Escape"
+															) {
+																cancelEditing();
+															}
+														}}
+														autoFocus
 													/>
 												</td>
-												<td>
+												<td className="inline-edit-cell">
 													<input
 														type="number"
 														value={editItemPrice}
@@ -300,12 +319,28 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 														step="0.01"
 														min="0"
 														placeholder="Price"
+														onKeyDown={(e) => {
+															if (
+																e.key ===
+																"Enter"
+															) {
+																saveEdit(
+																	item.id
+																);
+															} else if (
+																e.key ===
+																"Escape"
+															) {
+																cancelEditing();
+															}
+														}}
 													/>
 												</td>
-												{/* Span across user columns */}
 												<td colSpan={users.length}></td>
-												<td className="actions-cell">
-													{/* Save/Cancel buttons */}
+												<td
+													className="actions-cell"
+													colSpan={2}
+												>
 													<button
 														onClick={() =>
 															saveEdit(item.id)
@@ -333,42 +368,67 @@ const AssignmentSection: React.FC<AssignmentSectionProps> = ({
 												{users.map((user) => (
 													<td
 														key={user}
-														className="user-cell"
+														className={`user-cell ${
+															item.assigned_users.includes(
+																user
+															)
+																? "checked"
+																: ""
+														}`}
+														onClick={(e) => {
+															if (
+																editingItemId !==
+																item.id
+															) {
+																handleCheckboxChange(
+																	item.id,
+																	user,
+																	!item.assigned_users.includes(
+																		user
+																	)
+																);
+															}
+														}}
 													>
 														<input
 															type="checkbox"
 															checked={item.assigned_users.includes(
 																user
 															)}
-															onChange={(e) =>
+															onChange={(e) => {
+																e.stopPropagation();
 																handleCheckboxChange(
 																	item.id,
 																	user,
 																	e.target
 																		.checked
-																)
-															}
+																);
+															}}
 															aria-label={`Assign ${item.name} to ${user}`}
 														/>
 													</td>
 												))}
-												<td className="actions-cell">
+												<td className="action-cell edit-cell">
 													<button
-														onClick={() =>
-															startEditing(item)
-														}
+														onClick={(e) => {
+															e.stopPropagation();
+															startEditing(item);
+														}}
 														className="edit-button"
 														type="button"
 													>
 														Edit
 													</button>
+												</td>
+												<td className="action-cell delete-cell">
 													{onRemoveItem && (
 														<button
-															onClick={() =>
+															onClick={(e) => {
+																e.stopPropagation();
 																onRemoveItem(
 																	item.id
-																)
-															}
+																);
+															}}
 															className="remove-button"
 															type="button"
 														>
