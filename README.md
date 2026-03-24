@@ -1,146 +1,55 @@
-# GrocerySplit
+# Grocery Split
 
-A React and Flask application for splitting grocery expenses among friends, with advanced receipt scanning functionality using Google's Gemini Vision AI.
+**App Description:** An advanced, premium application for extracting, splitting, and tracking shared grocery expenses smoothly.
 
-## Features
+**Features:**
+- Add and manage user accounts with secure password hashing and JWT authentication.
+- Create and persist grocery splitting sessions with a robust SQLite database.
+- Utilize Google Gemini AI / Tesseract OCR to automatically parse physical receipt images and itemize prices.
+- Dynamically assign items to specific users and automatically calculate splitting totals.
+- Modern, dynamic, glassmorphism-inspired UI designed using Stitch and Tailwind CSS.
 
--   Upload and automatically scan receipts using AI-powered image recognition
--   AI-powered receipt analysis with Google's Gemini Vision API
--   Fallback to OCR when needed (both server-side and browser-based)
--   Manually add grocery items and prices
--   Add multiple users to split expenses with
--   Assign items to specific users
--   Calculate how much each person owes
+## Technologies
 
-## Prerequisites
+- **Frontend:** React, TypeScript, Tailwind CSS, Vite
+- **Backend:** Python, Flask, Werkzeug, itsdangerous
+- **Database:** SQLite
+- **AI/OCR:** Google Generative AI (Gemini Vision), OpenCV, PyTesseract
 
--   Python 3.7+
--   Node.js and npm
--   Tesseract OCR (for OCR fallback)
--   Google Gemini API key (for advanced receipt scanning)
+## Installation
 
-## Configuration
+### Backend
+Make sure you have `python3` and `pip` installed.
 
-Port settings can be configured in `config.json`:
+```bash
+cd backend
 
--   Frontend runs on port 3000 by default
--   Backend runs on port 6000 by default
+# Create and activate a virtual environment (optional but recommended)
+python3 -m venv venv
+source venv/bin/activate
 
-To change ports, edit the `config.json` file in the root directory.
+# Install dependencies
+pip install -r requirements.txt
 
-## Setup Instructions
+# Create .env file with GEMINI_API_KEY if using AI parsing
+# Example: GEMINI_API_KEY=your_key_here
 
-### Get a Google Gemini API Key
+# Run the Flask backend (Runs on port 6000 strictly based on config.json)
+python app.py
+```
 
-1. Visit the Google AI Studio at https://makersuite.google.com/
-2. Sign in with your Google account and create a new project
-3. Navigate to the API Keys section and create a new API key
-4. Copy your API key
-5. Open the file `backend/.env` and set `GEMINI-API-KEY` to your API key
+### Frontend
+Make sure you have Node.js installed.
 
-### Install Tesseract OCR (For OCR fallback)
+```bash
+cd frontend
 
-1. Download and install Tesseract OCR from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
-2. Make sure to add Tesseract to your PATH environment variable
-3. Verify installation by running `tesseract --version` in your terminal
+# Install dependencies
+npm install
 
-### Quick Start
+# Start the React Vite development server
+npm run dev
+```
 
-1. Clone this repository
-2. Run the startup script:
-    ```
-    .\start.ps1
-    ```
-
-This script will:
-
--   Create a Python virtual environment
--   Install Python dependencies
--   Install Node.js dependencies
--   Start the Flask backend server
--   Start the React development server
-
-### Manual Setup (If startup script doesn't work)
-
-#### Backend Setup
-
-1. Create a virtual environment:
-
-    ```
-    python -m venv venv
-    ```
-
-2. Activate the virtual environment:
-
-    ```
-    .\venv\Scripts\Activate.ps1
-    ```
-
-3. Install Python dependencies:
-
-    ```
-    pip install -r requirements.txt
-    ```
-
-4. Run the Flask backend:
-    ```
-    python backend\app.py
-    ```
-
-#### Frontend Setup
-
-1. Navigate to the frontend directory:
-
-    ```
-    cd frontend
-    ```
-
-2. Install Node.js dependencies:
-
-    ```
-    npm install
-    ```
-
-3. Start the React development server:
-    ```
-    npm start
-    ```
-
-## Usage
-
-1. Open your browser and navigate to the configured frontend port (default: http://localhost:3000)
-2. Upload a receipt image using the upload section
-3. The app will use Google's Gemini Vision AI to analyze the receipt and extract items with prices
-4. Add users to split expenses with
-5. Assign items to specific users by checking the appropriate boxes
-6. Click "Calculate" to see how much each person owes
-
-## Technical Details
-
--   **Frontend**: React.js
--   **Backend**: Flask (Python)
--   **Receipt Scanning**:
-    -   Primary: Google Gemini Vision AI for advanced image understanding
-    -   Fallback 1: Tesseract OCR with OpenCV for image preprocessing (server-side)
-    -   Fallback 2: Tesseract.js (browser-based OCR)
-
-## Troubleshooting
-
-### Receipt scanning not working with Gemini AI?
-
-1. Check that you've added your Gemini API key correctly in `backend/.env`
-2. Make sure you have an active internet connection as Gemini requires API calls
-3. Verify that the uploaded receipt image is clear and well-lit
-4. The app will automatically fall back to traditional OCR methods if Gemini fails
-
-### Receipt scanning not working at all?
-
-1. Make sure Tesseract OCR is properly installed
-2. Ensure the receipt image is clear and well-lit
-3. Try adding items manually if automatic scanning fails
-
-### API connection issues?
-
-1. Make sure both frontend and backend servers are running
-2. Check that the ports in `config.json` match your running services
-3. The frontend expects the backend to be available at the port specified in `config.json` (default: http://localhost:6000)
+## Running the Complete App
+The backend runs on `http://localhost:6000` and the frontend proxy routes `/api` requests to it via Vite configuration on `http://localhost:3000`. To start using the app, simply fire up both the Python and Node development servers.

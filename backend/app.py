@@ -12,6 +12,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import threading
 from datetime import datetime, timezone
+from db import get_db_connection, create_token, token_required, generate_password_hash, check_password_hash
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # In-memory storage (will be loaded from/saved to file)
 items = {}  # Item IDs will be strings (UUIDs)
 users = set()
+groups = {} # Dict mapping Group Name -> List of Users
 data_lock = threading.RLock()  # Use RLock (Reentrant Lock) instead of Lock
 
 # Add Session storage
@@ -69,18 +71,82 @@ def save_data():
                 }
             with open(DATA_FILE, 'w') as f:
                 json.dump({'items': serializable_items,
-                          'users': list(users)}, f, indent=4)
+                          'users': list(users),
+                          'groups': groups}, f, indent=4)
         except IOError as e:
             print(f"Error saving data: {e}")
 
 
+@app.route('/api/users', methods=['GET', 'POST', 'DELETE'])
+@token_required
+def manage_users(current_user):
+    global users
+    with data_lock:
+        if request.method == 'GET':
+            return jsonify({'users': list(users)})
+        elif request.method == 'POST':
+            name = request.json.get('name')
+            if name and name not in users:
+                users.add(name)
+                save_data()
+            return jsonify({'users': list(users)})
+        elif request.method == 'DELETE':
+            name = request.json.get('name')
+            if name in users:
+                users.remove(name)
+                # Remove user from all items
+                for item_id in items:
+                    if name in items[item_id]['assigned_users']:
+                        items[item_id]['assigned_users'].remove(name)
+                # Remove user from active session
+                if active_session_id in sessions:
+                     if name in sessions[active_session_id].get('users', set()):
+                          sessions[active_session_id]['users'].remove(name)
+                
+                # Auto-purge user from all groups
+                for group_name in groups:
+                     if name in groups[group_name]:
+                          groups[group_name].remove(name)
+
+                save_data()
+                save_sessions_to_disk()
+            return jsonify({'users': list(users)})
+
+@app.route('/api/groups', methods=['GET', 'POST'])
+@token_required
+def manage_groups(current_user):
+    global groups
+    with data_lock:
+        if request.method == 'GET':
+            return jsonify({'groups': groups})
+        elif request.method == 'POST':
+            name = request.json.get('name')
+            members = request.json.get('members', [])
+            if not name:
+                return jsonify({"error": "Group name required"}), 400
+            groups[name] = members
+            save_data()
+            return jsonify({'groups': groups, 'success': True})
+
+@app.route('/api/groups/<name>', methods=['DELETE'])
+@token_required
+def delete_group(current_user, name):
+    global groups
+    with data_lock:
+        if name in groups:
+            del groups[name]
+            save_data()
+            return jsonify({"success": True})
+        return jsonify({"error": "Group not found"}), 404
+
 def load_data():
     """Loads items and users from a JSON file."""
-    global items, users
+    global items, users, groups
     with data_lock:
         if not os.path.exists(DATA_FILE):
             items = {}
             users = set()
+            groups = {}
             return  # No data file yet
 
         try:
@@ -96,10 +162,12 @@ def load_data():
                         'assigned_users': set(item_data.get('assigned_users', []))
                     }
                 users = set(data.get('users', []))
+                groups = data.get('groups', {})
         except (IOError, json.JSONDecodeError) as e:
             print(f"Error loading data: {e}. Starting with empty data.")
             items = {}
             users = set()
+            groups = {}
 
 
 def save_sessions_to_disk():
@@ -143,7 +211,10 @@ def load_sessions_from_disk():
                 loaded_sessions = data.get('sessions', {})
                 sessions = {}
                 for session_id_str, session_data in loaded_sessions.items():
-                    session_id = int(session_id_str)
+                    try:
+                        session_id = int(session_id_str)
+                    except ValueError:
+                        session_id = session_id_str
                     sessions[session_id] = {
                         'name': session_data.get('name', f'Session {session_id}'),
                         'items': {
@@ -177,11 +248,9 @@ def load_session_data_into_memory(session_id_to_load):
                     'price': data.get('price', 0.0),
                     'assigned_users': set(data.get('assigned_users', []))
                 }
-            loaded_users = set(session.get('users', []))
 
-            # Replace global state
+            # Replace global temporal items buffer ONLY
             items = loaded_items
-            users = loaded_users
             active_session_id = session_id_to_load
             print(f"Loaded session {session_id_to_load} into memory.")
             save_data()
@@ -191,6 +260,20 @@ def load_session_data_into_memory(session_id_to_load):
             f"Attempted to load non-existent session {session_id_to_load} into memory.")
         return False
 
+def auto_save_active_session():
+    """Immediately synchronizes global items into the active session file tracking block."""
+    global active_session_id, items, users
+    if "active_session_id" in globals() and active_session_id is not None and active_session_id in sessions:
+        session_items = {}
+        for item_id, data in items.items():
+            session_items[item_id] = {
+                'name': data['name'],
+                'price': data['price'],
+                'assigned_users': list(data.get('assigned_users', set()))
+            }
+        sessions[active_session_id]['items'] = session_items
+        sessions[active_session_id]['updated_at'] = datetime.now(timezone.utc).isoformat()
+        save_sessions_to_disk()
 
 # Load initial data and sessions
 load_data()
@@ -247,8 +330,62 @@ def serve(path):
             return jsonify({"error": "index.html not found in build directory. Run 'npm run build' in frontend."}), 404
 
 
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    name = data.get('name')
+    if not email or not password or not name:
+        return jsonify({'error': 'Missing fields'}), 400
+
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    if user:
+        conn.close()
+        return jsonify({'error': 'Email already exists'}), 409
+
+    hashed_password = generate_password_hash(password)
+    cur = conn.execute(
+        'INSERT INTO users (email, password, name) VALUES (?, ?, ?)', (email, hashed_password, name))
+    user_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    token = create_token(user_id)
+    return jsonify({'token': token, 'user': {'id': user_id, 'name': name, 'email': email}}), 201
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({'error': 'Missing fields'}), 400
+
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    conn.close()
+
+    if not user or not check_password_hash(user['password'], password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    token = create_token(user['id'])
+    return jsonify({'token': token, 'user': {'id': user['id'], 'name': user['name'], 'email': user['email']}}), 200
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def get_me(current_user):
+    return jsonify({'user': {'id': current_user['id'], 'name': current_user['name'], 'email': current_user['email']}}), 200
+
+
 @app.route('/api/items', methods=['GET'])
-def get_items():
+@token_required
+def get_items(current_user):
     """Returns the current list of items."""
     with data_lock:
         items_list = []
@@ -257,14 +394,15 @@ def get_items():
                 'id': item_id,
                 'name': data['name'],
                 'price': data['price'],
-                'assigned_users': list(data['assigned_users'])
+                'assigned_users': list(data.get('assigned_users', []))
             })
         return jsonify({'items': items_list, 'users': list(users)})
 
 
 @app.route('/api/items', methods=['POST'])
-def add_item():
-    """Adds a new item."""
+@token_required
+def add_item(current_user):
+    """Adds a new manual item."""
     data = request.json
     name = data.get('name')
     price = data.get('price')
@@ -280,10 +418,11 @@ def add_item():
 
     item_id = str(uuid.uuid4())
     with data_lock:
-        items[item_id] = {'name': name,
+        items[item_id] = {'id': item_id, 'name': name,
                           'price': price, 'assigned_users': set()}
+        auto_save_active_session()
     save_data()
-    return jsonify({'id': item_id, 'name': name, 'price': price}), 201
+    return jsonify({'item_id': item_id, 'name': name, 'price': price}), 201
 
 
 @app.route('/api/items/batch', methods=['POST'])
@@ -319,6 +458,7 @@ def add_items_batch():
 
     with data_lock:
         items.update(new_items_to_add)
+        auto_save_active_session()
     save_data()
 
     return jsonify(added_items_info), 201
@@ -411,6 +551,8 @@ def assign_user_to_item(item_id):
         else:
             items[item_id]['assigned_users'].discard(user_name)
 
+        auto_save_active_session()
+
     save_data()
     return jsonify({'message': f'User {user_name} {"assigned to" if assign else "unassigned from"} item {item_id}'})
 
@@ -438,6 +580,11 @@ def edit_item(item_id):
 
         items[item_id]['name'] = name
         items[item_id]['price'] = price
+        if 'assigned_users' in data:
+            if isinstance(data['assigned_users'], list):
+                items[item_id]['assigned_users'] = set(data['assigned_users'])
+        
+        auto_save_active_session()
 
     save_data()
     return jsonify({
@@ -455,6 +602,7 @@ def remove_item(item_id):
         if item_id not in items:
             return jsonify({'error': 'Item not found'}), 404
         del items[item_id]
+        auto_save_active_session()
     save_data()
     return jsonify({'message': f'Item {item_id} removed'}), 200
 
@@ -600,9 +748,11 @@ def get_sessions():
                 if isinstance(session_data, dict):
                     # Manually construct the dictionary for the response, converting sets
                     response_session_data = {
-                        'id': int(session_id),  # Convert id to int
+                        'id': str(session_id),
                         'name': session_data.get('name', f'Session {session_id}'),
                         'updated_at': session_data.get('updated_at'),
+                        'item_count': len(session_data.get('items', {})),
+                        'participant_count': len(session_data.get('users', set())),
                         # Convert users set to list
                         'users': list(session_data.get('users', set())),
                         # Convert items, ensuring assigned_users within items are lists
@@ -658,10 +808,7 @@ def save_session():
         return jsonify({'error': 'Missing session name'}), 400
 
     with data_lock:
-        if any(session_data['name'].lower() == name.lower() for session_data in sessions.values()):
-            return jsonify({'error': 'A session with this name already exists'}), 409
-
-        session_id = current_session_id
+        session_id = str(uuid.uuid4())
         sessions[session_id] = {
             'name': name,
             'items': {},
@@ -674,10 +821,11 @@ def save_session():
     return jsonify({'id': session_id, 'name': name}), 201
 
 
-@app.route('/api/sessions/<int:session_id>', methods=['PUT'])
+@app.route('/api/sessions/<session_id>', methods=['PUT'])
 def edit_session(session_id):
     """Edits a session name and updates its timestamp."""
-    if session_id not in sessions:
+    sid = session_id if session_id in sessions else int(session_id) if session_id.isdigit() and int(session_id) in sessions else None
+    if sid is None:
         return jsonify({'error': 'Session not found'}), 404
 
     data = request.json
@@ -686,46 +834,45 @@ def edit_session(session_id):
     if not name:
         return jsonify({'error': 'Missing session name'}), 400
 
-    for sid, session_data in sessions.items():
-        if sid != session_id and session_data['name'].lower() == name.lower():
-            return jsonify({'error': 'A session with this name already exists'}), 409
-
     with data_lock:
-        sessions[session_id]['name'] = name
-        sessions[session_id]['updated_at'] = datetime.now(
+        sessions[sid]['name'] = name
+        sessions[sid]['updated_at'] = datetime.now(
             timezone.utc).isoformat()
         save_sessions_to_disk()
-    return jsonify({'id': session_id, 'name': name})
+    return jsonify({'id': sid, 'name': name})
 
 
-@app.route('/api/sessions/<int:session_id>', methods=['DELETE'])
+@app.route('/api/sessions/<session_id>', methods=['DELETE'])
 def delete_session(session_id):
     """Deletes a session."""
-    if session_id not in sessions:
+    sid = session_id if session_id in sessions else int(session_id) if session_id.isdigit() and int(session_id) in sessions else None
+    if sid is None:
         return jsonify({'error': 'Session not found'}), 404
 
     with data_lock:
-        del sessions[session_id]
+        del sessions[sid]
         global active_session_id
-        if active_session_id == session_id:
+        if active_session_id == sid:
             active_session_id = None
         save_sessions_to_disk()
-    return jsonify({'message': f'Session {session_id} deleted'})
+    return jsonify({'message': f'Session {sid} deleted'})
 
 
-@app.route('/api/sessions/<int:session_id>/load', methods=['POST'])
+@app.route('/api/sessions/<session_id>/load', methods=['POST'])
 def load_session(session_id):
     """Loads a saved session into memory, making it the current working state."""
-    if load_session_data_into_memory(session_id):
-        return jsonify({'message': f'Session {session_id} loaded'})
+    sid = session_id if session_id in sessions else int(session_id) if session_id.isdigit() and int(session_id) in sessions else None
+    if sid is not None and load_session_data_into_memory(sid):
+        return jsonify({'message': f'Session {sid} loaded'})
     else:
         return jsonify({'error': 'Session not found'}), 404
 
 
-@app.route('/api/sessions/<int:session_id>/update', methods=['PUT'])
+@app.route('/api/sessions/<session_id>/update', methods=['PUT'])
 def update_session_data(session_id):
     """Updates the data of an existing session and its timestamp."""
-    if session_id not in sessions:
+    sid = session_id if session_id in sessions else int(session_id) if session_id.isdigit() and int(session_id) in sessions else None
+    if sid is None:
         return jsonify({'error': 'Session not found'}), 404
 
     with data_lock:
@@ -737,16 +884,22 @@ def update_session_data(session_id):
                 'assigned_users': list(data.get('assigned_users', set()))
             }
 
-        session_users = list(users)
+        data = request.json or {}
+        session_users = data.get('users', sessions[sid].get('users', []))
+        
+        tax = float(data.get('tax', 0.0))
+        tip = float(data.get('tip', 0.0))
 
-        sessions[session_id]['items'] = session_items
-        sessions[session_id]['users'] = session_users
-        sessions[session_id]['updated_at'] = datetime.now(
+        sessions[sid]['items'] = session_items
+        sessions[sid]['users'] = session_users
+        sessions[sid]['tax'] = tax
+        sessions[sid]['tip'] = tip
+        sessions[sid]['updated_at'] = datetime.now(
             timezone.utc).isoformat()
 
         save_sessions_to_disk()
 
-    return jsonify({'message': f'Session {session_id} updated with current state'})
+    return jsonify({'message': f'Session {sid} updated with current state'})
 
 
 def process_receipt_with_gemini(image_path):

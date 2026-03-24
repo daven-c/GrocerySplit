@@ -1,262 +1,108 @@
-import React, { useState, useRef } from "react";
-import axios from "axios";
+import React, { useState } from 'react';
+import axios from 'axios';
 
 interface ReceiptUploadProps {
-	onReceiptProcessed: (items: { name: string; price: number }[]) => void;
-	loading: boolean;
-	setLoading: (loading: boolean) => void;
-	setError: (error: string) => void;
+    onUploadComplete: () => void;
+    onBack: () => void;
 }
 
-const ReceiptUpload: React.FC<ReceiptUploadProps> = ({
-	onReceiptProcessed,
-	loading,
-	setLoading,
-	setError,
-}) => {
-	const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-	const [previewURL, setPreviewURL] = useState<string | null>(null);
-	const [scanningStatus, setScanningStatus] = useState<string>("");
-	const [processingMethod, setProcessingMethod] = useState<string>("");
-	const [jsonInput, setJsonInput] = useState<string>("");
-	const [activeTab, setActiveTab] = useState<"image" | "json">("image");
-	const fileInputRef = useRef<HTMLInputElement>(null);
+export default function ReceiptUpload({ onUploadComplete, onBack }: ReceiptUploadProps) {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-		const file = event.target.files?.[0];
-		if (file) {
-			// Validate file is an image
-			if (!file.type.match("image.*")) {
-				setError("Please select an image file");
-				return;
-			}
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-			setUploadedImage(file);
-			setPreviewURL(URL.createObjectURL(file));
-		}
-	};
+        setLoading(true);
+        setError('');
+        const formData = new FormData();
+        formData.append('receipt', file);
 
-	const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-		event.preventDefault();
-		event.stopPropagation();
+        try {
+            await axios.post('/api/scan-receipt', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            onUploadComplete();
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Failed to upload receipt');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-		if (event.dataTransfer.files && event.dataTransfer.files[0]) {
-			const file = event.dataTransfer.files[0];
+    const handleMockData = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            await axios.post('/api/scan-receipt-json', {
+                items: [
+                    { name: "Organic Honey Crisp", price: 12.40 },
+                    { name: "Artisanal Oat Milk", price: 7.50 },
+                    { name: "Free Range Eggs", price: 5.99 },
+                    { name: "Avocados (Bag)", price: 8.25 }
+                ]
+            });
+            onUploadComplete();
+        } catch (err: any) {
+            setError('Failed to load mock data');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-			// Validate file is an image
-			if (!file.type.match("image.*")) {
-				setError("Please drop an image file");
-				return;
-			}
+    return (
+        <div className="bg-slate-50 font-body text-slate-900 min-h-screen">
+            <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
+                <div className="flex items-center justify-between px-6 py-4 max-w-2xl mx-auto">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors active:scale-95">
+                            <span className="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h1 className="font-headline font-bold text-lg text-slate-900">Upload Receipt</h1>
+                    </div>
+                </div>
+            </header>
 
-			setUploadedImage(file);
-			setPreviewURL(URL.createObjectURL(file));
-		}
-	};
+            <main className="pt-8 px-6 max-w-2xl mx-auto space-y-8">
+                <div className="text-center mt-6">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-6">
+                        <span className="material-symbols-outlined text-4xl text-slate-400">document_scanner</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-900">Scan Your Grocery Bill</h2>
+                    <p className="text-slate-500 mt-2 text-sm max-w-[280px] mx-auto">Upload a clear photo of your receipt and let the AI extract all the items instantly.</p>
+                </div>
 
-	const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-		event.preventDefault();
-		event.stopPropagation();
-	};
+                {error && (
+                    <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm text-center">
+                        {error}
+                    </div>
+                )}
 
-	const uploadToServer = async () => {
-		if (!uploadedImage) return;
+                <div className="space-y-4">
+                    <label className="flex items-center justify-center w-full h-16 bg-slate-900 text-white font-bold rounded-xl cursor-pointer hover:bg-slate-800 transition-all shadow-sm active:scale-[0.98]">
+                        {loading ? 'Processing...' : (
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined">photo_camera</span>
+                                <span>Upload Image</span>
+                            </div>
+                        )}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={loading} />
+                    </label>
 
-		setLoading(true);
-		setScanningStatus("Uploading and analyzing receipt...");
-		setProcessingMethod("Using advanced AI vision analysis...");
+                    <div className="relative flex items-center justify-center py-4">
+                        <div className="h-px w-full bg-slate-200 absolute"></div>
+                        <span className="bg-slate-50 px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest relative">Or</span>
+                    </div>
 
-		const formData = new FormData();
-		formData.append("receipt", uploadedImage);
-
-		try {
-			const response = await axios.post("/api/scan-receipt", formData, {
-				headers: {
-					"Content-Type": "multipart/form-data",
-				},
-			});
-
-			if (response.data.items && response.data.items.length > 0) {
-				onReceiptProcessed(response.data.items);
-				setScanningStatus("Receipt processed successfully!");
-				setProcessingMethod("");
-			} else {
-				setError("No items could be detected in the receipt");
-				setScanningStatus("");
-				setProcessingMethod("");
-			}
-		} catch (err: any) {
-			console.error("Error processing receipt:", err);
-			setError(err.response?.data?.error || "Failed to process receipt");
-			setScanningStatus("");
-			setProcessingMethod("");
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const handleProcessClick = () => {
-		if (uploadedImage) {
-			uploadToServer();
-		} else {
-			setError("Please upload a receipt image first");
-		}
-	};
-
-	const handleJsonSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		if (!jsonInput.trim()) {
-			setError("Please enter JSON data");
-			return;
-		}
-
-		setLoading(true);
-		setError(null);
-
-		try {
-			// Parse and validate JSON
-			const parsedData = JSON.parse(jsonInput);
-
-			if (!parsedData.items || !Array.isArray(parsedData.items)) {
-				throw new Error(
-					"Invalid JSON format. Expected an object with 'items' array"
-				);
-			}
-
-			// Transform to expected format
-			const items = parsedData.items
-				.map((item: any) => ({
-					name: item.item || item.name,
-					price: parseFloat(item.cost || item.price),
-				}))
-				.filter((item: any) => item.name && !isNaN(item.price));
-
-			if (items.length === 0) {
-				throw new Error("No valid items found in JSON");
-			}
-
-			await onReceiptProcessed(items);
-			setJsonInput("");
-			setError(null);
-		} catch (err: any) {
-			console.error("Error processing JSON:", err);
-			setError(err.message || "Failed to process JSON data");
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	return (
-		<div className="section receipt-upload">
-			<h2>Import Items</h2>
-
-			<div className="upload-tabs">
-				<button
-					className={activeTab === "image" ? "active" : ""}
-					onClick={() => setActiveTab("image")}
-				>
-					Upload Image
-				</button>
-				<button
-					className={activeTab === "json" ? "active" : ""}
-					onClick={() => setActiveTab("json")}
-				>
-					Paste JSON
-				</button>
-			</div>
-
-			{activeTab === "image" ? (
-				<div>
-					<div
-						className="upload-area"
-						onDrop={handleDrop}
-						onDragOver={handleDragOver}
-						onClick={() => fileInputRef.current?.click()}
-					>
-						<input
-							type="file"
-							ref={fileInputRef}
-							onChange={handleFileChange}
-							accept="image/*"
-							style={{ display: "none" }}
-						/>
-						<p>Click to browse or drop receipt image here</p>
-						{previewURL && (
-							<img
-								src={previewURL}
-								alt="Receipt preview"
-								className="receipt-preview"
-							/>
-						)}
-					</div>
-
-					<div style={{ marginTop: "15px", textAlign: "center" }}>
-						<button
-							onClick={handleProcessClick}
-							disabled={!uploadedImage || loading}
-						>
-							Scan Receipt
-						</button>
-						{uploadedImage && (
-							<button
-								onClick={() => {
-									setUploadedImage(null);
-									setPreviewURL(null);
-									setScanningStatus("");
-									setProcessingMethod("");
-								}}
-								disabled={loading}
-							>
-								Clear
-							</button>
-						)}
-					</div>
-
-					{loading && (
-						<div className="loading">
-							<div className="loading-spinner"></div>
-							<p>{scanningStatus}</p>
-							{processingMethod && (
-								<p className="processing-method">
-									{processingMethod}
-								</p>
-							)}
-						</div>
-					)}
-
-					{scanningStatus && !loading && (
-						<p style={{ color: "green", textAlign: "center" }}>
-							{scanningStatus}
-						</p>
-					)}
-				</div>
-			) : (
-				<form onSubmit={handleJsonSubmit}>
-					<textarea
-						value={jsonInput}
-						onChange={(e) => setJsonInput(e.target.value)}
-						placeholder={`Paste JSON here, e.g.:
-{
-  "items": [
-    {"item": "THAI JASMINE", "cost": 19.89},
-    {"item": "PREMIER CHOC", "cost": 31.99}
-  ]
-}`}
-						rows={10}
-						disabled={loading}
-						className="json-input"
-					/>
-					<button
-						type="submit"
-						disabled={!jsonInput.trim() || loading}
-					>
-						{loading ? "Processing..." : "Import Items"}
-					</button>
-				</form>
-			)}
-		</div>
-	);
-};
-
-export default ReceiptUpload;
+                    <button 
+                        onClick={handleMockData} disabled={loading}
+                        className="w-full flex items-center justify-center gap-2 h-16 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-[0.98]">
+                        <span className="material-symbols-outlined">bug_report</span>
+                        <span>Use Mock Data (Test Flow)</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+    );
+}
