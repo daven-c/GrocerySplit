@@ -112,6 +112,19 @@ run('shared groups integration', () => {
         expect((await api.listSessions(groupId)).map(x => x.id).sort()).toEqual([sessionId, second].sort());
     });
 
+    it('any member can delete a receipt (and its items); outsiders cannot', async () => {
+        await as('a');
+        const doomed = await api.createSession({ groupId, name: 'Doomed', items: [{ name: 'Gum', price: 1 }] });
+        await as('c');
+        await api.deleteSession(doomed); // RLS: affects 0 rows
+        await as('b');
+        expect((await api.getSession(doomed)).items).toHaveLength(1);
+        await api.deleteSession(doomed);
+        await as('a');
+        expect((await api.listSessions(groupId)).some(x => x.id === doomed)).toBe(false);
+        expect((await supabase.from('items').select('id').eq('session_id', doomed)).data).toEqual([]);
+    });
+
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
         await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();

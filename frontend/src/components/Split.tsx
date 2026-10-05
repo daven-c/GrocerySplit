@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getSession, getGroup, listPeople, updateSession, addItem, updateItem, deleteItem, Item, Group } from '../lib/api';
+import { getSession, getGroup, listPeople, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Group } from '../lib/api';
 import { computeSplit } from '../lib/calc';
 
 interface SplitProps {
@@ -40,6 +40,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const [activeAssignParticipant, setActiveAssignParticipant] = useState<string | null>(null);
     const [selectedGroupPreview, setSelectedGroupPreview] = useState<string>('');
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+    const [confirmDeleteReceipt, setConfirmDeleteReceipt] = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -169,6 +170,17 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const handleAddAllGroupMembers = () =>
         saveParticipants(Array.from(new Set([...users, ...(group?.members.map(m => m.name) ?? [])])));
 
+    const handleDeleteReceipt = async () => {
+        setConfirmDeleteReceipt(false);
+        try {
+            await deleteSession(sessionId);
+            onBack();
+        } catch (err) {
+            console.error("Delete failed", err);
+            flash('Failed to delete receipt.', 'error');
+        }
+    };
+
     const handleSaveSession = async () => {
         try {
             const taxAmt = Math.max(0, parseFloat(tax) || 0);
@@ -234,6 +246,18 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                         <div className="flex gap-3">
                             <button onClick={() => setItemToDelete(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors active:scale-95">Cancel</button>
                             <button onClick={confirmDeleteItem} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-sm active:scale-95">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {confirmDeleteReceipt && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                        <h3 className="font-headline font-bold text-xl text-slate-900 mb-2">Delete receipt?</h3>
+                        <p className="text-slate-500 mb-6 font-medium leading-relaxed">This permanently deletes <strong className="text-slate-900">{sessionName || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmDeleteReceipt(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors active:scale-95">Cancel</button>
+                            <button onClick={handleDeleteReceipt} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-sm active:scale-95">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -576,6 +600,13 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                         >
                                             <span className="material-symbols-outlined text-[20px]">save</span>
                                             Save Receipt Settings
+                                        </button>
+                                        <button
+                                            onClick={() => setConfirmDeleteReceipt(true)}
+                                            className="w-full mt-3 font-bold py-4 rounded-xl bg-white text-red-600 border border-red-200 hover:bg-red-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                                            Delete Receipt
                                         </button>
                                     </div>
                                 </div>
