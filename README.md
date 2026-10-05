@@ -65,5 +65,5 @@ npm test                     # unit tests (split math + JSON import)
 
 - **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
 - **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` then deploys to production and every PR gets a preview deployment.
-- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and push to `main`.
+- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and every push to `main` or `dev`.
 - **Database migrations are not automated.** Apply new files in `supabase/migrations/` to the Supabase project before merging a change that needs them.
