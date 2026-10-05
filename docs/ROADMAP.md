@@ -6,7 +6,7 @@ Groceries remain a first-class, itemized flow inside it. Live at https://costspl
 
 ## Where it is today
 - Groups at the top level, expenses inside, members invited by email.
-- **Two kinds of expense:** itemized grocery receipts, and standalone bills split equally / by amount / by percent / by shares, each with a category.
+- **One expense editor:** a *Split by* control switches between equally / amounts / percent / shares and *By item* (itemized receipts); each expense has a category.
 - Receipts imported from model-generated JSON (itemized), tax/tip shared proportionally, exact-penny math.
 - Friends view: what you owe / are owed across all groups, with manual "mark paid" settlements.
 

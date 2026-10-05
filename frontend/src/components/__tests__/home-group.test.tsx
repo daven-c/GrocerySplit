@@ -150,31 +150,23 @@ describe('Group detail', () => {
         expect(screen.getByText('Costco')).toBeInTheDocument();
     });
 
-    it('Add expense lists a bill first, then groceries, then a payback; Escape closes it', async () => {
+    it('Add expense is one option for any cost, plus Record a payback; Escape closes it', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         const menu = await screen.findByRole('menu');
-        expect(within(menu).getAllByRole('menuitem').map(i => within(i).getByText(/^[A-Z]/, { selector: 'span.text-sm' }).textContent)).toEqual(['Split a bill or cost', 'Split groceries', 'Record a payback']);
+        expect(within(menu).getAllByRole('menuitem').map(i => within(i).getByText(/^[A-Z]/, { selector: 'span.text-sm' }).textContent)).toEqual(['Add an expense', 'Record a payback']);
+        expect(within(menu).queryByText('Split groceries')).not.toBeInTheDocument(); // groceries are the "By item" split now
         expect(within(menu).queryByText('Import from a photo')).not.toBeInTheDocument();
         await u.keyboard('{Escape}');
         await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     });
 
-    it('"Split groceries" creates a blank grocery receipt for everyone and opens the receipt editor', async () => {
+    it('"Add an expense" creates a draft expense split equally among everyone, to be refined in the editor', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split groceries'));
-        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries', draft: true }));
-        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'receipt', true)); // a draft: not saved until Save
-    });
-
-    it('"Split a bill or cost" creates a standalone expense split equally among everyone', async () => {
-        const u = userEvent.setup();
-        renderWithData(<GroupDetail {...props} />);
-        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a bill or cost'));
+        await u.click(await screen.findByText('Add an expense'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
             groupId: 'g1', kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
             splitMethod: 'equal', splitData: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 },
@@ -182,11 +174,11 @@ describe('Group detail', () => {
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense', true));
     });
 
-    it('a double click on "Split a bill or cost" creates only one record', async () => {
+    it('a double click on "Add an expense" creates only one record', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.dblClick(await screen.findByText('Split a bill or cost'));
+        await u.dblClick(await screen.findByText('Add an expense'));
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalled());
         expect(api.createSession).toHaveBeenCalledTimes(1);
     });

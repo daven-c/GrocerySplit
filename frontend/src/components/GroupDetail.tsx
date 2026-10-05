@@ -123,17 +123,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const memberNames = group.members.map(m => m.name);
 
-    const addReceiptByHand = async () => {
-        setAddOpen(false);
-        if (creating.current) return; // a double click must not create two records (stays locked: success navigates away)
-        creating.current = true;
-        try {
-            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
-            await refresh();
-            onOpenRecord(id, 'receipt', true);
-        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
-    };
-
     const addExpense = async () => {
         setAddOpen(false);
         if (creating.current) return;
@@ -302,8 +291,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[
-                                    { icon: 'payments', title: 'Split a bill or cost', desc: 'Rent, utilities, dinner, a trip. Pick who shares it', go: addExpense },
-                                    { icon: 'shopping_basket', title: 'Split groceries', desc: 'Add items by hand, or import them from a receipt', go: addReceiptByHand },
+                                    { icon: 'payments', title: 'Add an expense', desc: 'A bill, groceries, rent, a trip. You choose how to split it', go: addExpense },
                                     { icon: 'swap_horiz', title: 'Record a payback', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">

@@ -24,6 +24,13 @@ export const METHODS: { value: SplitMethod; label: string; hint: string }[] = [
     { value: 'shares', label: 'Shares', hint: 'Split in proportion, e.g. 2 shares for a bigger room.' },
 ];
 
+export type SplitBy = SplitMethod | 'items';
+/** Every way to split one expense. "By item" is the itemized (receipt) split; the rest are standalone splits. */
+export const SPLIT_BY: { value: SplitBy; label: string; hint: string }[] = [
+    ...METHODS,
+    { value: 'items', label: 'By item', hint: 'Tap who had each item. Tax and tip are shared by what each person had.' },
+];
+
 const cents = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100);
 
 export interface ExpenseSplit {

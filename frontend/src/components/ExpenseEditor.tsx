@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, Modal, SegmentedTabs, AnimatedNumber, tap, tapFlat } from '../lib/motion';
+import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
-import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
+import { CATEGORIES, METHODS, SplitBy, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, DraftBar, Icon } from './ui';
+import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -13,6 +13,8 @@ interface ExpenseEditorProps {
     onBack: () => void;
     onSaved: () => void;
     onDiscard: () => void;
+    /** The record changed between an itemized split and the other methods; reopen it in the right body. */
+    onSwitched: (kind: 'receipt' | 'expense') => void;
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
@@ -23,7 +25,7 @@ const dateMeta = (iso: string) => {
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
 
-export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDiscard }: ExpenseEditorProps) {
+export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDiscard, onSwitched }: ExpenseEditorProps) {
     const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [name, setName] = useState('');
@@ -108,6 +110,26 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [name, total, date, category, paidBy, method, data, record, split.valid]);
+
+    // "By item" turns this into an itemized record; any items it had before are still there.
+    const switchToItems = async () => {
+        if (!record || saving) return;
+        autosave.cancel();
+        setSaving(true);
+        setError('');
+        try {
+            await updateSession(sessionId, {
+                kind: 'receipt', name: name.trim() || 'Expense', session_date: date || record.session_date, category,
+                ...(paidBy ? { paid_by: paidBy } : {}), participants: members.map(m => m.name),
+            });
+            await refresh();
+            onSwitched('receipt');
+        } catch (err: any) {
+            setError(err.message || 'Could not switch to splitting by item');
+            setSaving(false);
+        }
+    };
+    const pickSplitBy = (to: SplitBy) => (to === 'items' ? switchToItems() : changeMethod(to));
 
     const changeMethod = (to: SplitMethod) => {
         const next = convertSplit(method, to, data, total);
@@ -208,10 +230,10 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
 
                     <Card className="p-5 flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold">Split</span>
+                            <span className="text-sm font-semibold">Split by</span>
                             <motion.button {...tapFlat} onClick={toggleEveryone} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{everyone ? 'Clear everyone' : 'Select everyone'}</motion.button>
                         </div>
-                        <SegmentedTabs id="split-method" value={method} onChange={changeMethod} tabs={METHODS.map(m => ({ value: m.value, label: m.label }))} />
+                        <SplitByTabs value={method} onChange={pickSplitBy} disabled={saving} />
                         <span className="text-[13px] text-muted -mt-1">{hint}</span>
 
                         <div className="flex flex-col">

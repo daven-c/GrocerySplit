@@ -1,5 +1,6 @@
 import React from 'react';
-import { motion, tap, tapFlat } from '../lib/motion';
+import { motion, tap, tapFlat, SegmentedTabs } from '../lib/motion';
+import { SPLIT_BY, SplitBy } from '../lib/expenses';
 import type { Tone } from '../lib/people';
 import { initialOf } from '../lib/people';
 
@@ -101,6 +102,15 @@ export function DraftBar({ what, canSave, problem, saving, onSave, onDiscard }: 
                 <Button variant="secondary" height={38} onClick={onDiscard} disabled={saving}>Discard</Button>
                 <Button height={38} onClick={onSave} disabled={!canSave || saving}>{saving ? 'Saving…' : `Save ${what}`}</Button>
             </div>
+        </div>
+    );
+}
+
+/** The one control for how an expense is split, shared by both bodies of the editor. */
+export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitBy; onChange: (v: SplitBy) => void; disabled?: boolean }) {
+    return (
+        <div className={disabled ? 'opacity-60 pointer-events-none' : ''} aria-busy={disabled}>
+            <SegmentedTabs id="split-by" compact value={value} onChange={onChange} tabs={SPLIT_BY.map(m => ({ value: m.value, label: m.label }))} />
         </div>
     );
 }
