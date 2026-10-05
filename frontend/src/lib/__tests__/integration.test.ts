@@ -225,6 +225,59 @@ run('shared groups integration', () => {
         expect((await supabase.from('groups').select('id')).data ?? []).toEqual([]);
     });
 
+    it('admin dashboard: only admins can list users or create accounts', async () => {
+        // gs-test-a is made an admin by the test setup SQL; b and c are regular users.
+        await as('b');
+        expect(await api.isAdmin()).toBe(false);
+        await expect(api.adminListUsers()).rejects.toThrow(/not authorized/i);
+        await expect(api.adminTotals()).rejects.toThrow(/not authorized/i);
+        await expect(api.adminCreateUser({ name: 'X', email: 'gs-test-x@mailinator.com', password: 'longenough1', confirm: true, makeAdmin: false })).rejects.toThrow(/admins only/i);
+        const me = (await supabase.auth.getUser()).data.user!.id;
+        expect((await supabase.from('admins').insert({ user_id: me })).error).toBeTruthy(); // cannot self-promote
+        expect((await supabase.from('admins').select('user_id')).data).toEqual([]); // cannot see who the admins are
+
+        await supabase.auth.signOut({ scope: 'local' });
+        await expect(api.adminCreateUser({ name: 'X', email: 'gs-test-x@mailinator.com', password: 'longenough1', confirm: true, makeAdmin: false })).rejects.toThrow();
+        expect((await supabase.rpc('admin_list_users')).error).toBeTruthy(); // anon
+
+        await as('a');
+        expect(await api.isAdmin()).toBe(true);
+        const users = await api.adminListUsers();
+        expect(users.map(u => u.email)).toEqual(expect.arrayContaining([email('a'), email('b'), email('c')]));
+        expect(users.find(u => u.email === email('a'))).toMatchObject({ is_admin: true, email_confirmed: true, name: 'Test A' });
+        expect(users.find(u => u.email === email('b'))?.is_admin).toBe(false);
+        const totals = await api.adminTotals();
+        expect(totals.groups).toBeGreaterThanOrEqual(1);
+    });
+
+    it('admin can force-create a confirmed user who can sign in immediately', async () => {
+        await as('a');
+        const created = await api.adminCreateUser({ name: 'Forced D', email: 'GS-Test-D@mailinator.com', password: 'forced-pass-123', confirm: true, makeAdmin: false });
+        expect(created.email).toBe('gs-test-d@mailinator.com');
+        await expect(api.adminCreateUser({ name: 'Dup', email: 'gs-test-d@mailinator.com', password: 'forced-pass-123', confirm: true, makeAdmin: false })).rejects.toThrow(/already exists/i);
+        await expect(api.adminCreateUser({ name: 'Weak', email: 'gs-test-w@mailinator.com', password: 'short', confirm: true, makeAdmin: false })).rejects.toThrow(/at least 8/i);
+        await expect(api.adminCreateUser({ name: '', email: 'gs-test-w@mailinator.com', password: 'longenough1', confirm: true, makeAdmin: false })).rejects.toThrow(/name/i);
+
+        const listed = (await api.adminListUsers()).find(u => u.email === 'gs-test-d@mailinator.com')!;
+        expect(listed).toMatchObject({ name: 'Forced D', email_confirmed: true, is_admin: false, groups_count: 0 });
+
+        const fresh = await supabase.auth.signInWithPassword({ email: 'gs-test-d@mailinator.com', password: 'forced-pass-123' });
+        expect(fresh.error).toBeNull();
+        await as('a');
+        expect((await api.adminListUsers()).find(u => u.email === 'gs-test-d@mailinator.com')?.last_sign_in_at).toBeTruthy();
+    });
+
+    it('admin can create an unconfirmed user, force-confirm them, and promote on create', async () => {
+        await as('a');
+        const e = await api.adminCreateUser({ name: 'Pending E', email: 'gs-test-e@mailinator.com', password: 'pending-pass-123', confirm: false, makeAdmin: true });
+        let row = (await api.adminListUsers()).find(u => u.id === e.id)!;
+        expect(row).toMatchObject({ email_confirmed: false, is_admin: true });
+        await api.adminConfirmUser(e.id);
+        row = (await api.adminListUsers()).find(u => u.id === e.id)!;
+        expect(row.email_confirmed).toBe(true);
+        await expect(api.adminConfirmUser('')).rejects.toThrow();
+    });
+
     it('users can rename themselves but cannot edit their stored profile email', async () => {
         await as('a');
         const myGroup = await api.createGroup('Rename check');

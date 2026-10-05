@@ -7,8 +7,10 @@ import ReceiptUpload from "./components/ReceiptUpload";
 import Split from "./components/Split";
 import GroupDetail from "./components/GroupDetail";
 import Account from "./components/Account";
+import Admin from "./components/Admin";
+import { MotionConfig, motion, FROM } from "./lib/motion";
 
-type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account';
+type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account' | 'admin';
 
 const App: React.FC = () => {
     const [auth, setAuth] = useState<AuthSession | null>(null);
@@ -20,16 +22,36 @@ const App: React.FC = () => {
     const user = auth ? { id: auth.user.id, email: auth.user.email, name: auth.user.user_metadata?.name || auth.user.email?.split('@')[0] || 'User' } : null;
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data }) => {
-            setAuth(data.session);
-            setView(data.session ? 'dashboard' : 'auth');
+        let done = false;
+        // Whatever happens (rejection, a stuck cross-tab lock), never leave the user on an empty screen.
+        const finish = (session: AuthSession | null) => {
+            if (done) return;
+            done = true;
+            setAuth(session);
+            setView(session ? 'dashboard' : 'auth');
             setReady(true);
-        });
+        };
+        supabase.auth.getSession()
+            .then(({ data }) => finish(data.session))
+            .catch(err => {
+                console.error('Could not restore session', err);
+                finish(null);
+            });
+        const timer = setTimeout(() => {
+            console.warn('Session restore timed out; showing sign-in');
+            finish(null);
+        }, 6000);
+
         const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
             setAuth(session);
-            if (!session) setView('auth');
+            // A late session (after the timeout) should still land on the app, not the sign-in screen.
+            setView(v => (session ? (v === 'auth' ? 'dashboard' : v) : 'auth'));
+            if (session) setReady(true);
         });
-        return () => sub.subscription.unsubscribe();
+        return () => {
+            clearTimeout(timer);
+            sub.subscription.unsubscribe();
+        };
     }, []);
 
     const openGroup = (groupId: string) => {
@@ -47,15 +69,22 @@ const App: React.FC = () => {
         setView('auth');
     };
 
-    if (!ready) return <div className="min-h-screen bg-slate-50" />;
+    if (!ready) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center" role="status" aria-label="Loading">
+                <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     const signedIn = !!auth;
 
     return (
+        <MotionConfig reducedMotion="user">
         <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
-            <div key={view} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <motion.div key={view} initial={{ opacity: 0.7, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
-                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onLogout={handleLogout} />}
+                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onOpenAdmin={() => setView('admin')} onLogout={handleLogout} />}
                 {signedIn && view === 'group' && activeGroupId && (
                     <GroupDetail
                         groupId={activeGroupId}
@@ -66,10 +95,11 @@ const App: React.FC = () => {
                 )}
                 {signedIn && view === 'upload' && activeGroupId && <ReceiptUpload groupId={activeGroupId} onImported={id => openReceipt(id)} onBack={() => setView('group')} />}
                 {signedIn && view === 'split' && activeSessionId && <Split sessionId={activeSessionId} onBack={() => setView(activeGroupId ? 'group' : 'dashboard')} />}
+                {signedIn && view === 'admin' && <Admin onBack={() => setView('dashboard')} />}
                 {signedIn && view === 'account' && <Account user={user} onBack={() => setView('dashboard')} onLogout={handleLogout} />}
-            </div>
-
+            </motion.div>
         </div>
+        </MotionConfig>
     );
 };
 

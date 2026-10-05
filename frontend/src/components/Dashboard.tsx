@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, Group, Invite, Session, Settlement } from '../lib/api';
+import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, isAdmin, Group, Invite, Session, Settlement } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import FriendsTab from './FriendsTab';
+import { motion, FROM, AnimatePresence, Pop, SegmentedTabs, AnimatedNumber, listItem, spring, tap, tapFlat, tapRow } from '../lib/motion';
 
 interface DashboardProps {
     user: any;
     onOpenGroup: (groupId: string) => void;
     onOpenAccount: () => void;
+    onOpenAdmin: () => void;
     onLogout: () => void;
 }
 
-export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }: DashboardProps) {
+export default function Dashboard({ user, onOpenGroup, onOpenAccount, onOpenAdmin, onLogout }: DashboardProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [invites, setInvites] = useState<Invite[]>([]);
@@ -20,6 +22,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [menuOpen, setMenuOpen] = useState(false);
+    const [admin, setAdmin] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -47,6 +50,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
     }, []);
 
     useEffect(() => { load(); }, [load]);
+    useEffect(() => { isAdmin().then(setAdmin).catch(() => setAdmin(false)); }, []);
 
     const handleCreate = async () => {
         const name = newName.trim();
@@ -86,24 +90,32 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                         <h1 className="font-headline font-extrabold tracking-tight text-xl text-slate-900">Grocery Split</h1>
                     </div>
                     <div className="relative" ref={menuRef}>
-                        <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen}
-                            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 active:scale-95 transition-all">
+                        <motion.button {...tap} onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen}
+                            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors">
                             <span className="material-symbols-outlined">{menuOpen ? 'close' : 'menu'}</span>
-                        </button>
+                        </motion.button>
+                        <AnimatePresence>
                         {menuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                            <motion.div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 origin-top-right"
+                                initial={{ opacity: FROM, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={spring}>
                                 <div className="px-4 py-3 border-b border-slate-100">
                                     <p className="font-bold text-slate-900 text-sm truncate">{user?.name}</p>
                                     <p className="text-xs text-slate-400 truncate">{user?.email}</p>
                                 </div>
-                                <button onClick={() => { setMenuOpen(false); onOpenAccount(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
+                                <motion.button {...tapFlat} onClick={() => { setMenuOpen(false); onOpenAccount(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
                                     <span className="material-symbols-outlined text-[20px] text-slate-400">manage_accounts</span>Account
-                                </button>
-                                <button onClick={() => { setMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 text-left">
+                                </motion.button>
+                                {admin && (
+                                    <motion.button {...tapFlat} onClick={() => { setMenuOpen(false); onOpenAdmin(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
+                                        <span className="material-symbols-outlined text-[20px] text-slate-400">admin_panel_settings</span>Admin
+                                    </motion.button>
+                                )}
+                                <motion.button {...tapFlat} onClick={() => { setMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 text-left">
                                     <span className="material-symbols-outlined text-[20px]">logout</span>Sign out
-                                </button>
-                            </div>
+                                </motion.button>
+                            </motion.div>
                         )}
+                        </AnimatePresence>
                     </div>
                 </div>
             </header>
@@ -114,32 +126,31 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                     <p className="text-slate-500 text-sm mt-1">Split costs with your groups, and see who owes whom.</p>
                 </section>
 
-                {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
+                <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
 
                 {invites.length > 0 && (
                     <section className="space-y-3">
                         <h3 className="font-headline font-bold text-lg text-slate-900">Invitations</h3>
-                        {invites.map(inv => (
-                            <div key={inv.id} className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between gap-3">
+                        <AnimatePresence initial={false}>
+                        {invites.map((inv, i) => (
+                            <motion.div key={inv.id} {...listItem(i)} className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <p className="font-bold text-slate-900 truncate">{inv.group_name}</p>
                                     <p className="text-xs text-slate-500">Invited by {inv.inviter_name}</p>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
-                                    <button onClick={() => handleRespond(inv.id, false)} className="px-3 py-2 text-sm font-bold bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 active:scale-95">Decline</button>
-                                    <button onClick={() => handleRespond(inv.id, true)} className="px-3 py-2 text-sm font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800 active:scale-95">Join</button>
+                                    <motion.button {...tap} onClick={() => handleRespond(inv.id, false)} className="px-3 py-2 text-sm font-bold bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50">Decline</motion.button>
+                                    <motion.button {...tap} onClick={() => handleRespond(inv.id, true)} className="px-3 py-2 text-sm font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800">Join</motion.button>
                                 </div>
-                            </div>
+                            </motion.div>
                         ))}
+                        </AnimatePresence>
                     </section>
                 )}
 
-                <div className="flex bg-slate-200 rounded-xl p-1 shadow-inner">
-                    {(['groups', 'friends'] as const).map(t => (
-                        <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2.5 text-sm font-bold rounded-lg capitalize transition-colors ${tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>{t}</button>
-                    ))}
-                </div>
+                <SegmentedTabs id="home" value={tab} onChange={setTab} tabs={[{ value: 'groups', label: 'Groups' }, { value: 'friends', label: 'Friends' }]} />
 
+                <motion.div key={tab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                 {tab === 'friends' && (
                     loading ? <p className="text-center text-slate-400 font-semibold py-8 animate-pulse">Loading...</p> : (
                         <FriendsTab me={user?.id ?? ''} groups={groups} sessions={sessions} settlements={settlements} onChanged={load} />
@@ -160,9 +171,9 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                 placeholder="New group..."
                                 className="bg-transparent border-none outline-none text-sm px-3 py-1.5 w-32 font-semibold text-slate-700"
                             />
-                            <button onClick={handleCreate} disabled={!newName.trim()} aria-label="Create group" className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center disabled:opacity-30 active:scale-95">
+                            <motion.button {...tap} onClick={handleCreate} disabled={!newName.trim()} aria-label="Create group" className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center disabled:opacity-30">
                                 <span className="material-symbols-outlined text-[18px]">add</span>
-                            </button>
+                            </motion.button>
                         </div>
                     </div>
 
@@ -175,11 +186,12 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                 <p className="text-slate-400 text-sm mt-1">Create one above, then invite the people you split with.</p>
                             </div>
                         ) : (
-                            groups.map(g => {
+                            groups.map((g, gi) => {
                                 const gs = sessions.filter(s => s.group_id === g.id);
                                 const spent = gs.reduce((a, s) => a + total(s), 0);
                                 return (
-                                    <button key={g.id} onClick={() => onOpenGroup(g.id)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 transition-all hover:border-slate-300 shadow-sm hover:shadow active:scale-[0.99] group cursor-pointer text-left">
+                                    <motion.div key={g.id} {...listItem(gi)}>
+                                    <motion.button {...tapRow} onClick={() => onOpenGroup(g.id)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 transition-colors hover:border-slate-300 shadow-sm hover:shadow group cursor-pointer text-left">
                                         <div className="flex items-center gap-4 min-w-0">
                                             <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100 shrink-0">
                                                 <span className="material-symbols-outlined">group</span>
@@ -193,7 +205,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                         </div>
                                         <div className="text-right flex items-center gap-3 shrink-0">
                                             <div>
-                                                <p className="font-headline font-bold text-slate-900">${spent.toFixed(2)}</p>
+                                                <p className="font-headline font-bold text-slate-900"><AnimatedNumber value={spent} prefix="$" /></p>
                                                 {Math.abs(groupBalance[g.id] ?? 0) >= 0.005 && (
                                                     <p className={`text-[11px] font-bold ${groupBalance[g.id] > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                         {groupBalance[g.id] > 0 ? `you're owed $${groupBalance[g.id].toFixed(2)}` : `you owe $${(-groupBalance[g.id]).toFixed(2)}`}
@@ -202,13 +214,15 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                             </div>
                                             <span className="material-symbols-outlined text-slate-300">chevron_right</span>
                                         </div>
-                                    </button>
+                                    </motion.button>
+                                    </motion.div>
                                 );
                             })
                         )}
                     </div>
                 </section>
                 )}
+                </motion.div>
             </main>
         </div>
     );

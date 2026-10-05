@@ -267,3 +267,64 @@ export async function recordSettlement(groupId: string, fromUser: string, toUser
 export async function deleteSettlement(id: string) {
     check(await supabase.from('settlements').delete().eq('id', id));
 }
+
+// ---- Admin (all enforced server-side; the UI only hides what a non-admin could not use anyway) ----
+export interface AdminUser {
+    id: string;
+    email: string;
+    name: string;
+    created_at: string;
+    last_sign_in_at: string | null;
+    email_confirmed: boolean;
+    is_admin: boolean;
+    groups_count: number;
+    receipts_count: number;
+}
+
+export interface AdminTotals {
+    groups: number;
+    receipts: number;
+    items: number;
+    settlements: number;
+}
+
+export async function isAdmin(): Promise<boolean> {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return false;
+    const res = await supabase.from('admins').select('user_id').eq('user_id', data.user.id).maybeSingle();
+    return !!res.data;
+}
+
+export async function adminListUsers(): Promise<AdminUser[]> {
+    const rows = check(await supabase.rpc('admin_list_users'));
+    return rows.map((r: any) => ({ ...r, groups_count: Number(r.groups_count), receipts_count: Number(r.receipts_count) }));
+}
+
+export async function adminTotals(): Promise<AdminTotals> {
+    const [r] = check(await supabase.rpc('admin_totals'));
+    return { groups: Number(r.groups), receipts: Number(r.receipts), items: Number(r.items), settlements: Number(r.settlements) };
+}
+
+async function adminCall<T>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await supabase.functions.invoke('admin-users', { body });
+    if (error) {
+        let message = error.message;
+        const ctx = (error as any).context;
+        if (ctx && typeof ctx.json === 'function') {
+            try { message = (await ctx.json()).error ?? message; } catch { /* keep generic message */ }
+        }
+        throw new Error(message);
+    }
+    return data as T;
+}
+
+/** "Force create": the account is confirmed immediately, with no email sent. */
+export function adminCreateUser(input: { name: string; email: string; password: string; confirm: boolean; makeAdmin: boolean }) {
+    return adminCall<{ id: string; email: string; name: string }>({
+        action: 'create', name: input.name, email: input.email, password: input.password, confirm: input.confirm, make_admin: input.makeAdmin,
+    });
+}
+
+export function adminConfirmUser(userId: string) {
+    return adminCall<{ ok: true }>({ action: 'confirm', user_id: userId });
+}

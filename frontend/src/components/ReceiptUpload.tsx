@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createSession, getGroup } from '../lib/api';
 import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
+import { motion, FROM, AnimatePresence, Pop, enter, tap, tapFlat } from '../lib/motion';
 
 interface ReceiptUploadProps {
     groupId: string;
@@ -71,29 +72,29 @@ export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUp
             <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
                 <div className="flex items-center justify-between px-6 py-4 max-w-2xl mx-auto">
                     <div className="flex items-center gap-3">
-                        <button onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors active:scale-95">
+                        <motion.button {...tap} onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors">
                             <span className="material-symbols-outlined">arrow_back</span>
-                        </button>
+                        </motion.button>
                         <h1 className="font-headline font-bold text-lg text-slate-900">Import Receipt</h1>
                     </div>
                 </div>
             </header>
 
             <main className="pt-8 px-6 pb-16 max-w-2xl mx-auto space-y-8">
-                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <motion.section {...enter(0)} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
                     <h2 className="font-bold text-slate-900"><span className="text-slate-400">1.</span> Copy the prompt</h2>
                     <p className="text-sm text-slate-500">Paste it into your favorite AI chat together with a photo of your receipt. It will reply with JSON.</p>
-                    <button onClick={copyPrompt} className="w-full flex items-center justify-center gap-2 h-12 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
+                    <motion.button {...tapFlat} onClick={copyPrompt} className="w-full flex items-center justify-center gap-2 h-12 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors">
                         <span className="material-symbols-outlined">{copied ? 'check' : 'content_copy'}</span>
                         {copied ? 'Copied!' : 'Copy prompt'}
-                    </button>
+                    </motion.button>
                     <details className="text-sm">
                         <summary className="cursor-pointer text-slate-500 font-semibold">View prompt</summary>
                         <pre className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap text-xs text-slate-700 select-all">{RECEIPT_PROMPT}</pre>
                     </details>
-                </section>
+                </motion.section>
 
-                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <motion.section {...enter(1)} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
                     <h2 className="font-bold text-slate-900"><span className="text-slate-400">2.</span> Paste the JSON it returns</h2>
                     <textarea
                         value={json}
@@ -109,31 +110,31 @@ export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUp
                             Choose .json file
                             <input type="file" accept=".json,application/json,text/plain" className="hidden" onChange={handleFile} />
                         </label>
-                        <button onClick={() => setJson(EXAMPLE_RECEIPT_JSON)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 active:scale-[0.98]">
+                        <motion.button {...tapFlat} onClick={() => setJson(EXAMPLE_RECEIPT_JSON)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50">
                             Try example
-                        </button>
+                        </motion.button>
                     </div>
 
-                    {parsed && 'err' in parsed && (
-                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{parsed.err}</div>
-                    )}
-                    {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
+                    <Pop show={!!(parsed && 'err' in parsed)} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{parsed && 'err' in parsed ? parsed.err : ''}</Pop>
+                    <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
 
+                    <AnimatePresence>
                     {receipt && (
-                        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
+                        <motion.div initial={{ opacity: FROM, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }} className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
                             <p className="font-bold">{receipt.store || 'Grocery Trip'}{receipt.date ? ` · ${receipt.date}` : ''}</p>
                             <p>{receipt.items.length} items · subtotal ${subtotal.toFixed(2)} · tax ${receipt.tax.toFixed(2)}{receipt.tip ? ` · tip $${receipt.tip.toFixed(2)}` : ''}</p>
                             {receipt.skipped > 0 && <p className="text-amber-700">{receipt.skipped} invalid line(s) will be skipped.</p>}
-                        </div>
+                        </motion.div>
                     )}
+                    </AnimatePresence>
 
-                    <button
+                    <motion.button {...tapFlat}
                         onClick={handleImport}
                         disabled={!receipt || loading}
-                        className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-sm disabled:opacity-40 active:scale-[0.98] transition-all">
+                        className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-sm disabled:opacity-40 transition-colors">
                         {loading ? 'Importing...' : 'Import & split'}
-                    </button>
-                </section>
+                    </motion.button>
+                </motion.section>
             </main>
         </div>
     );
