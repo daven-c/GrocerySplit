@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { computeBalances } from '../lib/balances';
 import { recordSettlement, deleteSettlement, Group, Session, Settlement } from '../lib/api';
-import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tap, tapFlat, tapRow } from '../lib/motion';
+import { motion, FROM, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tap, tapFlat, tapRow } from '../lib/motion';
 
 interface FriendsTabProps {
     me: string;
@@ -112,7 +112,7 @@ export default function FriendsTab({ me, groups, sessions, settlements, onChange
                                     <div className="space-y-2">
                                         <AnimatePresence initial={false}>
                                         {lines.map(([gid, net]) => (
-                                            <motion.div key={gid} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2.5">
+                                            <motion.div key={gid} layout initial={{ opacity: FROM, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2.5">
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-semibold text-slate-800 truncate">{groupName[gid] ?? 'Group'}</p>
                                                     <p className={`text-xs font-bold ${net > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{net > 0 ? `${f.name} owes you ${money(net)}` : `You owe ${f.name} ${money(net)}`}</p>
@@ -137,7 +137,7 @@ export default function FriendsTab({ me, groups, sessions, settlements, onChange
                                         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Recorded payments</p>
                                         <AnimatePresence initial={false}>
                                         {history.map(h => (
-                                            <motion.div key={h.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex items-center justify-between text-sm bg-white border border-slate-100 rounded-lg px-3 py-2">
+                                            <motion.div key={h.id} layout initial={{ opacity: FROM, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex items-center justify-between text-sm bg-white border border-slate-100 rounded-lg px-3 py-2">
                                                 <span className="text-slate-600 truncate">
                                                     {h.from_user === me ? `You paid ${f.name}` : `${f.name} paid you`} {money(h.amount)}
                                                     <span className="text-slate-400"> · {groupName[h.group_id] ?? 'Group'} · {new Date(h.created_at).toLocaleDateString()}</span>

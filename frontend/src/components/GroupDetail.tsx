@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { motion, AnimatePresence, Pop, SegmentedTabs, Modal, listItem, tap, tapFlat, tapRow } from '../lib/motion';
+import { motion, FROM, AnimatePresence, Pop, SegmentedTabs, Modal, listItem, tap, tapFlat, tapRow } from '../lib/motion';
 import {
     getGroup, listSessions, createSession, deleteGroup, removeMember, inviteToGroup,
     listPendingInvites, revokeInvite, Group, Session, PendingInvite,
@@ -149,8 +149,7 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                 <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
                 <Pop show={!!notice} className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm">{notice}</Pop>
 
-                <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                <motion.div key={tab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                 {tab === 'receipts' && (
                     <section className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -214,7 +213,7 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                                         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Pending</p>
                                         <AnimatePresence initial={false}>
                                         {pending.map(p => (
-                                            <motion.div key={p.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
+                                            <motion.div key={p.id} layout initial={{ opacity: FROM, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
                                                 <span className="text-sm font-semibold text-slate-700 truncate">{p.email}</span>
                                                 <motion.button {...tap} onClick={async () => { await revokeInvite(p.id); setPending(await listPendingInvites(groupId)); }} className="text-xs font-bold text-red-500 hover:text-red-700">Revoke</motion.button>
                                             </motion.div>
@@ -257,7 +256,6 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                     </section>
                 )}
                 </motion.div>
-                </AnimatePresence>
             </main>
         </div>
     );

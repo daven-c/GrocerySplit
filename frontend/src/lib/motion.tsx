@@ -1,7 +1,22 @@
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence, MotionConfig, animate, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig, MotionGlobalConfig, animate, useMotionValue, useTransform } from 'framer-motion';
 
 export { motion, AnimatePresence, MotionConfig };
+
+// Browsers pause animation frames in hidden/occluded tabs. Framer would then never finish an entrance,
+// leaving content stuck at its starting opacity. While hidden, jump straight to the end state instead.
+if (typeof document !== 'undefined') {
+    const sync = () => { MotionGlobalConfig.skipAnimations = document.visibilityState === 'hidden'; };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+}
+
+/**
+ * Entrances start at partial opacity, never 0: if an animation is ever delayed or throttled the content
+ * is still readable and clickable rather than invisible. Fades multiply as animated elements nest, so
+ * only a page's outermost wrapper fades noticeably; tab content slides without fading.
+ */
+export const FROM = 0.8;
 
 export const spring = { type: 'spring', stiffness: 460, damping: 32 } as const;
 const gentle = { type: 'spring', stiffness: 380, damping: 30 } as const;
@@ -11,9 +26,9 @@ export const tap = { whileHover: { scale: 1.04 }, whileTap: { scale: 0.93 }, tra
 export const tapFlat = { whileTap: { scale: 0.97 }, transition: spring } as const;
 export const tapRow = { whileHover: { scale: 1.012 }, whileTap: { scale: 0.985 }, transition: spring } as const;
 
-export const fade = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.18 } } as const;
+export const fade = { initial: { opacity: FROM }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.18 } } as const;
 export const fadeUp = {
-    initial: { opacity: 0, y: 10 },
+    initial: { opacity: FROM, y: 10 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -6 },
     transition: { duration: 0.2 },
@@ -22,7 +37,7 @@ export const fadeUp = {
 /** Staggered entrance for list rows; index is capped so long lists don't take forever to settle. */
 export const listItem = (i = 0) => ({
     layout: true as const,
-    initial: { opacity: 0, y: 14 },
+    initial: { opacity: FROM, y: 14 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, scale: 0.96, transition: { duration: 0.15 } },
     transition: { ...gentle, delay: Math.min(i, 8) * 0.035 },
@@ -30,7 +45,7 @@ export const listItem = (i = 0) => ({
 
 /** Entrance-only stagger (no layout animation) for rows that resize themselves, like accordions. */
 export const enter = (i = 0) => ({
-    initial: { opacity: 0, y: 14 },
+    initial: { opacity: FROM, y: 14 },
     animate: { opacity: 1, y: 0 },
     transition: { ...gentle, delay: Math.min(i, 8) * 0.035 },
 });
@@ -56,7 +71,7 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
                         role="dialog"
                         aria-modal="true"
                         className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
-                        initial={{ opacity: 0, scale: 0.92, y: 14 }}
+                        initial={{ opacity: FROM, scale: 0.92, y: 14 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 8 }}
                         transition={spring}
@@ -76,7 +91,7 @@ export function Collapse({ open, children }: { open: boolean; children: React.Re
         <AnimatePresence initial={false}>
             {open && (
                 <motion.div
-                    initial={{ height: 0, opacity: 0 }}
+                    initial={{ height: 0, opacity: FROM }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
@@ -96,7 +111,7 @@ export function Pop({ show, className, children }: { show: boolean; className?: 
             {show && (
                 <motion.div
                     className={className}
-                    initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                    initial={{ opacity: FROM, scale: 0.96, y: -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.98 }}
                     transition={{ duration: 0.18 }}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getSession, getGroup, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Group } from '../lib/api';
 import { computeSplit } from '../lib/calc';
-import { motion, AnimatePresence, Modal, SegmentedTabs, AnimatedNumber, spring, tap, tapFlat } from '../lib/motion';
+import { motion, FROM, AnimatePresence, Modal, SegmentedTabs, AnimatedNumber, spring, tap, tapFlat } from '../lib/motion';
 
 interface SplitProps {
     sessionId: string;
@@ -230,7 +230,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                 {toast && (
                     <motion.div
                         key="toast"
-                        initial={{ opacity: 0, y: -24, x: '-50%', scale: 0.9 }}
+                        initial={{ opacity: FROM, y: -24, x: '-50%', scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, x: '-50%', scale: 1 }}
                         exit={{ opacity: 0, y: -16, x: '-50%', scale: 0.95 }}
                         transition={spring}
@@ -286,8 +286,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                         {/* Tabs */}
                         <SegmentedTabs id="split-tab" className="mb-8" value={activeTab} onChange={setActiveTab} tabs={[{ value: 'items', label: 'Items' }, { value: 'settings', label: 'Settings' }]} />
 
-                        <AnimatePresence mode="wait" initial={false}>
-                        <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                        <motion.div key={activeTab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                         {/* TAB 1: ITEMS */}
                         {activeTab === 'items' && (
                             <div>
@@ -367,7 +366,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                         <motion.div 
                                             key={item.id} 
                                             layout
-                                            initial={{ opacity: 0, y: 14 }}
+                                            initial={{ opacity: FROM, y: 14 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.15 } }}
                                             transition={spring}
@@ -562,7 +561,6 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                             </div>
                         )}
                         </motion.div>
-                        </AnimatePresence>
                         
                     </div>
                     

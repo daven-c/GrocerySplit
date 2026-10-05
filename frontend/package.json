@@ -28,6 +28,7 @@
 		"build": "tsc && vite build",
 		"preview": "vite preview",
 		"test": "vitest run",
-		"test:integration": "INTEGRATION=1 vitest run --mode development integration"
+		"test:integration": "INTEGRATION=1 vitest run --mode development integration",
+		"dev:mock": "MOCK=1 vite"
 	}
 }

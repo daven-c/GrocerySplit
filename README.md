@@ -57,6 +57,7 @@ cd frontend
 cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
 npm run dev                  # http://localhost:3000
+npm run dev:mock             # same UI with an in-memory fake backend (src/mocks): no Supabase or login needed
 npm test                     # unit + component tests (split math, balances, JSON import, every screen's interactions)
 ```
 

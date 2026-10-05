@@ -8,7 +8,7 @@ import Split from "./components/Split";
 import GroupDetail from "./components/GroupDetail";
 import Account from "./components/Account";
 import Admin from "./components/Admin";
-import { AnimatePresence, MotionConfig, motion } from "./lib/motion";
+import { MotionConfig, motion, FROM } from "./lib/motion";
 
 type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account' | 'admin';
 
@@ -82,8 +82,7 @@ const App: React.FC = () => {
     return (
         <MotionConfig reducedMotion="user">
         <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
-            <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={view} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+            <motion.div key={view} initial={{ opacity: 0.7, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
                 {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onOpenAdmin={() => setView('admin')} onLogout={handleLogout} />}
                 {signedIn && view === 'group' && activeGroupId && (
@@ -99,7 +98,6 @@ const App: React.FC = () => {
                 {signedIn && view === 'admin' && <Admin onBack={() => setView('dashboard')} />}
                 {signedIn && view === 'account' && <Account user={user} onBack={() => setView('dashboard')} onLogout={handleLogout} />}
             </motion.div>
-            </AnimatePresence>
         </div>
         </MotionConfig>
     );

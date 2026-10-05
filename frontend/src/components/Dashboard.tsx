@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, isAdmin, Group, Invite, Session, Settlement } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import FriendsTab from './FriendsTab';
-import { motion, AnimatePresence, Pop, SegmentedTabs, AnimatedNumber, listItem, spring, tap, tapFlat, tapRow } from '../lib/motion';
+import { motion, FROM, AnimatePresence, Pop, SegmentedTabs, AnimatedNumber, listItem, spring, tap, tapFlat, tapRow } from '../lib/motion';
 
 interface DashboardProps {
     user: any;
@@ -97,7 +97,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onOpenAdmi
                         <AnimatePresence>
                         {menuOpen && (
                             <motion.div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50 origin-top-right"
-                                initial={{ opacity: 0, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={spring}>
+                                initial={{ opacity: FROM, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={spring}>
                                 <div className="px-4 py-3 border-b border-slate-100">
                                     <p className="font-bold text-slate-900 text-sm truncate">{user?.name}</p>
                                     <p className="text-xs text-slate-400 truncate">{user?.email}</p>
@@ -150,8 +150,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onOpenAdmi
 
                 <SegmentedTabs id="home" value={tab} onChange={setTab} tabs={[{ value: 'groups', label: 'Groups' }, { value: 'friends', label: 'Friends' }]} />
 
-                <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                <motion.div key={tab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                 {tab === 'friends' && (
                     loading ? <p className="text-center text-slate-400 font-semibold py-8 animate-pulse">Loading...</p> : (
                         <FriendsTab me={user?.id ?? ''} groups={groups} sessions={sessions} settlements={settlements} onChanged={load} />
@@ -224,7 +223,6 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onOpenAdmi
                 </section>
                 )}
                 </motion.div>
-                </AnimatePresence>
             </main>
         </div>
     );

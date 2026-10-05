@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createSession, getGroup } from '../lib/api';
 import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
-import { motion, AnimatePresence, Pop, enter, tap, tapFlat } from '../lib/motion';
+import { motion, FROM, AnimatePresence, Pop, enter, tap, tapFlat } from '../lib/motion';
 
 interface ReceiptUploadProps {
     groupId: string;
@@ -120,7 +120,7 @@ export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUp
 
                     <AnimatePresence>
                     {receipt && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }} className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
+                        <motion.div initial={{ opacity: FROM, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }} className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
                             <p className="font-bold">{receipt.store || 'Grocery Trip'}{receipt.date ? ` · ${receipt.date}` : ''}</p>
                             <p>{receipt.items.length} items · subtotal ${subtotal.toFixed(2)} · tax ${receipt.tax.toFixed(2)}{receipt.tip ? ` · tip $${receipt.tip.toFixed(2)}` : ''}</p>
                             {receipt.skipped > 0 && <p className="text-amber-700">{receipt.skipped} invalid line(s) will be skipped.</p>}
