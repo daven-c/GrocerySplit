@@ -61,7 +61,7 @@ describe('with animation frames frozen', () => {
         fireEvent.click(await screen.findByText('October rent'));
         const amount = await screen.findByLabelText('How much was it?'); // expense editor
         expect(effectiveOpacity(amount)).toBeGreaterThanOrEqual(MIN);
-        expect(effectiveOpacity(screen.getByText('Split'))).toBeGreaterThanOrEqual(MIN);
+        expect(effectiveOpacity(screen.getByText('Split by'))).toBeGreaterThanOrEqual(MIN);
 
         fireEvent.click(within(sidebar).getByRole('button', { name: 'Friends' }));
         const amy = await screen.findByText('Amy');

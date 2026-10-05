@@ -18,10 +18,15 @@ export const CATEGORIES = [
 export const categoryOf = (id: string) => CATEGORIES.find(c => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
 
 export const METHODS: { value: SplitMethod; label: string; hint: string }[] = [
-    { value: 'equal', label: 'Equally', hint: 'Everyone ticked pays the same.' },
-    { value: 'exact', label: 'Amounts', hint: 'Enter exactly what each person owes.' },
+    { value: 'exact', label: 'Amounts', hint: 'Starts split evenly. Change any amount to adjust it.' },
     { value: 'percent', label: 'Percent', hint: 'Percentages must add up to 100.' },
-    { value: 'shares', label: 'Shares', hint: 'Split in proportion, e.g. 2 shares for a bigger room.' },
+];
+
+export type SplitBy = SplitMethod | 'items';
+/** Every way to split one expense in the editor (older expenses saved as equal/shares open as amounts). "By item" is the itemized (receipt) split; the rest are standalone splits. */
+export const SPLIT_BY: { value: SplitBy; label: string; hint: string }[] = [
+    ...METHODS,
+    { value: 'items', label: 'By item', hint: 'Tap who had each item. Tax and tip are shared by what each person had.' },
 ];
 
 const cents = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100);

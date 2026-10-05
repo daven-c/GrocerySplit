@@ -4,9 +4,9 @@ import { useAppData } from '../lib/appData';
 import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Session } from '../lib/api';
 import { computeSplit } from '../lib/calc';
-import { CATEGORIES } from '../lib/expenses';
+import { CATEGORIES, SplitMethod, convertSplit, everyoneEqual } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, DraftBar, Icon } from './ui';
+import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
 
 interface SplitProps {
     sessionId: string;
@@ -15,6 +15,8 @@ interface SplitProps {
     onImport: () => void;
     onSaved: () => void;
     onDiscard: () => void;
+    /** The record changed between an itemized split and the other methods; reopen it in the right body. */
+    onSwitched: (kind: 'receipt' | 'expense') => void;
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
@@ -26,7 +28,7 @@ const dateMeta = (iso: string) => {
 const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right font-mono text-sm bg-wash';
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
-export default function Split({ sessionId, narrow, onBack, onImport, onSaved, onDiscard }: SplitProps) {
+export default function Split({ sessionId, narrow, onBack, onImport, onSaved, onDiscard, onSwitched }: SplitProps) {
     const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [items, setItems] = useState<Item[]>([]);
@@ -167,6 +169,27 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
         catch (err) { console.error(err); setItems(prev); flash('Could not delete that item.'); }
     };
 
+    // Splitting some other way turns this into a standalone expense with the same total; the items are kept
+    // (dormant) so switching back to "By item" brings them back.
+    const switchTo = async (to: SplitMethod) => {
+        if (!record || saving) return;
+        autosave.cancel();
+        setSaving(true);
+        try {
+            const amount = Math.round((subtotal + num(tax) + num(tip)) * 100) / 100;
+            await updateSession(sessionId, {
+                kind: 'expense', amount, split_method: to, split_data: convertSplit('equal', to, everyoneEqual(members.map(m => m.user_id)), amount),
+                name: name.trim() || 'Expense', session_date: date || record.session_date, category, ...(paidBy ? { paid_by: paidBy } : {}),
+            });
+            await refresh();
+            onSwitched('expense');
+        } catch (err) {
+            console.error(err);
+            flash('Could not switch how this is split.');
+            setSaving(false);
+        }
+    };
+
     const handleSaveDraft = async () => {
         if (!record) return;
         setSaving(true);
@@ -217,7 +240,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 </div>
             </Modal>
             <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h3 className="m-0 mb-2 text-xl font-semibold">Delete receipt?</h3>
+                <h3 className="m-0 mb-2 text-xl font-semibold">Delete expense?</h3>
                 <p className="m-0 mb-6 text-muted leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
                 <div className="flex gap-3">
                     <Button variant="secondary" wide height={42} onClick={() => setConfirmDelete(false)}>Cancel</Button>
@@ -244,10 +267,15 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 </div>
             </div>
 
-            {record.draft && <DraftBar what="receipt" canSave saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
+            {record.draft && <DraftBar what="expense" canSave saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
 
             <div className="flex flex-wrap gap-6 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
+                    <Card className="p-4 flex flex-col gap-3">
+                        <span className="text-sm font-semibold">Split by</span>
+                        <SplitByTabs value="items" onChange={m => { if (m !== 'items') void switchTo(m); }} disabled={saving} />
+                    </Card>
+
                     <Card className="p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-semibold">{paint ? `Tap the items ${display(paint) === 'You' ? 'you' : paint} had` : 'Pick a person, then tap their items'}</span>
@@ -397,7 +425,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                             </select>
                         </label>
                         <div className="flex items-center justify-between pt-1">
-                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete receipt</motion.button>}
+                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete expense</motion.button>}
                             <span className="text-xs text-faint" aria-live="polite">{saveText}</span>
                         </div>
                     </Card>

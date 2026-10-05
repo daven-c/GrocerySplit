@@ -90,6 +90,9 @@ const App: React.FC = () => {
         }
     }, [view, draftId, discard]);
 
+    // "Split by" moved between an itemized split and the other methods: reopen the same record in the other body.
+    const handleSwitched = (kind: 'receipt' | 'expense') => { if (recordId) openRecord(recordId, kind, draftId === recordId); };
+
     const handleSaved = () => { setDraftId(null); setView(groupId ? 'group' : 'home'); };
     const handleDiscard = () => {
         if (draftId) discard(draftId);
@@ -152,8 +155,8 @@ const App: React.FC = () => {
                             />
                         )}
                         {view === 'import' && groupId && recordId && <ReceiptUpload groupId={groupId} sessionId={recordId} narrow={narrow} onImported={() => setView('split')} onBack={() => setView('split')} />}
-                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} onSaved={handleSaved} onDiscard={handleDiscard} />}
-                        {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onSaved={handleSaved} onDiscard={handleDiscard} />}
+                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} onSaved={handleSaved} onDiscard={handleDiscard} onSwitched={handleSwitched} />}
+                        {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onSaved={handleSaved} onDiscard={handleDiscard} onSwitched={handleSwitched} />}
                         {view === 'friends' && <Friends />}
                         {view === 'account' && <Account user={user} onLogout={handleLogout} />}
                         {view === 'admin' && <Admin />}

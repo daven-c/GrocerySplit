@@ -141,7 +141,7 @@ export function AnimatedNumber({ value, prefix = '', decimals = 2, className }: 
 
 /** Segmented control (track #ECE9E2, white active pill) whose highlight slides between options. */
 export function SegmentedTabs<T extends string>({
-    id, tabs, value, onChange, className = '',
+    id, tabs, value, onChange, compact = false, className = '',
 }: {
     id: string;
     tabs: { value: T; label: string }[];
@@ -149,6 +149,8 @@ export function SegmentedTabs<T extends string>({
     onChange: (v: T) => void;
     /** kept for API compatibility with earlier callers */
     size?: 'md' | 'sm';
+    /** Smaller labels, for controls with many options. */
+    compact?: boolean;
     className?: string;
 }) {
     return (
@@ -163,7 +165,7 @@ export function SegmentedTabs<T extends string>({
                         aria-selected={active}
                         onClick={() => onChange(t.value)}
                         {...tapFlat}
-                        className="relative h-[34px] rounded-lg text-sm font-semibold text-ink"
+                        className={`relative h-[34px] rounded-lg font-semibold text-ink ${compact ? 'text-[13px]' : 'text-sm'}`}
                     >
                         {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 bg-white rounded-lg shadow-seg" transition={spring} />}
                         <span className="relative">{t.label}</span>

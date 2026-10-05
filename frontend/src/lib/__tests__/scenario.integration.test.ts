@@ -98,6 +98,16 @@ run('what users do: expenses, paying back, and more expenses', () => {
         expect((await seen(groupId)).friend(a)).toBe(before); // all B's: A owes nothing
     });
 
+    it('an expense can be switched to itemized and back without losing its details', async () => {
+        await as('a');
+        const id = await api.createSession({ groupId, kind: 'expense', draft: true, name: 'Switch me', category: 'groceries', amount: 20, splitMethod: 'equal', splitData: everyoneEqual([a, b]) });
+        await api.updateSession(id, { kind: 'receipt', participants: ['Test A', 'Test B'] });
+        expect(await api.getSession(id)).toMatchObject({ kind: 'receipt', name: 'Switch me', category: 'groceries' });
+        await api.updateSession(id, { kind: 'expense', amount: 20, split_method: 'equal', split_data: everyoneEqual([a, b]) });
+        expect(await api.getSession(id)).toMatchObject({ kind: 'expense', name: 'Switch me', amount: 20, split_method: 'equal' });
+        await api.deleteSession(id);
+    });
+
     it('cleanup', async () => {
         await as('a');
         await api.deleteGroup(groupId);

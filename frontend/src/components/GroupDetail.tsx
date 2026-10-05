@@ -23,7 +23,7 @@ interface GroupDetailProps {
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
 
 /** One line in the list: an expense/receipt, or a payback between two members. */
-type Entry = { type: 'record'; date: string; rec: Session } | { type: 'payback'; date: string; p: Settlement };
+type Entry = { type: 'record'; date: string; at: string; rec: Session } | { type: 'payback'; date: string; at: string; p: Settlement };
 const localDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -99,12 +99,13 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     if (!q) return true;
                     return r.name.toLowerCase().includes(q) || categoryOf(r.category).label.toLowerCase().includes(q) || r.items.some(i => i.name.toLowerCase().includes(q));
                 })
-                .map(rec => ({ type: 'record' as const, date: rec.session_date, rec })),
+                .map(rec => ({ type: 'record' as const, date: rec.session_date, at: rec.updated_at, rec })),
             ...(category ? [] : groupPaybacks)
                 .filter(p => !q || 'payback'.includes(q) || nm(p.from_user).includes(q) || nm(p.to_user).includes(q))
-                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), p })),
+                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), at: p.created_at, p })),
         ];
-        return entries.sort((a, b) => b.date.localeCompare(a.date));
+        // Newest first: by date, and within a day by when it was added or last saved.
+        return entries.sort((a, b) => b.date.localeCompare(a.date) || Date.parse(b.at) - Date.parse(a.at));
     }, [records, groupPaybacks, search, category, group, me]);
 
     const months = useMemo(() => {
@@ -123,17 +124,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const memberNames = group.members.map(m => m.name);
 
-    const addReceiptByHand = async () => {
-        setAddOpen(false);
-        if (creating.current) return; // a double click must not create two records (stays locked: success navigates away)
-        creating.current = true;
-        try {
-            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
-            await refresh();
-            onOpenRecord(id, 'receipt', true);
-        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
-    };
-
     const addExpense = async () => {
         setAddOpen(false);
         if (creating.current) return;
@@ -141,7 +131,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         try {
             const id = await createSession({
                 groupId, kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
-                splitMethod: 'equal', splitData: everyoneEqual(group.members.map(m => m.user_id)),
+                splitMethod: 'exact', splitData: Object.fromEntries(group.members.map(m => [m.user_id, 0])),
             });
             await refresh();
             onOpenRecord(id, 'expense', true);
@@ -302,8 +292,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[
-                                    { icon: 'payments', title: 'Split a bill or cost', desc: 'Rent, utilities, dinner, a trip. Pick who shares it', go: addExpense },
-                                    { icon: 'shopping_basket', title: 'Split groceries', desc: 'Add items by hand, or import them from a receipt', go: addReceiptByHand },
+                                    { icon: 'payments', title: 'Add an expense', desc: 'A bill, groceries, rent, a trip. You choose how to split it', go: addExpense },
                                     { icon: 'swap_horiz', title: 'Record a payback', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">

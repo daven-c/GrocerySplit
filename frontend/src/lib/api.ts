@@ -144,7 +144,7 @@ export async function importReceiptIntoSession(
 
 export async function updateSession(
     id: string,
-    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data' | 'draft'>>
+    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data' | 'draft' | 'kind'>>
 ) {
     check(await supabase.from('sessions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id));
 }

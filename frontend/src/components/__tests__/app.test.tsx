@@ -210,7 +210,7 @@ describe('App shell', () => {
 });
 
 describe('Drafts in the app shell', () => {
-    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'equal' as const, split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
+    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'exact' as const, split_data: { [ME]: 0, 'u-amy': 0, 'u-bo': 0 } });
     const startDraft = async () => {
         const u = userEvent.setup();
         signIn();
@@ -220,7 +220,7 @@ describe('Drafts in the app shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a bill or cost'));
+        await u.click(await screen.findByText('Add an expense'));
         await screen.findByRole('region', { name: 'Unsaved draft' });
         return { u, sidebar };
     };
@@ -243,6 +243,32 @@ describe('Drafts in the app shell', () => {
         await u.click(screen.getByRole('button', { name: 'Discard' }));
         await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('s9'));
         expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
+    });
+
+    it('"By item" and back: the same draft moves between the two editors and is never discarded by the switch', async () => {
+        const u = userEvent.setup();
+        signIn();
+        let rec: any = structuredClone(await draftExpense());
+        api.getSession.mockImplementation(async (id: string) => (id === 's9' ? structuredClone(rec) : structuredClone((await import('../../test/apiMock')).sessions.find(x => x.id === id)!)));
+        api.updateSession.mockImplementation(async (_id: string, patch: any) => { rec = { ...rec, ...patch }; });
+        render(<App />);
+        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
+        await u.click(await screen.findByText('Add an expense'));
+        await screen.findByLabelText('How much was it?'); // the amount-based body
+
+        await u.click(screen.getByRole('tab', { name: 'By item' }));
+        expect(await screen.findByRole('button', { name: /Add an item/ })).toBeInTheDocument(); // the itemized body
+        expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument(); // still a draft
+        expect(api.deleteSession).not.toHaveBeenCalled();
+
+        await u.click(screen.getByRole('tab', { name: 'Percent' }));
+        expect(await screen.findByLabelText('How much was it?')).toBeInTheDocument(); // back to the amount body
+        expect(screen.getByRole('tab', { name: 'Percent', selected: true })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument();
+        expect(api.deleteSession).not.toHaveBeenCalled();
     });
 
     it('Save publishes it (not deleted) and returns to the group', async () => {
