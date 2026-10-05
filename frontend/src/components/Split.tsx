@@ -14,7 +14,6 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const [users, setUsers] = useState<string[]>([]);
     
     // global network
-    const [globalUsers, setGlobalUsers] = useState<string[]>([]);
     const [group, setGroup] = useState<Group | null>(null);
 
     const [total, setTotal] = useState(0);
@@ -30,10 +29,11 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const [tax, setTax] = useState('');
     const [tip, setTip] = useState('');
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-    const [initialSettings, setInitialSettings] = useState({ name: '', date: '', tax: '', tip: '' });
+    const [paidBy, setPaidBy] = useState('');
+    const [initialSettings, setInitialSettings] = useState({ name: '', date: '', tax: '', tip: '', paidBy: '' });
     
     // Tabs & Search/Sort
-    const [activeTab, setActiveTab] = useState<'items' | 'members' | 'settings'>('items');
+    const [activeTab, setActiveTab] = useState<'items' | 'settings'>('items');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'name_a_z' | 'price_high' | 'price_low'>('name_a_z');
     const [assignMode, setAssignMode] = useState<'by_item' | 'by_person'>('by_item');
@@ -48,17 +48,23 @@ export default function Split({ sessionId, onBack }: SplitProps) {
             const session = await getSession(sessionId);
             const g = await getGroup(session.group_id);
             setGroup(g);
-            setGlobalUsers(g.members.map(m => m.name));
             setItems(session.items);
-            setUsers(session.participants);
+            // Everyone in the group is on every receipt; keep the stored list in step with the group.
+            const everyone = g.members.map(m => m.name);
+            setUsers(everyone);
+            if (everyone.length !== session.participants.length || everyone.some(n => !session.participants.includes(n))) {
+                updateSession(sessionId, { participants: everyone }).catch(err => console.error('Participant sync failed', err));
+            }
             setTotal(session.items.reduce((acc, i) => acc + i.price, 0));
             const savedTax = session.tax ? session.tax.toString() : '';
             const savedTip = session.tip ? session.tip.toString() : '';
             setSessionName(session.name);
             setSessionDate(session.session_date);
+            const payer = session.paid_by ?? session.user_id ?? '';
+            setPaidBy(payer);
             setTax(savedTax);
             setTip(savedTip);
-            setInitialSettings({ name: session.name, date: session.session_date, tax: savedTax, tip: savedTip });
+            setInitialSettings({ name: session.name, date: session.session_date, tax: savedTax, tip: savedTip, paidBy: payer });
         } catch (err) {
             console.error("Failed to load session logic", err);
             flash('Failed to load receipt.', 'error');
@@ -154,22 +160,6 @@ export default function Split({ sessionId, onBack }: SplitProps) {
         } catch (err) { console.error(err); loadData(); }
     };
 
-    const saveParticipants = async (newUsers: string[]) => {
-        setUsers(newUsers);
-        try {
-            await updateSession(sessionId, { participants: newUsers });
-        } catch (e) {
-            console.error("Participant sync failed", e);
-            flash('Failed to update members.', 'error');
-        }
-    };
-
-    const handleToggleSessionParticipant = (u: string) =>
-        saveParticipants(users.includes(u) ? users.filter(x => x !== u) : [...users, u]);
-
-    const handleAddAllGroupMembers = () =>
-        saveParticipants(Array.from(new Set([...users, ...(group?.members.map(m => m.name) ?? [])])));
-
     const handleDeleteReceipt = async () => {
         setConfirmDeleteReceipt(false);
         try {
@@ -191,8 +181,9 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                 tax: taxAmt,
                 tip: tipAmt,
                 participants: users,
+                ...(paidBy ? { paid_by: paidBy } : {}),
             });
-            setInitialSettings({ name: sessionName.trim(), date: sessionDate, tax, tip });
+            setInitialSettings({ name: sessionName.trim(), date: sessionDate, tax, tip, paidBy });
             flash('Receipt saved successfully!', 'success');
         } catch (err) {
             console.error("Save failed", err);
@@ -221,7 +212,8 @@ export default function Split({ sessionId, onBack }: SplitProps) {
         sessionName.trim() !== initialSettings.name || 
         sessionDate !== initialSettings.date || 
         tax !== initialSettings.tax || 
-        tip !== initialSettings.tip;
+        tip !== initialSettings.tip ||
+        paidBy !== initialSettings.paidBy;
 
     if (loading) {
         return (
@@ -292,7 +284,6 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                         {/* Tabs */}
                         <div className="flex bg-slate-200 rounded-xl p-1 mb-8 shadow-inner">
                             <button onClick={() => setActiveTab('items')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors ${activeTab === 'items' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Items</button>
-                            <button onClick={() => setActiveTab('members')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors ${activeTab === 'members' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Members</button>
                             <button onClick={() => setActiveTab('settings')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Settings</button>
                         </div>
 
@@ -456,7 +447,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                                         );
                                                     })}
                                                     {users.length === 0 && (
-                                                        <p className="text-sm font-semibold text-slate-400 italic">No members added to receipt yet.</p>
+                                                        <p className="text-sm font-semibold text-slate-400 italic">This group has no members yet.</p>
                                                     )}
                                                 </div>
                                             )}
@@ -471,76 +462,11 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                             </div>
                         )}
 
-                        {/* TAB 2: MEMBERS */}
-                        {activeTab === 'members' && (
-                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <section>
-                                    <h3 className="font-headline font-bold text-lg text-slate-900 mb-3">Group Members</h3>
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
-                                        <p className="text-sm text-slate-500 mb-3">{group ? `Everyone in "${group.name}" can see and edit this receipt.` : ''}</p>
-                                        <button
-                                            onClick={handleAddAllGroupMembers}
-                                            disabled={!group || group.members.every(m => users.includes(m.name))}
-                                            className="w-full py-3 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] transition-all">
-                                            Add all {group?.members.length ?? 0} group members to this receipt
-                                        </button>
-                                    </div>
-                                </section>
-
-                                <hr className="border-slate-200" />
-
-                                <section>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="font-headline font-bold text-lg text-slate-900">Individuals ({users.length})</h3>
-                                    </div>
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
-                                        <select 
-                                            value=""
-                                            onChange={e => {
-                                                if (e.target.value !== '') {
-                                                    handleToggleSessionParticipant(e.target.value);
-                                                }
-                                            }}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-400 appearance-none"
-                                        >
-                                            <option value="">+ Add a group member...</option>
-                                            {globalUsers.filter(u => !users.includes(u)).map(u => (
-                                                <option key={u} value={u}>{u}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {users.length === 0 ? (
-                                            <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl">
-                                                <p className="text-sm font-semibold text-slate-400 italic">No members assigned to this receipt. Add someone above or import a group.</p>
-                                            </div>
-                                        ) : (
-                                            users.map(u => (
-                                                <div key={u} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 shadow-sm transition-all animate-in zoom-in-95 duration-200">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 uppercase border border-slate-200">
-                                                            {u.charAt(0)}
-                                                        </div>
-                                                        <span className="font-bold text-slate-800 text-base">{u}</span>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => handleToggleSessionParticipant(u)}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors border border-transparent hover:border-red-100"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">close</span>
-                                                    </button>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </section>
-                            </div>
-                        )}
-
-                        {/* TAB 3: SETTINGS */}
+                        {/* TAB 2: SETTINGS */}
                         {activeTab === 'settings' && (
                             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <h3 className="font-headline font-bold text-lg text-slate-900 mb-6 border-b border-slate-100 pb-4">Receipt Settings</h3>
+                                <h3 className="font-headline font-bold text-lg text-slate-900 mb-2">Receipt Settings</h3>
+                                <p className="text-sm text-slate-500 mb-6 border-b border-slate-100 pb-4">{group ? `Everyone in "${group.name}" (${group.members.length}) is on this receipt automatically. Manage who's in the group from the group's Members tab.` : ''}</p>
                                 
                                 <div className="space-y-5">
                                     <div>
@@ -561,6 +487,18 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                             onChange={e => setSessionDate(e.target.value)}
                                             className="w-full text-slate-900 font-bold text-base tracking-wide bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-slate-400 transition-colors"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Paid By</label>
+                                        <select
+                                            value={paidBy}
+                                            onChange={e => setPaidBy(e.target.value)}
+                                            className="w-full text-slate-900 font-bold text-base bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-slate-400 transition-colors appearance-none"
+                                        >
+                                            {!group?.members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
+                                            {group?.members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                                        </select>
+                                        <p className="text-xs text-slate-400 mt-1.5">Everyone else on this receipt owes the payer their share. Shows up in Friends balances.</p>
                                     </div>
                                     <div className="pt-4 mt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
                                         <div>

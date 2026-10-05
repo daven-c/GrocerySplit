@@ -10,6 +10,8 @@ export interface Item {
 export interface Session {
     id: string;
     group_id: string;
+    user_id: string | null;
+    paid_by: string | null;
     name: string;
     session_date: string;
     tax: number;
@@ -34,6 +36,8 @@ const mapItem = (r: any): Item => ({
 const mapSession = (r: any): Session => ({
     id: r.id,
     group_id: r.group_id,
+    user_id: r.user_id ?? null,
+    paid_by: r.paid_by ?? null,
     name: r.name,
     session_date: r.session_date,
     tax: Number(r.tax),
@@ -96,7 +100,7 @@ export async function createSession(input: {
 
 export async function updateSession(
     id: string,
-    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants'>>
+    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by'>>
 ) {
     check(await supabase.from('sessions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id));
 }
@@ -238,4 +242,28 @@ export async function myInvites(): Promise<Invite[]> {
 
 export async function respondToInvite(id: string, accept: boolean) {
     check(await supabase.rpc('respond_to_invite', { invite_id: id, accept }));
+}
+
+// ---- Settlements (recorded payments between members) ----
+export interface Settlement {
+    id: string;
+    group_id: string;
+    from_user: string;
+    to_user: string;
+    amount: number;
+    created_by: string;
+    created_at: string;
+}
+
+export async function listSettlements(): Promise<Settlement[]> {
+    const data = check(await supabase.from('settlements').select('*').order('created_at', { ascending: false }));
+    return data.map((r: any) => ({ ...r, amount: Number(r.amount) }));
+}
+
+export async function recordSettlement(groupId: string, fromUser: string, toUser: string, amount: number) {
+    check(await supabase.from('settlements').insert({ group_id: groupId, from_user: fromUser, to_user: toUser, amount }));
+}
+
+export async function deleteSettlement(id: string) {
+    check(await supabase.from('settlements').delete().eq('id', id));
 }

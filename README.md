@@ -8,6 +8,7 @@ Import a grocery receipt, tap once per item to assign it to a friend, and get an
 - **Receipts live inside a group.** Every member can see and edit the group's receipts.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
+- **Friends** (home screen tab) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
 - **Account** (menu button, top right) lets you change your display name, email and password, or sign out.
 
 ## How receipt import works
@@ -36,6 +37,8 @@ The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"`
 
 All money is handled in integer cents. Each item is split evenly among its assignees, and tax and tip are shared in proportion to what each person's items cost. Leftover pennies are distributed by largest remainder, so per-person totals always add up exactly to items + tax + tip (see `frontend/src/lib/calc.ts`).
 
+See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost-splitting app, not just groceries).
+
 ## Tech stack
 
 | Layer    | Technology                                                     |
@@ -62,5 +65,5 @@ npm test                     # unit tests (split math + JSON import)
 
 - **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
 - **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` then deploys to production and every PR gets a preview deployment.
-- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and push to `main`.
+- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and every push to `main` or `dev`.
 - **Database migrations are not automated.** Apply new files in `supabase/migrations/` to the Supabase project before merging a change that needs them.
