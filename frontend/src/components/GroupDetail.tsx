@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, PendingInvite, Session } from '../lib/api';
+import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, deleteSettlement, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, AvatarStack, Button, Card, Icon, inputCls } from './ui';
+import { SegmentedTabs } from '../lib/motion';
 
 export type GroupTab = 'expenses' | 'balances' | 'members';
 
@@ -16,11 +17,17 @@ interface GroupDetailProps {
     initialTab?: GroupTab;
     narrow: boolean;
     onBack: () => void;
-    onImport: () => void;
     onOpenRecord: (id: string, kind: 'receipt' | 'expense') => void;
 }
 
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
+
+/** One line in the list: an expense/receipt, or a payback between two members. */
+type Entry = { type: 'record'; date: string; rec: Session } | { type: 'payback'; date: string; p: Settlement };
+const localDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const monthLabel = (iso: string) => {
     const d = new Date(iso + 'T00:00');
@@ -28,7 +35,7 @@ const monthLabel = (iso: string) => {
     return d.toLocaleDateString('en-US', sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' });
 };
 
-export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, onBack, onImport, onOpenRecord }: GroupDetailProps) {
+export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, onBack, onOpenRecord }: GroupDetailProps) {
     const { me, groups, sessions, settlements, refresh, loading } = useAppData();
     const group = groups.find(g => g.id === groupId);
     const [tab, setTab] = useState<GroupTab>(initialTab);
@@ -41,6 +48,10 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [settling, setSettling] = useState(false);
+    const [pbOpen, setPbOpen] = useState(false);
+    const [pbMember, setPbMember] = useState('');
+    const [pbDir, setPbDir] = useState<'paid' | 'received'>('paid');
+    const [pbAmount, setPbAmount] = useState('');
     const creating = useRef(false);
     const addRef = useRef<HTMLDivElement>(null);
 
@@ -76,21 +87,32 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const categoriesPresent = useMemo(() => CATEGORIES.filter(c => records.some(r => r.category === c.id)), [records]);
 
+    const groupPaybacks = useMemo(() => settlements.filter(p => p.group_id === groupId), [settlements, groupId]);
+
     const shown = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return records.filter(r => {
-            if (category && r.category !== category) return false;
-            if (!q) return true;
-            return r.name.toLowerCase().includes(q) || categoryOf(r.category).label.toLowerCase().includes(q) || r.items.some(i => i.name.toLowerCase().includes(q));
-        });
-    }, [records, search, category]);
+        const nm = (id: string) => (id === me ? 'you' : group?.members.find(m => m.user_id === id)?.name.toLowerCase() ?? '');
+        const entries: Entry[] = [
+            ...records
+                .filter(r => {
+                    if (category && r.category !== category) return false;
+                    if (!q) return true;
+                    return r.name.toLowerCase().includes(q) || categoryOf(r.category).label.toLowerCase().includes(q) || r.items.some(i => i.name.toLowerCase().includes(q));
+                })
+                .map(rec => ({ type: 'record' as const, date: rec.session_date, rec })),
+            ...(category ? [] : groupPaybacks)
+                .filter(p => !q || 'payback'.includes(q) || nm(p.from_user).includes(q) || nm(p.to_user).includes(q))
+                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), p })),
+        ];
+        return entries.sort((a, b) => b.date.localeCompare(a.date));
+    }, [records, groupPaybacks, search, category, group, me]);
 
     const months = useMemo(() => {
-        const out: { label: string; rows: Session[] }[] = [];
-        for (const r of shown) {
-            const label = monthLabel(r.session_date);
+        const out: { label: string; rows: Entry[] }[] = [];
+        for (const e of shown) {
+            const label = monthLabel(e.date);
             const bucket = out.find(m => m.label === label) ?? (out[out.push({ label, rows: [] }) - 1]);
-            bucket.rows.push(r);
+            bucket.rows.push(e);
         }
         return out;
     }, [shown]);
@@ -124,6 +146,47 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             await refresh();
             onOpenRecord(id, 'expense');
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
+    };
+
+    // Prefill a payback with whatever is outstanding between you and the chosen member in this group.
+    const suggest = (memberId: string) => {
+        const d = ledger?.debts.find(x => (x.from === me && x.to === memberId) || (x.to === me && x.from === memberId));
+        return d ? { dir: (d.from === me ? 'paid' : 'received') as 'paid' | 'received', amount: d.amount } : null;
+    };
+    const openPayback = () => {
+        setAddOpen(false);
+        const first = group.members.find(m => m.user_id !== me);
+        if (!first) { setError('Invite someone to this group first.'); return; }
+        const sg = suggest(first.user_id);
+        setPbMember(first.user_id);
+        setPbDir(sg?.dir ?? 'paid');
+        setPbAmount(sg ? String(sg.amount) : '');
+        setPbOpen(true);
+    };
+    const pickPbMember = (id: string) => {
+        setPbMember(id);
+        const sg = suggest(id);
+        if (sg) { setPbDir(sg.dir); setPbAmount(String(sg.amount)); }
+    };
+    const savePayback = async () => {
+        const amount = Math.round((parseFloat(pbAmount) || 0) * 100) / 100;
+        if (!pbMember || amount <= 0) return;
+        setSettling(true);
+        setError('');
+        try {
+            await (pbDir === 'paid' ? recordSettlement(groupId, me, pbMember, amount) : recordSettlement(groupId, pbMember, me, amount));
+            setPbOpen(false);
+            await refresh();
+        } catch (err: any) {
+            setError(err.message || 'Could not record that payback');
+        } finally {
+            setSettling(false);
+        }
+    };
+    const undoPayback = async (id: string) => {
+        setError('');
+        try { await deleteSettlement(id); await refresh(); }
+        catch (err: any) { setError(err.message || 'Could not undo that payback'); }
     };
 
     const handleInvite = async () => {
@@ -189,6 +252,29 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                 )}
             </Modal>
 
+            <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
+                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">Record a payback</h3>
+                <p className="m-0 mb-4 text-sm text-muted">Evens out what you and a member owe each other in {group.name}. It doesn't move money.</p>
+                <div className="flex flex-col gap-3">
+                    <SegmentedTabs id="payback-dir" value={pbDir} onChange={setPbDir} tabs={[{ value: 'paid', label: 'I paid them' }, { value: 'received', label: 'They paid me' }]} />
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Member
+                        <select value={pbMember} onChange={e => pickPbMember(e.target.value)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
+                            {group.members.filter(m => m.user_id !== me).map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                        </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Amount
+                        <span className="flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
+                            <span className="font-mono text-faint">$</span>
+                            <input aria-label="Payback amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[15px]" />
+                        </span>
+                    </label>
+                </div>
+                <div className="flex gap-3 mt-5">
+                    <Button variant="secondary" wide height={42} onClick={() => setPbOpen(false)}>Cancel</Button>
+                    <Button wide height={42} disabled={settling || !(parseFloat(pbAmount) > 0)} onClick={savePayback}>Save payback</Button>
+                </div>
+            </Modal>
+
             <div className="flex flex-wrap items-end justify-between gap-5">
                 <div className="flex flex-col gap-3 min-w-0">
                     {!narrow && (
@@ -212,9 +298,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[
-                                    { icon: 'photo_camera', title: 'Import from a photo', desc: 'Use any AI chat to read a grocery receipt for you', go: () => { setAddOpen(false); onImport(); } },
-                                    { icon: 'edit_note', title: 'Enter a receipt by hand', desc: 'Start blank and add items yourself', go: addReceiptByHand },
                                     { icon: 'payments', title: 'Split a bill or cost', desc: 'Rent, utilities, dinner, a trip. Pick who shares it', go: addExpense },
+                                    { icon: 'shopping_basket', title: 'Split groceries', desc: 'Add items by hand, or import them from a receipt', go: addReceiptByHand },
+                                    { icon: 'swap_horiz', title: 'Record a payback', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">
                                         <Icon name={o.icon} size={22} />
@@ -262,7 +348,30 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             <div key={m.label} className="flex flex-col gap-2">
                                 <span className="text-[13px] font-medium text-faint">{m.label}</span>
                                 <Card className="overflow-hidden">
-                                    {m.rows.map((r, i) => {
+                                    {m.rows.map((e, i) => {
+                                        if (e.type === 'payback') {
+                                            const p = e.p;
+                                            const d = new Date(e.date + 'T00:00');
+                                            return (
+                                                <motion.div key={`pb-${p.id}`} {...listItem(i)} className={`flex items-center gap-4 px-[18px] py-3.5 bg-white ${i ? 'border-t border-rule' : ''}`}>
+                                                    <span className="w-[42px] shrink-0 flex flex-col items-center leading-[1.1]">
+                                                        <span className="text-[11px] font-medium text-faint">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                                                        <span className="text-lg font-semibold">{d.getDate()}</span>
+                                                    </span>
+                                                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                        <span className="text-[15px] font-semibold truncate flex items-center gap-1.5">
+                                                            <Icon name="swap_horiz" size={16} className="text-green" />{p.from_user === me ? 'You paid' : `${nameOf(p.from_user)} paid`} {p.to_user === me ? 'you' : nameOf(p.to_user)}
+                                                        </span>
+                                                        <span className="text-[13px] text-faint">Payback</span>
+                                                    </span>
+                                                    <span className="shrink-0 flex flex-col items-end gap-0.5">
+                                                        <span className="text-[15px] font-semibold text-green">{fmt(p.amount)}</span>
+                                                        {p.created_by === me && <button type="button" onClick={() => undoPayback(p.id)} className="text-xs font-semibold text-ink underline underline-offset-2">Undo</button>}
+                                                    </span>
+                                                </motion.div>
+                                            );
+                                        }
+                                        const r = e.rec;
                                         const d = new Date(r.session_date + 'T00:00');
                                         const total = totalOf(r);
                                         const share = myShare(r, meMember);

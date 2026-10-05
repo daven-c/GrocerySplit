@@ -1,21 +1,23 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { motion, Pop, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { createSession } from '../lib/api';
+import { importReceiptIntoSession } from '../lib/api';
 import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
 import { fmt } from '../lib/people';
 import { Button, Card, Icon } from './ui';
 
 interface ReceiptUploadProps {
     groupId: string;
+    /** The receipt the items are added to. */
+    sessionId: string;
     narrow: boolean;
-    onImported: (sessionId: string) => void;
+    onImported: () => void;
     onBack: () => void;
 }
 
 const dateLabel = (iso?: string) => (iso ? new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 
-export default function ReceiptUpload({ groupId, narrow, onImported, onBack }: ReceiptUploadProps) {
+export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, onBack }: ReceiptUploadProps) {
     const { groups, refresh } = useAppData();
     const group = groups.find(g => g.id === groupId);
     const [json, setJson] = useState('');
@@ -56,12 +58,9 @@ export default function ReceiptUpload({ groupId, narrow, onImported, onBack }: R
         setLoading(true);
         setError('');
         try {
-            const id = await createSession({
-                groupId, name: receipt.store || 'Receipt', date: receipt.date, tax: receipt.tax, tip: receipt.tip,
-                items: receipt.items, participants: group.members.map(m => m.name), category: 'groceries',
-            });
+            await importReceiptIntoSession(sessionId, { store: receipt.store, date: receipt.date, tax: receipt.tax, tip: receipt.tip, items: receipt.items });
             await refresh();
-            onImported(id);
+            onImported();
         } catch (err: any) {
             setError(err.message || 'Failed to import the receipt');
         } finally {
@@ -74,11 +73,11 @@ export default function ReceiptUpload({ groupId, narrow, onImported, onBack }: R
             <div className="flex flex-col gap-2">
                 {!narrow && (
                     <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink">
-                        <Icon name="arrow_back" size={16} />{group?.name ?? 'Back'}
+                        <Icon name="arrow_back" size={16} />Back to receipt
                     </motion.button>
                 )}
-                <h1 className="m-0 text-[28px] font-semibold tracking-title">Import a receipt</h1>
-                <p className="m-0 text-[15px] leading-normal text-muted max-w-[540px]">Your AI chat of choice reads the photo; Splitpot does the splitting. Nothing is uploaded here.</p>
+                <h1 className="m-0 text-[28px] font-semibold tracking-title">Import from JSON</h1>
+                <p className="m-0 text-[15px] leading-normal text-muted max-w-[540px]">Your AI chat of choice reads the photo; Splitpot does the splitting. The items are added to this receipt, and nothing is uploaded here.</p>
             </div>
 
             <div className="flex flex-wrap gap-6 items-start">
@@ -155,7 +154,7 @@ export default function ReceiptUpload({ groupId, narrow, onImported, onBack }: R
                         </Card>
                     </motion.div>
                     <Button height={46} wide className="text-[15px]" disabled={!receipt || loading || !group} onClick={handleImport}>
-                        {loading ? 'Importing…' : 'Import and split'}
+                        {loading ? 'Importing…' : 'Add to receipt'}
                     </Button>
                 </div>
             </div>

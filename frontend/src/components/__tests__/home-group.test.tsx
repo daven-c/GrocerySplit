@@ -93,7 +93,7 @@ describe('Home', () => {
 });
 
 describe('Group detail', () => {
-    const props = { groupId: 'g1', narrow: false, onBack: vi.fn(), onImport: vi.fn(), onOpenRecord: vi.fn() };
+    const props = { groupId: 'g1', narrow: false, onBack: vi.fn(), onOpenRecord: vi.fn() };
 
     it('shows the header, balance sentence and expenses grouped by month, receipts and bills together', async () => {
         renderWithData(<GroupDetail {...props} />);
@@ -150,27 +150,22 @@ describe('Group detail', () => {
         expect(screen.getByText('Costco')).toBeInTheDocument();
     });
 
-    it('Add expense offers import, a receipt by hand, and a bill or cost; Escape closes it', async () => {
+    it('Add expense lists a bill first, then groceries, then a payback; Escape closes it', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         const menu = await screen.findByRole('menu');
-        expect(within(menu).getByText('Import from a photo')).toBeInTheDocument();
-        expect(within(menu).getByText('Enter a receipt by hand')).toBeInTheDocument();
-        expect(within(menu).getByText('Split a bill or cost')).toBeInTheDocument();
+        expect(within(menu).getAllByRole('menuitem').map(i => within(i).getByText(/^[A-Z]/, { selector: 'span.text-sm' }).textContent)).toEqual(['Split a bill or cost', 'Split groceries', 'Record a payback']);
+        expect(within(menu).queryByText('Import from a photo')).not.toBeInTheDocument();
         await u.keyboard('{Escape}');
         await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-
-        await u.click(screen.getByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Import from a photo'));
-        expect(props.onImport).toHaveBeenCalled();
     });
 
-    it('"Enter a receipt by hand" creates an empty grocery receipt for everyone', async () => {
+    it('"Split groceries" creates a blank grocery receipt for everyone and opens the receipt editor', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Enter a receipt by hand'));
+        await u.click(await screen.findByText('Split groceries'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries' }));
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'receipt'));
     });
@@ -252,6 +247,80 @@ describe('Group detail', () => {
         await u.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Leave' }));
         await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('g2', ME));
         await waitFor(() => expect(props.onBack).toHaveBeenCalled());
+    });
+
+    const payback = { id: 'p1', group_id: 'g1', from_user: 'u-amy', to_user: ME, amount: 50, created_by: ME, created_at: '2026-10-04T12:00:00' };
+
+    it('shows paybacks in the list with the expenses, newest first, with an undo for your own', async () => {
+        const u = userEvent.setup();
+        api.listSettlements.mockResolvedValue([payback, { ...payback, id: 'p2', from_user: ME, to_user: 'u-bo', amount: 12.5, created_by: 'u-bo', created_at: '2026-10-02T12:00:00' }]);
+        renderWithData(<GroupDetail {...props} />);
+        expect(await screen.findByText('Amy paid you')).toBeInTheDocument();
+        expect(screen.getByText('You paid Bo')).toBeInTheDocument();
+        expect(screen.getAllByText('Payback')).toHaveLength(2);
+        expect(screen.getByText('$50.00')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Expenses · 3' })).toBeInTheDocument(); // paybacks are not expenses
+        expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1); // only the one you recorded
+        await u.click(screen.getByRole('button', { name: 'Undo' }));
+        await waitFor(() => expect(api.deleteSettlement).toHaveBeenCalledWith('p1'));
+    });
+
+    it('paybacks are searchable and hidden by a category filter', async () => {
+        const u = userEvent.setup();
+        api.listSettlements.mockResolvedValue([payback]);
+        renderWithData(<GroupDetail {...props} />);
+        await screen.findByText('Amy paid you');
+        await u.type(screen.getByLabelText('Search expenses'), 'payback');
+        expect(screen.getByText('Amy paid you')).toBeInTheDocument();
+        expect(screen.queryByText('Costco')).not.toBeInTheDocument();
+        await u.clear(screen.getByLabelText('Search expenses'));
+        await u.click(within(screen.getByRole('group', { name: 'Filter by category' })).getByRole('button', { name: /Rent & home/ }));
+        expect(screen.queryByText('Amy paid you')).not.toBeInTheDocument();
+    });
+
+    it('"Record a payback" prefills what is outstanding, and records it in this group', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
+        await u.click(await screen.findByText('Record a payback'));
+        const dialog = await screen.findByRole('dialog');
+        // Amy owes you 578.85 in the fixtures, so it starts as "They paid me" for that amount
+        expect(within(dialog).getByRole('tab', { name: 'They paid me', selected: true })).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('578.85');
+        await u.clear(within(dialog).getByLabelText('Payback amount'));
+        await u.type(within(dialog).getByLabelText('Payback amount'), '100');
+        await u.click(within(dialog).getByRole('button', { name: 'Save payback' }));
+        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-amy', ME, 100));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    it('a payback can go the other way and pick another member', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
+        await u.click(await screen.findByText('Record a payback'));
+        const dialog = await screen.findByRole('dialog');
+        await u.click(within(dialog).getByRole('tab', { name: 'I paid them' }));
+        await u.selectOptions(within(dialog).getByLabelText('Member'), 'Bo');
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('603.97'); // Bo owes you
+        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeEnabled();
+        await u.clear(within(dialog).getByLabelText('Payback amount'));
+        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeDisabled();
+        await u.type(within(dialog).getByLabelText('Payback amount'), '7.5');
+        await u.click(within(dialog).getByRole('tab', { name: 'I paid them' }));
+        await u.click(within(dialog).getByRole('button', { name: 'Save payback' }));
+        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', ME, 'u-bo', 7.5));
+    });
+
+    it('Balances tab shows each member\'s standing and who owes whom, and can record the payment', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} initialTab="balances" />);
+        expect(await screen.findByText('Where everyone stands')).toBeInTheDocument();
+        expect(screen.getByText('Who owes whom')).toBeInTheDocument();
+        expect((await screen.findAllByText('Amy', { selector: 'span.font-semibold' })).length).toBeGreaterThan(0); // in standings and in who-owes-whom
+        expect(screen.getByText('$603.97', { selector: 'span.font-mono' })).toBeInTheDocument();
+        await u.click(screen.getAllByRole('button', { name: 'Mark received' })[0]);
+        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-bo', ME, 603.97));
     });
 
     it('on narrow screens the back link lives in the header, not the page', async () => {

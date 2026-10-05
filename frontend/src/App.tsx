@@ -83,7 +83,7 @@ const App: React.FC = () => {
     };
 
     // Back: record -> its group, import -> group, group -> home.
-    const back = () => setView(v => (v === 'group' ? 'home' : groupId ? 'group' : 'home'));
+    const back = () => setView(v => (v === 'group' ? 'home' : v === 'import' ? 'split' : groupId ? 'group' : 'home'));
 
     if (!ready) {
         return (
@@ -126,12 +126,11 @@ const App: React.FC = () => {
                                 initialTab={groupTab}
                                 narrow={narrow}
                                 onBack={() => setView('home')}
-                                onImport={() => setView('import')}
                                 onOpenRecord={openRecord}
                             />
                         )}
-                        {view === 'import' && groupId && <ReceiptUpload groupId={groupId} narrow={narrow} onImported={id => openRecord(id, 'receipt')} onBack={() => setView('group')} />}
-                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} />}
+                        {view === 'import' && groupId && recordId && <ReceiptUpload groupId={groupId} sessionId={recordId} narrow={narrow} onImported={() => setView('split')} onBack={() => setView('split')} />}
+                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} />}
                         {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} />}
                         {view === 'friends' && <Friends />}
                         {view === 'account' && <Account user={user} onLogout={handleLogout} />}

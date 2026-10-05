@@ -20,7 +20,7 @@ afterEach(cleanup);
 const SLOW = { timeout: 3000 }; // autosave debounces for 600ms
 
 describe('Receipt editor (grocery split)', () => {
-    const props = { sessionId: 's1', narrow: false, onBack: vi.fn() };
+    const props = { sessionId: 's1', narrow: false, onBack: vi.fn(), onImport: vi.fn() };
     const rowOf = (name: string) => screen.getByText(name).closest('div[class*="flex-col"]') as HTMLElement;
 
     it('is one screen: name, meta, total, people, items and who pays what (no tabs)', async () => {
@@ -169,6 +169,16 @@ describe('Receipt editor (grocery split)', () => {
         await screen.findByDisplayValue('Costco');
         fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
         expect(await screen.findByText(/No date · 3 items/)).toBeInTheDocument();
+    });
+
+    it('has an Import from JSON button, and an empty receipt invites you to add or import items', async () => {
+        const u = userEvent.setup();
+        const onImport = vi.fn();
+        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, items: [] });
+        renderWithData(<Split {...props} onImport={onImport} />);
+        expect(await screen.findByText('No items yet. Add one by hand, or import them from a receipt.')).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: /Import from JSON/ }));
+        expect(onImport).toHaveBeenCalled();
     });
 
     it('keeps the stored participant list in step with the group', async () => {
@@ -345,17 +355,17 @@ describe('Expense editor (general cost splitting)', () => {
     });
 });
 
-describe('Import a receipt', () => {
-    const props = { groupId: 'g1', narrow: false, onImported: vi.fn(), onBack: vi.fn() };
+describe('Import from JSON (fills an existing receipt)', () => {
+    const props = { groupId: 'g1', sessionId: 's1', narrow: false, onImported: vi.fn(), onBack: vi.fn() };
 
     it('explains the two steps and shows an empty preview', async () => {
         renderWithData(<ReceiptUpload {...props} />);
-        expect(await screen.findByRole('heading', { name: 'Import a receipt' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Import from JSON' })).toBeInTheDocument();
         expect(screen.getByText('Copy the prompt')).toBeInTheDocument();
         expect(screen.getByText('Paste what it sends back')).toBeInTheDocument();
         expect(screen.getByText('Your receipt shows up here as soon as you paste it.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Import and split' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: /Roomies/ })).toBeInTheDocument(); // back link names the group
+        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /Back to receipt/ })).toBeInTheDocument();
     });
 
     it('copies the prompt and confirms with "Copied"', async () => {
@@ -368,26 +378,26 @@ describe('Import a receipt', () => {
         expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
     });
 
-    it('rejects bad JSON with friendly copy, previews good JSON, and imports into the group for everyone', async () => {
+    it('rejects bad JSON with friendly copy, previews good JSON, and adds the items to THIS receipt', async () => {
         const u = userEvent.setup();
         renderWithData(<ReceiptUpload {...props} />);
         const box = await screen.findByLabelText('Receipt JSON');
         fireEvent.change(box, { target: { value: 'not json' } });
         expect(await screen.findByText("That doesn't look like receipt JSON yet. Make sure you copied the whole reply.")).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Import and split' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeDisabled();
 
         await u.click(screen.getByRole('button', { name: 'Try an example' }));
         expect(await screen.findByText('Corner Market')).toBeInTheDocument();
         expect(screen.getByText('Oat Milk')).toBeInTheDocument();
         expect(screen.getByText('$12.40')).toBeInTheDocument();
-        expect(screen.getByText('Tax')).toBeInTheDocument();
         expect(screen.getByText('$27.14')).toBeInTheDocument(); // 12.40 + 7.50 + 5.99 + 1.25 tax
-        await u.click(screen.getByRole('button', { name: 'Import and split' }));
-        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith(expect.objectContaining({
-            groupId: 'g1', name: 'Corner Market', date: '2026-10-05', tax: 1.25, category: 'groceries', participants: ['Daven', 'Amy', 'Bo'],
+        await u.click(screen.getByRole('button', { name: 'Add to receipt' }));
+        await waitFor(() => expect(api.importReceiptIntoSession).toHaveBeenCalledWith('s1', {
+            store: 'Corner Market', date: '2026-10-05', tax: 1.25, tip: 0,
             items: [{ name: 'Organic Honeycrisp Apples', price: 12.4 }, { name: 'Oat Milk', price: 7.5 }, { name: 'Free Range Eggs', price: 5.99 }],
-        })));
-        await waitFor(() => expect(props.onImported).toHaveBeenCalledWith('s9'));
+        }));
+        expect(api.createSession).not.toHaveBeenCalled(); // never a second receipt
+        await waitFor(() => expect(props.onImported).toHaveBeenCalled());
     });
 
     it('tolerates chatter around the JSON', async () => {
@@ -395,6 +405,6 @@ describe('Import a receipt', () => {
         fireEvent.change(await screen.findByLabelText('Receipt JSON'), { target: { value: 'Sure!\n```json\n{"store":"Deli","items":[{"name":"Soup","price":"$4.50"}]}\n```' } });
         expect(await screen.findByText('Deli')).toBeInTheDocument();
         expect(screen.getByText('Soup')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Import and split' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeEnabled();
     });
 });

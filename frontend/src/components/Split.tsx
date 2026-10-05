@@ -12,6 +12,7 @@ interface SplitProps {
     sessionId: string;
     narrow: boolean;
     onBack: () => void;
+    onImport: () => void;
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
@@ -23,7 +24,7 @@ const dateMeta = (iso: string) => {
 const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right font-mono text-sm bg-wash';
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
-export default function Split({ sessionId, narrow, onBack }: SplitProps) {
+export default function Split({ sessionId, narrow, onBack, onImport }: SplitProps) {
     const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [items, setItems] = useState<Item[]>([]);
@@ -311,9 +312,17 @@ export default function Split({ sessionId, narrow, onBack }: SplitProps) {
                                 );
                             })}
                         </AnimatePresence>
-                        <motion.button {...tapFlat} onClick={handleAddItem} className={`w-full flex items-center gap-2 px-[18px] py-3.5 bg-wash text-sm font-semibold text-body hover:bg-surface transition-colors ${items.length ? 'border-t border-rule' : ''}`}>
-                            <Icon name="add" size={18} />Add an item
-                        </motion.button>
+                        {items.length === 0 && (
+                            <p className="m-0 px-[18px] py-6 text-center text-sm text-faint">No items yet. Add one by hand, or import them from a receipt.</p>
+                        )}
+                        <div className="flex bg-wash border-t border-rule">
+                            <motion.button {...tapFlat} onClick={handleAddItem} className="flex-1 flex items-center gap-2 px-[18px] py-3.5 text-sm font-semibold text-body hover:bg-surface transition-colors">
+                                <Icon name="add" size={18} />Add an item
+                            </motion.button>
+                            <motion.button {...tapFlat} onClick={onImport} className="flex items-center gap-2 px-[18px] py-3.5 border-l border-rule text-sm font-semibold text-body hover:bg-surface transition-colors">
+                                <Icon name="upload_file" size={18} />Import from JSON
+                            </motion.button>
+                        </div>
                     </Card>
                 </div>
 
