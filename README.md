@@ -44,7 +44,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost
 
 | Layer    | Technology                                                     |
 | -------- | -------------------------------------------------------------- |
-| Frontend | React + TypeScript, Vite, Tailwind (CDN)                       |
+| Frontend | React + TypeScript, Vite, Tailwind (CDN), Framer Motion        |
 | Auth/DB  | Supabase (Auth + Postgres with row-level security)             |
 | Hosting  | Vercel (static build)                                          |
 
@@ -57,7 +57,7 @@ cd frontend
 cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
 npm run dev                  # http://localhost:3000
-npm test                     # unit tests (split math + JSON import)
+npm test                     # unit + component tests (split math, balances, JSON import, every screen's interactions)
 ```
 
 `npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.

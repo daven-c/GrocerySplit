@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminListUsers, adminTotals, adminCreateUser, adminConfirmUser, AdminUser, AdminTotals } from '../lib/api';
+import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tap, tapFlat, tapRow } from '../lib/motion';
 
 interface AdminProps {
     onBack: () => void;
@@ -25,13 +26,13 @@ function generatePassword(): string {
 
 const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 outline-none';
 
-function Stat({ label, value, tone = 'slate' }: { label: string; value: number | string; tone?: 'slate' | 'amber' | 'emerald' }) {
+function Stat({ label, value, tone = 'slate', i = 0 }: { label: string; value: number | string; tone?: 'slate' | 'amber' | 'emerald'; i?: number }) {
     const tones = { slate: 'bg-white border-slate-200 text-slate-900', amber: 'bg-amber-50 border-amber-100 text-amber-800', emerald: 'bg-emerald-50 border-emerald-100 text-emerald-800' };
     return (
-        <div className={`border rounded-2xl p-4 ${tones[tone]}`}>
+        <motion.div {...enter(i)} className={`border rounded-2xl p-4 ${tones[tone]}`}>
             <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</p>
-            <p className="font-headline text-2xl font-extrabold">{value}</p>
-        </div>
+            <p className="font-headline text-2xl font-extrabold">{typeof value === 'number' ? <AnimatedNumber value={value} decimals={0} /> : value}</p>
+        </motion.div>
     );
 }
 
@@ -133,37 +134,37 @@ export default function Admin({ onBack }: AdminProps) {
             <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
                 <div className="flex items-center justify-between px-6 py-4 max-w-4xl mx-auto">
                     <div className="flex items-center gap-3">
-                        <button onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900 active:scale-95">
+                        <motion.button {...tap} onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900">
                             <span className="material-symbols-outlined">arrow_back</span>
-                        </button>
+                        </motion.button>
                         <h1 className="font-headline font-extrabold text-xl text-slate-900">Admin</h1>
                     </div>
-                    <button onClick={load} aria-label="Refresh" className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 active:scale-95">
+                    <motion.button {...tap} onClick={load} aria-label="Refresh" className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100">
                         <span className="material-symbols-outlined">refresh</span>
-                    </button>
+                    </motion.button>
                 </div>
             </header>
 
             <main className="pt-6 px-6 max-w-4xl mx-auto space-y-6">
-                {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
+                <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
 
                 <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <Stat label="Users" value={stats.total} />
-                    <Stat label="Unconfirmed" value={stats.unconfirmed} tone={stats.unconfirmed ? 'amber' : 'slate'} />
-                    <Stat label="New (7 days)" value={stats.newWeek} tone="emerald" />
-                    <Stat label="Active (7 days)" value={stats.activeWeek} />
-                    <Stat label="Groups" value={totals?.groups ?? '–'} />
-                    <Stat label="Receipts" value={totals?.receipts ?? '–'} />
-                    <Stat label="Items" value={totals?.items ?? '–'} />
-                    <Stat label="Payments" value={totals?.settlements ?? '–'} />
+                    <Stat i={0} label="Users" value={stats.total} />
+                    <Stat i={1} label="Unconfirmed" value={stats.unconfirmed} tone={stats.unconfirmed ? 'amber' : 'slate'} />
+                    <Stat i={2} label="New (7 days)" value={stats.newWeek} tone="emerald" />
+                    <Stat i={3} label="Active (7 days)" value={stats.activeWeek} />
+                    <Stat i={4} label="Groups" value={totals?.groups ?? '–'} />
+                    <Stat i={5} label="Receipts" value={totals?.receipts ?? '–'} />
+                    <Stat i={6} label="Items" value={totals?.items ?? '–'} />
+                    <Stat i={7} label="Payments" value={totals?.settlements ?? '–'} />
                 </section>
 
                 <section className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-                    <button onClick={() => setShowCreate(v => !v)} aria-expanded={showCreate} className="w-full flex items-center justify-between p-5 text-left">
+                    <motion.button {...tapRow} onClick={() => setShowCreate(v => !v)} aria-expanded={showCreate} className="w-full flex items-center justify-between p-5 text-left">
                         <span className="font-headline font-bold text-lg">Create user</span>
                         <span className="material-symbols-outlined text-slate-400">{showCreate ? 'expand_less' : 'expand_more'}</span>
-                    </button>
-                    {showCreate && (
+                    </motion.button>
+                    <Collapse open={showCreate}>
                         <form onSubmit={handleCreate} className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
                             <div className="grid md:grid-cols-2 gap-3">
                                 <input className={inputCls} placeholder="Display name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
@@ -171,27 +172,27 @@ export default function Admin({ onBack }: AdminProps) {
                             </div>
                             <div className="flex gap-2">
                                 <input className={inputCls + ' font-mono'} type={showPw ? 'text' : 'password'} placeholder="Temporary password (min 8)" value={password} onChange={e => setPassword(e.target.value)} minLength={8} required />
-                                <button type="button" onClick={() => setPassword(generatePassword())} className="px-3 shrink-0 text-sm font-bold bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 active:scale-95">Generate</button>
-                                <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} className="px-2 shrink-0 text-slate-400 hover:text-slate-900">
+                                <motion.button {...tap} type="button" onClick={() => setPassword(generatePassword())} className="px-3 shrink-0 text-sm font-bold bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200">Generate</motion.button>
+                                <motion.button {...tap} type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} className="px-2 shrink-0 text-slate-400 hover:text-slate-900">
                                     <span className="material-symbols-outlined text-[20px]">{showPw ? 'visibility_off' : 'visibility'}</span>
-                                </button>
+                                </motion.button>
                             </div>
                             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
                                 <label className="flex items-center gap-2"><input type="checkbox" checked={confirmEmail} onChange={e => setConfirmEmail(e.target.checked)} /> Skip email confirmation (force create)</label>
                                 <label className="flex items-center gap-2"><input type="checkbox" checked={makeAdmin} onChange={e => setMakeAdmin(e.target.checked)} /> Make admin</label>
                             </div>
-                            <button disabled={creating} className="w-full md:w-auto px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98]">
+                            <motion.button {...tapFlat} disabled={creating} className="w-full md:w-auto px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 disabled:opacity-40">
                                 {creating ? 'Creating...' : 'Create user'}
-                            </button>
+                            </motion.button>
                         </form>
-                    )}
-                    {created && (
-                        <div className="mx-5 mb-5 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm text-emerald-900 space-y-2">
-                            <p className="font-bold">User created. Share these credentials now; the password is not shown again.</p>
+                    </Collapse>
+                    <Pop show={!!created} className="mx-5 mb-5 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm text-emerald-900 space-y-2">
+                        {created && (<>
+                        <p className="font-bold">User created. Share these credentials now; the password is not shown again.</p>
                             <p className="font-mono break-all">{created.email}<br />{created.password}</p>
-                            <button onClick={() => copy(`${created.email}\n${created.password}`)} className="px-3 py-1.5 text-xs font-bold bg-emerald-700 text-white rounded-lg active:scale-95">{copied ? 'Copied!' : 'Copy'}</button>
-                        </div>
-                    )}
+                            <motion.button {...tap} onClick={() => copy(`${created.email}\n${created.password}`)} className="px-3 py-1.5 text-xs font-bold bg-emerald-700 text-white rounded-lg">{copied ? 'Copied!' : 'Copy'}</motion.button>
+                        </>)}
+                    </Pop>
                 </section>
 
                 <section className="space-y-3">
@@ -211,8 +212,10 @@ export default function Admin({ onBack }: AdminProps) {
                         <p className="text-center text-slate-400 font-semibold py-8 animate-pulse">Loading users...</p>
                     ) : shown.length === 0 ? (
                         <p className="text-center text-slate-400 font-semibold py-8 bg-white border border-dashed border-slate-200 rounded-3xl">No matching users.</p>
-                    ) : shown.map(u => (
-                        <div key={u.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+                    ) : (
+                    <AnimatePresence initial={false}>
+                    {shown.map((u, i) => (
+                        <motion.div key={u.id} {...listItem(i)} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
                             <div className="flex items-center gap-3 min-w-0 md:w-1/3">
                                 <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-600 uppercase shrink-0">{u.name.charAt(0)}</div>
                                 <div className="min-w-0">
@@ -233,13 +236,15 @@ export default function Admin({ onBack }: AdminProps) {
                                 {u.email_confirmed ? (
                                     <span className="text-xs font-bold text-emerald-600">Confirmed</span>
                                 ) : (
-                                    <button disabled={busyId === u.id} onClick={() => handleConfirm(u.id)} className="px-3 py-1.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-40 active:scale-95">
+                                    <motion.button {...tap} disabled={busyId === u.id} onClick={() => handleConfirm(u.id)} className="px-3 py-1.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-40">
                                         {busyId === u.id ? 'Confirming...' : 'Force confirm'}
-                                    </button>
+                                    </motion.button>
                                 )}
                             </div>
-                        </div>
+                        </motion.div>
                     ))}
+                    </AnimatePresence>
+                    )}
                 </section>
             </main>
         </div>

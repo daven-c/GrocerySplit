@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { motion, AnimatePresence, Pop, SegmentedTabs, Modal, listItem, tap, tapFlat, tapRow } from '../lib/motion';
 import {
     getGroup, listSessions, createSession, deleteGroup, removeMember, inviteToGroup,
     listPendingInvites, revokeInvite, Group, Session, PendingInvite,
@@ -23,6 +24,11 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string }>(null);
+
+    // Keep the last dialog's content around while its exit animation plays.
+    const lastConfirm = useRef(confirm);
+    if (confirm) lastConfirm.current = confirm;
+    const shownConfirm = confirm ?? lastConfirm.current;
 
     const isOwner = !!group && group.owner_id === me;
 
@@ -104,29 +110,29 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
     const confirmText = {
         delete: { title: 'Delete group?', body: `This permanently deletes "${group.name}" and all ${sessions.length} of its receipts for every member.`, action: 'Delete' },
         leave: { title: 'Leave group?', body: `You'll lose access to "${group.name}" and its receipts unless someone invites you again.`, action: 'Leave' },
-        remove: { title: 'Remove member?', body: `Remove ${confirm?.name} from "${group.name}"? They lose access to its receipts.`, action: 'Remove' },
+        remove: { title: 'Remove member?', body: `Remove ${shownConfirm?.name} from "${group.name}"? They lose access to its receipts.`, action: 'Remove' },
     };
 
     return (
         <div className="bg-slate-50 font-body text-slate-900 min-h-screen pb-32">
-            {confirm && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
-                        <h3 className="font-headline font-bold text-xl text-slate-900 mb-2">{confirmText[confirm.kind].title}</h3>
-                        <p className="text-slate-500 mb-6 font-medium leading-relaxed">{confirmText[confirm.kind].body}</p>
+            <Modal open={!!confirm} onClose={() => setConfirm(null)}>
+                {shownConfirm && (
+                    <>
+                        <h3 className="font-headline font-bold text-xl text-slate-900 mb-2">{confirmText[shownConfirm.kind].title}</h3>
+                        <p className="text-slate-500 mb-6 font-medium leading-relaxed">{confirmText[shownConfirm.kind].body}</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 active:scale-95">Cancel</button>
-                            <button onClick={handleConfirm} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-sm active:scale-95">{confirmText[confirm.kind].action}</button>
+                            <motion.button {...tapFlat} onClick={() => setConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200">Cancel</motion.button>
+                            <motion.button {...tapFlat} onClick={handleConfirm} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-sm">{confirmText[shownConfirm.kind].action}</motion.button>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </>
+                )}
+            </Modal>
 
             <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
                 <div className="flex items-center gap-3 px-6 py-4 max-w-2xl mx-auto">
-                    <button onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900 active:scale-95">
+                    <motion.button {...tap} onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900">
                         <span className="material-symbols-outlined">arrow_back</span>
-                    </button>
+                    </motion.button>
                     <div className="min-w-0">
                         <h1 className="font-headline font-bold text-lg text-slate-900 truncate">{group.name}</h1>
                         <p className="text-xs text-slate-500">{group.members.length} {group.members.length === 1 ? 'member' : 'members'}</p>
@@ -135,28 +141,27 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
             </header>
 
             <main className="pt-6 px-6 max-w-2xl mx-auto space-y-6">
-                <div className="flex bg-slate-200 rounded-xl p-1 shadow-inner">
-                    {(['receipts', 'members'] as const).map(t => (
-                        <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2.5 text-sm font-bold rounded-lg capitalize transition-colors ${tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
-                            {t === 'receipts' ? `Receipts (${sessions.length})` : `Members (${group.members.length})`}
-                        </button>
-                    ))}
-                </div>
+                <SegmentedTabs id="group" value={tab} onChange={setTab} tabs={[
+                    { value: 'receipts', label: `Receipts (${sessions.length})` },
+                    { value: 'members', label: `Members (${group.members.length})` },
+                ]} />
 
-                {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
-                {notice && <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm">{notice}</div>}
+                <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
+                <Pop show={!!notice} className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm">{notice}</Pop>
 
+                <AnimatePresence mode="wait" initial={false}>
+                <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
                 {tab === 'receipts' && (
                     <section className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => onImport(groupId)} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex flex-col items-center gap-1 shadow-lg shadow-blue-500/30 active:scale-[0.98]">
+                            <motion.button {...tap} onClick={() => onImport(groupId)} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex flex-col items-center gap-1 shadow-lg shadow-blue-500/30">
                                 <span className="material-symbols-outlined text-[26px]">upload_file</span>
                                 <span className="text-sm">Import Receipt</span>
-                            </button>
-                            <button onClick={handleManual} className="bg-white border-2 border-slate-100 text-indigo-900 font-bold py-4 rounded-2xl flex flex-col items-center gap-1 shadow-sm hover:border-indigo-100 active:scale-[0.98]">
+                            </motion.button>
+                            <motion.button {...tap} onClick={handleManual} className="bg-white border-2 border-slate-100 text-indigo-900 font-bold py-4 rounded-2xl flex flex-col items-center gap-1 shadow-sm hover:border-indigo-100">
                                 <span className="material-symbols-outlined text-[26px] text-indigo-500">edit_document</span>
                                 <span className="text-sm">Manual Receipt</span>
-                            </button>
+                            </motion.button>
                         </div>
 
                         <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm">
@@ -168,8 +173,9 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                             <p className="text-center text-slate-400 font-semibold py-8 bg-white border border-slate-200 border-dashed rounded-3xl">
                                 {sessions.length === 0 ? 'No receipts in this group yet.' : 'No matching receipts.'}
                             </p>
-                        ) : shown.map(s => (
-                            <button key={s.id} onClick={() => onOpenReceipt(s.id)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow active:scale-[0.99] text-left group">
+                        ) : shown.map((s, i) => (
+                            <motion.div key={s.id} {...listItem(i)}>
+                            <motion.button {...tapRow} onClick={() => onOpenReceipt(s.id)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow text-left group">
                                 <div className="flex items-center gap-4 min-w-0">
                                     <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 border border-slate-100 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
                                         <span className="material-symbols-outlined">receipt</span>
@@ -183,7 +189,8 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                                     <p className="font-headline font-bold text-slate-900">${total(s).toFixed(2)}</p>
                                     <span className="material-symbols-outlined text-slate-300">chevron_right</span>
                                 </div>
-                            </button>
+                            </motion.button>
+                            </motion.div>
                         ))}
                     </section>
                 )}
@@ -199,26 +206,28 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                                         onKeyDown={e => e.key === 'Enter' && handleInvite()}
                                         placeholder="friend@example.com"
                                         className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold outline-none focus:border-slate-400" />
-                                    <button onClick={handleInvite} disabled={!email.trim()} className="px-4 bg-slate-900 text-white font-bold text-sm rounded-xl disabled:opacity-40 active:scale-95">Invite</button>
+                                    <motion.button {...tap} onClick={handleInvite} disabled={!email.trim()} className="px-4 bg-slate-900 text-white font-bold text-sm rounded-xl disabled:opacity-40">Invite</motion.button>
                                 </div>
                                 <p className="text-xs text-slate-400">They need an account using that email. The invite appears on their home screen.</p>
                                 {pending.length > 0 && (
                                     <div className="pt-2 space-y-2">
                                         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Pending</p>
+                                        <AnimatePresence initial={false}>
                                         {pending.map(p => (
-                                            <div key={p.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
+                                            <motion.div key={p.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2">
                                                 <span className="text-sm font-semibold text-slate-700 truncate">{p.email}</span>
-                                                <button onClick={async () => { await revokeInvite(p.id); setPending(await listPendingInvites(groupId)); }} className="text-xs font-bold text-red-500 hover:text-red-700">Revoke</button>
-                                            </div>
+                                                <motion.button {...tap} onClick={async () => { await revokeInvite(p.id); setPending(await listPendingInvites(groupId)); }} className="text-xs font-bold text-red-500 hover:text-red-700">Revoke</motion.button>
+                                            </motion.div>
                                         ))}
+                                        </AnimatePresence>
                                     </div>
                                 )}
                             </div>
                         )}
 
                         <div className="space-y-3">
-                            {group.members.map(m => (
-                                <div key={m.user_id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            {group.members.map((m, i) => (
+                                <motion.div key={m.user_id} {...listItem(i)} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 uppercase border border-slate-200 shrink-0">{m.name.charAt(0)}</div>
                                         <div className="min-w-0">
@@ -229,24 +238,26 @@ export default function GroupDetail({ groupId, onBack, onImport, onOpenReceipt }
                                     <div className="flex items-center gap-2 shrink-0">
                                         {m.role === 'owner' && <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full">Owner</span>}
                                         {isOwner && m.role !== 'owner' && (
-                                            <button onClick={() => setConfirm({ kind: 'remove', userId: m.user_id, name: m.name })} aria-label={`Remove ${m.name}`} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500">
+                                            <motion.button {...tap} onClick={() => setConfirm({ kind: 'remove', userId: m.user_id, name: m.name })} aria-label={`Remove ${m.name}`} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500">
                                                 <span className="material-symbols-outlined text-[18px]">close</span>
-                                            </button>
+                                            </motion.button>
                                         )}
                                     </div>
-                                </div>
+                                </motion.div>
                             ))}
                         </div>
 
                         <div className="pt-2">
                             {isOwner ? (
-                                <button onClick={() => setConfirm({ kind: 'delete' })} className="w-full bg-white text-red-600 font-bold py-3 rounded-2xl border border-red-200 hover:bg-red-50 active:scale-[0.98]">Delete group</button>
+                                <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'delete' })} className="w-full bg-white text-red-600 font-bold py-3 rounded-2xl border border-red-200 hover:bg-red-50">Delete group</motion.button>
                             ) : (
-                                <button onClick={() => setConfirm({ kind: 'leave' })} className="w-full bg-white text-red-600 font-bold py-3 rounded-2xl border border-red-200 hover:bg-red-50 active:scale-[0.98]">Leave group</button>
+                                <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'leave' })} className="w-full bg-white text-red-600 font-bold py-3 rounded-2xl border border-red-200 hover:bg-red-50">Leave group</motion.button>
                             )}
                         </div>
                     </section>
                 )}
+                </motion.div>
+                </AnimatePresence>
             </main>
         </div>
     );
