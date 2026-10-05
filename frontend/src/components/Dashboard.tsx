@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { listGroups, listSessions, createGroup, myInvites, respondToInvite, Group, Invite, Session } from '../lib/api';
+import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, Group, Invite, Session, Settlement } from '../lib/api';
+import { computeBalances } from '../lib/balances';
+import FriendsTab from './FriendsTab';
 
 interface DashboardProps {
     user: any;
@@ -12,6 +14,8 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
     const [groups, setGroups] = useState<Group[]>([]);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [invites, setInvites] = useState<Invite[]>([]);
+    const [settlements, setSettlements] = useState<Settlement[]>([]);
+    const [tab, setTab] = useState<'groups' | 'friends'>('groups');
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -30,10 +34,11 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
 
     const load = useCallback(async () => {
         try {
-            const [g, s, i] = await Promise.all([listGroups(), listSessions(), myInvites()]);
+            const [g, s, i, st] = await Promise.all([listGroups(), listSessions(), myInvites(), listSettlements()]);
             setGroups(g);
             setSessions(s);
             setInvites(i);
+            setSettlements(st);
         } catch (err: any) {
             setError(err.message || 'Failed to load groups');
         } finally {
@@ -65,6 +70,8 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
             setError(err.message || 'Failed to answer invite');
         }
     };
+
+    const groupBalance = computeBalances(user?.id ?? '', groups, sessions, settlements).byGroup;
 
     const total = (s: Session) => s.items.reduce((a, i) => a + i.price, 0) + s.tax + s.tip;
 
@@ -104,7 +111,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
             <main className="pt-8 px-6 max-w-2xl mx-auto space-y-8">
                 <section>
                     <h2 className="text-2xl font-bold text-slate-900">Welcome back{user ? `, ${user.name.split(' ')[0]}` : ''}</h2>
-                    <p className="text-slate-500 text-sm mt-1">Pick a group to see its receipts, or start a new one.</p>
+                    <p className="text-slate-500 text-sm mt-1">Split costs with your groups, and see who owes whom.</p>
                 </section>
 
                 {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
@@ -127,6 +134,19 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                     </section>
                 )}
 
+                <div className="flex bg-slate-200 rounded-xl p-1 shadow-inner">
+                    {(['groups', 'friends'] as const).map(t => (
+                        <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2.5 text-sm font-bold rounded-lg capitalize transition-colors ${tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>{t}</button>
+                    ))}
+                </div>
+
+                {tab === 'friends' && (
+                    loading ? <p className="text-center text-slate-400 font-semibold py-8 animate-pulse">Loading...</p> : (
+                        <FriendsTab me={user?.id ?? ''} groups={groups} sessions={sessions} settlements={settlements} onChanged={load} />
+                    )
+                )}
+
+                {tab === 'groups' && (
                 <section>
                     <div className="flex items-center justify-between mb-4 gap-3">
                         <h3 className="font-headline font-bold text-xl text-slate-900">Your Groups</h3>
@@ -172,7 +192,14 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                             </div>
                                         </div>
                                         <div className="text-right flex items-center gap-3 shrink-0">
-                                            <p className="font-headline font-bold text-slate-900">${spent.toFixed(2)}</p>
+                                            <div>
+                                                <p className="font-headline font-bold text-slate-900">${spent.toFixed(2)}</p>
+                                                {Math.abs(groupBalance[g.id] ?? 0) >= 0.005 && (
+                                                    <p className={`text-[11px] font-bold ${groupBalance[g.id] > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        {groupBalance[g.id] > 0 ? `you're owed $${groupBalance[g.id].toFixed(2)}` : `you owe $${(-groupBalance[g.id]).toFixed(2)}`}
+                                                    </p>
+                                                )}
+                                            </div>
                                             <span className="material-symbols-outlined text-slate-300">chevron_right</span>
                                         </div>
                                     </button>
@@ -181,6 +208,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                         )}
                     </div>
                 </section>
+                )}
             </main>
         </div>
     );
