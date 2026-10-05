@@ -1,262 +1,140 @@
-import React, { useState, useRef } from "react";
-import axios from "axios";
+import React, { useMemo, useState } from 'react';
+import { createSession, getGroup } from '../lib/api';
+import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
 
 interface ReceiptUploadProps {
-	onReceiptProcessed: (items: { name: string; price: number }[]) => void;
-	loading: boolean;
-	setLoading: (loading: boolean) => void;
-	setError: (error: string) => void;
+    groupId: string;
+    onImported: (sessionId: string) => void;
+    onBack: () => void;
 }
 
-const ReceiptUpload: React.FC<ReceiptUploadProps> = ({
-	onReceiptProcessed,
-	loading,
-	setLoading,
-	setError,
-}) => {
-	const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-	const [previewURL, setPreviewURL] = useState<string | null>(null);
-	const [scanningStatus, setScanningStatus] = useState<string>("");
-	const [processingMethod, setProcessingMethod] = useState<string>("");
-	const [jsonInput, setJsonInput] = useState<string>("");
-	const [activeTab, setActiveTab] = useState<"image" | "json">("image");
-	const fileInputRef = useRef<HTMLInputElement>(null);
+export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUploadProps) {
+    const [json, setJson] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [copied, setCopied] = useState(false);
 
-	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-		const file = event.target.files?.[0];
-		if (file) {
-			// Validate file is an image
-			if (!file.type.match("image.*")) {
-				setError("Please select an image file");
-				return;
-			}
+    const parsed = useMemo(() => {
+        if (!json.trim()) return null;
+        try {
+            return { ok: parseReceiptJson(json) };
+        } catch (e: any) {
+            return { err: e.message as string };
+        }
+    }, [json]);
 
-			setUploadedImage(file);
-			setPreviewURL(URL.createObjectURL(file));
-		}
-	};
+    const copyPrompt = async () => {
+        try {
+            await navigator.clipboard.writeText(RECEIPT_PROMPT);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2500);
+        } catch {
+            setError('Could not access the clipboard. Select the prompt text below and copy it manually.');
+        }
+    };
 
-	const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-		event.preventDefault();
-		event.stopPropagation();
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) setJson(await file.text());
+        e.target.value = '';
+    };
 
-		if (event.dataTransfer.files && event.dataTransfer.files[0]) {
-			const file = event.dataTransfer.files[0];
+    const handleImport = async () => {
+        if (!parsed || !('ok' in parsed) || !parsed.ok) return;
+        const r = parsed.ok;
+        setLoading(true);
+        setError('');
+        try {
+            const group = await getGroup(groupId);
+            const id = await createSession({
+                groupId,
+                participants: group.members.map(m => m.name),
+                name: r.store || 'Grocery Trip',
+                date: r.date,
+                tax: r.tax,
+                tip: r.tip,
+                items: r.items,
+            });
+            onImported(id);
+        } catch (err: any) {
+            setError(err.message || 'Failed to import receipt');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-			// Validate file is an image
-			if (!file.type.match("image.*")) {
-				setError("Please drop an image file");
-				return;
-			}
+    const receipt = parsed && 'ok' in parsed ? parsed.ok : null;
+    const subtotal = receipt ? receipt.items.reduce((a, i) => a + i.price, 0) : 0;
 
-			setUploadedImage(file);
-			setPreviewURL(URL.createObjectURL(file));
-		}
-	};
+    return (
+        <div className="bg-slate-50 font-body text-slate-900 min-h-screen">
+            <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
+                <div className="flex items-center justify-between px-6 py-4 max-w-2xl mx-auto">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors active:scale-95">
+                            <span className="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h1 className="font-headline font-bold text-lg text-slate-900">Import Receipt</h1>
+                    </div>
+                </div>
+            </header>
 
-	const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-		event.preventDefault();
-		event.stopPropagation();
-	};
+            <main className="pt-8 px-6 pb-16 max-w-2xl mx-auto space-y-8">
+                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">1.</span> Copy the prompt</h2>
+                    <p className="text-sm text-slate-500">Paste it into your favorite AI chat together with a photo of your receipt. It will reply with JSON.</p>
+                    <button onClick={copyPrompt} className="w-full flex items-center justify-center gap-2 h-12 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
+                        <span className="material-symbols-outlined">{copied ? 'check' : 'content_copy'}</span>
+                        {copied ? 'Copied!' : 'Copy prompt'}
+                    </button>
+                    <details className="text-sm">
+                        <summary className="cursor-pointer text-slate-500 font-semibold">View prompt</summary>
+                        <pre className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap text-xs text-slate-700 select-all">{RECEIPT_PROMPT}</pre>
+                    </details>
+                </section>
 
-	const uploadToServer = async () => {
-		if (!uploadedImage) return;
+                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">2.</span> Paste the JSON it returns</h2>
+                    <textarea
+                        value={json}
+                        onChange={e => { setJson(e.target.value); setError(''); }}
+                        placeholder={EXAMPLE_RECEIPT_JSON}
+                        rows={10}
+                        spellCheck={false}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-xs text-slate-900 focus:ring-2 focus:ring-slate-900 outline-none"
+                    />
+                    <div className="flex gap-3">
+                        <label className="flex-1 flex items-center justify-center gap-2 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl cursor-pointer hover:bg-slate-50 active:scale-[0.98]">
+                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                            Choose .json file
+                            <input type="file" accept=".json,application/json,text/plain" className="hidden" onChange={handleFile} />
+                        </label>
+                        <button onClick={() => setJson(EXAMPLE_RECEIPT_JSON)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 active:scale-[0.98]">
+                            Try example
+                        </button>
+                    </div>
 
-		setLoading(true);
-		setScanningStatus("Uploading and analyzing receipt...");
-		setProcessingMethod("Using advanced AI vision analysis...");
+                    {parsed && 'err' in parsed && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{parsed.err}</div>
+                    )}
+                    {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
 
-		const formData = new FormData();
-		formData.append("receipt", uploadedImage);
+                    {receipt && (
+                        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
+                            <p className="font-bold">{receipt.store || 'Grocery Trip'}{receipt.date ? ` · ${receipt.date}` : ''}</p>
+                            <p>{receipt.items.length} items · subtotal ${subtotal.toFixed(2)} · tax ${receipt.tax.toFixed(2)}{receipt.tip ? ` · tip $${receipt.tip.toFixed(2)}` : ''}</p>
+                            {receipt.skipped > 0 && <p className="text-amber-700">{receipt.skipped} invalid line(s) will be skipped.</p>}
+                        </div>
+                    )}
 
-		try {
-			const response = await axios.post("/api/scan-receipt", formData, {
-				headers: {
-					"Content-Type": "multipart/form-data",
-				},
-			});
-
-			if (response.data.items && response.data.items.length > 0) {
-				onReceiptProcessed(response.data.items);
-				setScanningStatus("Receipt processed successfully!");
-				setProcessingMethod("");
-			} else {
-				setError("No items could be detected in the receipt");
-				setScanningStatus("");
-				setProcessingMethod("");
-			}
-		} catch (err: any) {
-			console.error("Error processing receipt:", err);
-			setError(err.response?.data?.error || "Failed to process receipt");
-			setScanningStatus("");
-			setProcessingMethod("");
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const handleProcessClick = () => {
-		if (uploadedImage) {
-			uploadToServer();
-		} else {
-			setError("Please upload a receipt image first");
-		}
-	};
-
-	const handleJsonSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		if (!jsonInput.trim()) {
-			setError("Please enter JSON data");
-			return;
-		}
-
-		setLoading(true);
-		setError(null);
-
-		try {
-			// Parse and validate JSON
-			const parsedData = JSON.parse(jsonInput);
-
-			if (!parsedData.items || !Array.isArray(parsedData.items)) {
-				throw new Error(
-					"Invalid JSON format. Expected an object with 'items' array"
-				);
-			}
-
-			// Transform to expected format
-			const items = parsedData.items
-				.map((item: any) => ({
-					name: item.item || item.name,
-					price: parseFloat(item.cost || item.price),
-				}))
-				.filter((item: any) => item.name && !isNaN(item.price));
-
-			if (items.length === 0) {
-				throw new Error("No valid items found in JSON");
-			}
-
-			await onReceiptProcessed(items);
-			setJsonInput("");
-			setError(null);
-		} catch (err: any) {
-			console.error("Error processing JSON:", err);
-			setError(err.message || "Failed to process JSON data");
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	return (
-		<div className="section receipt-upload">
-			<h2>Import Items</h2>
-
-			<div className="upload-tabs">
-				<button
-					className={activeTab === "image" ? "active" : ""}
-					onClick={() => setActiveTab("image")}
-				>
-					Upload Image
-				</button>
-				<button
-					className={activeTab === "json" ? "active" : ""}
-					onClick={() => setActiveTab("json")}
-				>
-					Paste JSON
-				</button>
-			</div>
-
-			{activeTab === "image" ? (
-				<div>
-					<div
-						className="upload-area"
-						onDrop={handleDrop}
-						onDragOver={handleDragOver}
-						onClick={() => fileInputRef.current?.click()}
-					>
-						<input
-							type="file"
-							ref={fileInputRef}
-							onChange={handleFileChange}
-							accept="image/*"
-							style={{ display: "none" }}
-						/>
-						<p>Click to browse or drop receipt image here</p>
-						{previewURL && (
-							<img
-								src={previewURL}
-								alt="Receipt preview"
-								className="receipt-preview"
-							/>
-						)}
-					</div>
-
-					<div style={{ marginTop: "15px", textAlign: "center" }}>
-						<button
-							onClick={handleProcessClick}
-							disabled={!uploadedImage || loading}
-						>
-							Scan Receipt
-						</button>
-						{uploadedImage && (
-							<button
-								onClick={() => {
-									setUploadedImage(null);
-									setPreviewURL(null);
-									setScanningStatus("");
-									setProcessingMethod("");
-								}}
-								disabled={loading}
-							>
-								Clear
-							</button>
-						)}
-					</div>
-
-					{loading && (
-						<div className="loading">
-							<div className="loading-spinner"></div>
-							<p>{scanningStatus}</p>
-							{processingMethod && (
-								<p className="processing-method">
-									{processingMethod}
-								</p>
-							)}
-						</div>
-					)}
-
-					{scanningStatus && !loading && (
-						<p style={{ color: "green", textAlign: "center" }}>
-							{scanningStatus}
-						</p>
-					)}
-				</div>
-			) : (
-				<form onSubmit={handleJsonSubmit}>
-					<textarea
-						value={jsonInput}
-						onChange={(e) => setJsonInput(e.target.value)}
-						placeholder={`Paste JSON here, e.g.:
-{
-  "items": [
-    {"item": "THAI JASMINE", "cost": 19.89},
-    {"item": "PREMIER CHOC", "cost": 31.99}
-  ]
-}`}
-						rows={10}
-						disabled={loading}
-						className="json-input"
-					/>
-					<button
-						type="submit"
-						disabled={!jsonInput.trim() || loading}
-					>
-						{loading ? "Processing..." : "Import Items"}
-					</button>
-				</form>
-			)}
-		</div>
-	);
-};
-
-export default ReceiptUpload;
+                    <button
+                        onClick={handleImport}
+                        disabled={!receipt || loading}
+                        className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-sm disabled:opacity-40 active:scale-[0.98] transition-all">
+                        {loading ? 'Importing...' : 'Import & split'}
+                    </button>
+                </section>
+            </main>
+        </div>
+    );
+}

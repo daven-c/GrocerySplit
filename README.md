@@ -1,146 +1,66 @@
 # GrocerySplit
 
-A React and Flask application for splitting grocery expenses among friends, with advanced receipt scanning functionality using Google's Gemini Vision AI.
+Import a grocery receipt, tap once per item to assign it to a friend, and get an exact split — tax and tip included.
 
-## Features
+## How it's organised
 
--   Upload and automatically scan receipts using AI-powered image recognition
--   AI-powered receipt analysis with Google's Gemini Vision API
--   Fallback to OCR when needed (both server-side and browser-based)
--   Manually add grocery items and prices
--   Add multiple users to split expenses with
--   Assign items to specific users
--   Calculate how much each person owes
+- **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
+- **Receipts live inside a group.** Every member can see and edit the group's receipts.
+- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
+- The owner can invite, remove members and delete the group; any member can leave.
+- **People** (bottom nav) are saved guest names you can add to a receipt even if they don't have an account.
 
-## Prerequisites
+## How receipt import works
 
--   Python 3.7+
--   Node.js and npm
--   Tesseract OCR (for OCR fallback)
--   Google Gemini API key (for advanced receipt scanning)
+There is no built-in AI. Instead:
 
-## Configuration
+1. Open **Import Receipt** and tap **Copy prompt**.
+2. Paste the prompt into any AI chat (ChatGPT, Claude, Gemini, ...) along with a photo of your receipt.
+3. Paste the JSON it returns (or upload it as a `.json` file) and tap **Import & split**.
 
-Port settings can be configured in `config.json`:
+Expected JSON (the prompt asks the model for exactly this):
 
--   Frontend runs on port 3000 by default
--   Backend runs on port 6000 by default
+```json
+{
+  "store": "Corner Market",
+  "date": "2026-10-05",
+  "items": [{ "name": "Oat Milk", "price": 7.5 }],
+  "tax": 1.25,
+  "tip": 0
+}
+```
 
-To change ports, edit the `config.json` file in the root directory.
+The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"` strings and a bare `[...]` array.
 
-## Setup Instructions
+## Split math
 
-### Get a Google Gemini API Key
+All money is handled in integer cents. Each item is split evenly among its assignees, and tax and tip are shared in proportion to what each person's items cost. Leftover pennies are distributed by largest remainder, so per-person totals always add up exactly to items + tax + tip (see `frontend/src/lib/calc.ts`).
 
-1. Visit the Google AI Studio at https://makersuite.google.com/
-2. Sign in with your Google account and create a new project
-3. Navigate to the API Keys section and create a new API key
-4. Copy your API key
-5. Open the file `backend/.env` and set `GEMINI-API-KEY` to your API key
+## Tech stack
 
-### Install Tesseract OCR (For OCR fallback)
+| Layer    | Technology                                                     |
+| -------- | -------------------------------------------------------------- |
+| Frontend | React + TypeScript, Vite, Tailwind (CDN)                       |
+| Auth/DB  | Supabase (Auth + Postgres with row-level security)             |
+| Hosting  | Vercel (static build)                                          |
 
-1. Download and install Tesseract OCR from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
-2. Make sure to add Tesseract to your PATH environment variable
-3. Verify installation by running `tesseract --version` in your terminal
+Access is enforced in Postgres with row-level security: you can only see groups you belong to and their receipts, and only owners can invite or remove people (`profiles`, `groups`, `group_members`, `group_invites`, `sessions`, `items`, `people`).
 
-### Quick Start
+## Local development
 
-1. Clone this repository
-2. Run the startup script:
-    ```
-    .\start.ps1
-    ```
+```bash
+cd frontend
+cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
+npm install
+npm run dev                  # http://localhost:3000
+npm test                     # unit tests (split math + JSON import)
+```
 
-This script will:
+`npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.
 
--   Create a Python virtual environment
--   Install Python dependencies
--   Install Node.js dependencies
--   Start the Flask backend server
--   Start the React development server
+## Deploying
 
-### Manual Setup (If startup script doesn't work)
-
-#### Backend Setup
-
-1. Create a virtual environment:
-
-    ```
-    python -m venv venv
-    ```
-
-2. Activate the virtual environment:
-
-    ```
-    .\venv\Scripts\Activate.ps1
-    ```
-
-3. Install Python dependencies:
-
-    ```
-    pip install -r requirements.txt
-    ```
-
-4. Run the Flask backend:
-    ```
-    python backend\app.py
-    ```
-
-#### Frontend Setup
-
-1. Navigate to the frontend directory:
-
-    ```
-    cd frontend
-    ```
-
-2. Install Node.js dependencies:
-
-    ```
-    npm install
-    ```
-
-3. Start the React development server:
-    ```
-    npm start
-    ```
-
-## Usage
-
-1. Open your browser and navigate to the configured frontend port (default: http://localhost:3000)
-2. Upload a receipt image using the upload section
-3. The app will use Google's Gemini Vision AI to analyze the receipt and extract items with prices
-4. Add users to split expenses with
-5. Assign items to specific users by checking the appropriate boxes
-6. Click "Calculate" to see how much each person owes
-
-## Technical Details
-
--   **Frontend**: React.js
--   **Backend**: Flask (Python)
--   **Receipt Scanning**:
-    -   Primary: Google Gemini Vision AI for advanced image understanding
-    -   Fallback 1: Tesseract OCR with OpenCV for image preprocessing (server-side)
-    -   Fallback 2: Tesseract.js (browser-based OCR)
-
-## Troubleshooting
-
-### Receipt scanning not working with Gemini AI?
-
-1. Check that you've added your Gemini API key correctly in `backend/.env`
-2. Make sure you have an active internet connection as Gemini requires API calls
-3. Verify that the uploaded receipt image is clear and well-lit
-4. The app will automatically fall back to traditional OCR methods if Gemini fails
-
-### Receipt scanning not working at all?
-
-1. Make sure Tesseract OCR is properly installed
-2. Ensure the receipt image is clear and well-lit
-3. Try adding items manually if automatic scanning fails
-
-### API connection issues?
-
-1. Make sure both frontend and backend servers are running
-2. Check that the ports in `config.json` match your running services
-3. The frontend expects the backend to be available at the port specified in `config.json` (default: http://localhost:6000)
+- **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
+- **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` then deploys to production and every PR gets a preview deployment.
+- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and push to `main`.
+- **Database migrations are not automated.** Apply new files in `supabase/migrations/` to the Supabase project before merging a change that needs them.

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Grocery Split - Authentication</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface": "#dee5ff",
+              "secondary-fixed-dim": "#ceb9ff",
+              "background": "#060e20",
+              "on-secondary-fixed": "#40009b",
+              "primary-fixed": "#69f6b8",
+              "error-container": "#9f0519",
+              "surface-bright": "#1f2b49",
+              "primary-container": "#06b77f",
+              "outline": "#6d758c",
+              "surface-container": "#0f1930",
+              "primary": "#69f6b8",
+              "secondary-fixed": "#dac9ff",
+              "inverse-surface": "#faf8ff",
+              "on-tertiary-fixed": "#00163b",
+              "on-primary": "#005a3c",
+              "surface-container-lowest": "#000000",
+              "on-primary-fixed": "#00452d",
+              "secondary-container": "#5516be",
+              "on-secondary": "#280067",
+              "on-error": "#490006",
+              "outline-variant": "#40485d",
+              "surface-variant": "#192540",
+              "on-primary-container": "#002919",
+              "primary-dim": "#58e7ab",
+              "on-surface-variant": "#a3aac4",
+              "on-error-container": "#ffa8a3",
+              "secondary-dim": "#8455ef",
+              "surface-container-low": "#091328",
+              "tertiary-dim": "#699cff",
+              "on-tertiary-container": "#000311",
+              "surface-dim": "#060e20",
+              "primary-fixed-dim": "#58e7ab",
+              "on-tertiary-fixed-variant": "#00377b",
+              "tertiary-container": "#4388fd",
+              "surface-container-high": "#141f38",
+              "tertiary": "#699cff",
+              "inverse-on-surface": "#4d556b",
+              "tertiary-fixed-dim": "#73a2ff",
+              "on-background": "#dee5ff",
+              "surface-tint": "#69f6b8",
+              "inverse-primary": "#006d4a",
+              "on-primary-fixed-variant": "#006544",
+              "surface": "#060e20",
+              "on-secondary-fixed-variant": "#5f28c8",
+              "error": "#ff716c",
+              "error-dim": "#d7383b",
+              "tertiary-fixed": "#8ab0ff",
+              "on-secondary-container": "#d9c8ff",
+              "on-tertiary": "#001e4a",
+              "secondary": "#ac8aff",
+              "surface-container-highest": "#192540"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .bg-vibrant {
+            background: radial-gradient(circle at 0% 0%, #ac8aff 0%, transparent 40%),
+                        radial-gradient(circle at 100% 100%, #69f6b8 0%, transparent 40%),
+                        #060e20;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-vibrant font-body text-on-surface min-h-screen flex items-center justify-center p-6 selection:bg-primary/30">
+<!-- Hero Background Element (Visual Texture) -->
+<div class="fixed inset-0 overflow-hidden pointer-events-none">
+<div class="absolute -top-24 -left-24 w-96 h-96 bg-secondary/10 rounded-full blur-[120px]"></div>
+<div class="absolute -bottom-24 -right-24 w-96 h-96 bg-primary/10 rounded-full blur-[120px]"></div>
+</div>
+<!-- Main Auth Container -->
+<main class="w-full max-w-[440px] relative z-10">
+<!-- Header / Logo Area -->
+<div class="flex flex-col items-center mb-10">
+<div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(105,246,184,0.15)]">
+<span class="material-symbols-outlined text-on-primary-container text-4xl" data-icon="bubble_chart">bubble_chart</span>
+</div>
+<h1 class="font-headline text-4xl font-extrabold tracking-tight bg-gradient-to-r from-on-surface to-on-surface-variant bg-clip-text text-transparent">
+                Grocery Split
+            </h1>
+<p class="font-body text-on-surface-variant mt-2 text-sm">Curating shared expenses with precision.</p>
+</div>
+<!-- Glassmorphism Auth Card -->
+<div class="glass-panel rounded-[2.5rem] p-8 md:p-10 border border-outline-variant/10 shadow-2xl">
+<!-- Tab Switcher -->
+<div class="flex p-1.5 bg-surface-container-lowest/40 rounded-full mb-10 relative">
+<button class="flex-1 py-3 text-sm font-semibold text-on-primary-container bg-primary rounded-full transition-all duration-300">
+                    Login
+                </button>
+<button class="flex-1 py-3 text-sm font-semibold text-on-surface-variant hover:text-on-surface transition-all duration-300">
+                    Sign Up
+                </button>
+</div>
+<!-- Form -->
+<form class="space-y-6" onsubmit="return false;">
+<!-- Email Field -->
+<div class="space-y-2 group">
+<label class="block text-xs font-medium text-on-surface-variant px-1 tracking-wider uppercase" for="email">Email Address</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors" data-icon="mail">mail</span>
+<input class="w-full bg-surface-container-highest/30 border-0 rounded-2xl py-4 pl-12 pr-4 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary/50 focus:bg-surface-container-highest/60 transition-all outline-none" id="email" placeholder="curator@grocerysplit.com" type="email"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-2 group">
+<div class="flex justify-between items-center px-1">
+<label class="block text-xs font-medium text-on-surface-variant tracking-wider uppercase" for="password">Password</label>
+<a class="text-[10px] font-semibold text-primary/70 hover:text-primary transition-colors tracking-tight" href="#">Forgot Password?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors" data-icon="lock">lock</span>
+<input class="w-full bg-surface-container-highest/30 border-0 rounded-2xl py-4 pl-12 pr-12 text-on-surface placeholder:text-on-surface-variant/40 focus:ring-2 focus:ring-primary/50 focus:bg-surface-container-highest/60 transition-all outline-none" id="password" placeholder="••••••••" type="password"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="visibility">visibility</span>
+</button>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full py-4 mt-4 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold rounded-full shadow-[0_8px_24px_rgba(105,246,184,0.2)] hover:scale-[0.98] active:scale-95 transition-all duration-200">
+                    Continue
+                </button>
+</form>
+<!-- Divider -->
+<div class="relative my-8">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full h-[1px] bg-outline-variant/10"></div>
+</div>
+<div class="relative flex justify-center">
+<span class="px-4 bg-transparent text-[10px] font-bold text-on-surface-variant/40 tracking-[0.2em] uppercase">or connect with</span>
+</div>
+</div>
+<!-- Social Login -->
+<button class="w-full flex items-center justify-center gap-3 py-4 bg-surface-container-high/40 hover:bg-surface-container-high/60 border border-outline-variant/10 rounded-full transition-all group">
+<div class="w-5 h-5 flex items-center justify-center bg-white rounded-full p-0.5">
+<img alt="Google Logo" class="w-full h-full object-contain" data-alt="Official Google icon on white circle" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVYewO-z2UTERYdVN7szXLIrWiV_EW_mR20DPy4QIanOSCJDeIGIlwm_zjtkc_nBKHICb_yjqTwsFAhchnaOfe4vEYz7PbGOWtAE9bpYRrv1LZ8cAxgjc9lvDw4PBC6c9KZbKutcIhB0y2BtJPdXuaWGUQ9ZurdmkRUgqxTFqN675LGGU_iNuxOu51_UiyQxJi-55eTkDzDpAgTBzYeygF9K0gdCxIwusgxvIuSsPr6OlZEhqQ3UzVrKMxqtAjnHRZdhYbxxzay6hv"/>
+</div>
+<span class="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">Login with Google</span>
+</button>
+</div>
+<!-- Footer Info -->
+<p class="text-center mt-10 text-[11px] text-on-surface-variant/50 leading-relaxed px-8">
+            By continuing, you agree to our <a class="text-on-surface-variant hover:text-primary underline decoration-primary/30 underline-offset-4" href="#">Terms of Service</a> and <a class="text-on-surface-variant hover:text-primary underline decoration-primary/30 underline-offset-4" href="#">Privacy Policy</a>.
+        </p>
+</main>
+<!-- Semantic Shell Logic - Navigation Suppressed for Transactional/Login Screen as per instructions -->
+</body></html>

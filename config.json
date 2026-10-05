@@ -1,9 +1,0 @@
-{
-	"ports": {
-		"frontend": 3000,
-		"backend": 6000
-	},
-	"api": {
-		"baseUrl": "http://localhost"
-	}
-}
