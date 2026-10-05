@@ -253,6 +253,28 @@ run('shared groups integration', () => {
         await api.deleteSession(id);
     });
 
+    it('drafts are invisible to other members until saved, and are not removed while fresh', async () => {
+        const a = (await (async () => { await as('a'); return supabase.auth.getUser(); })()).data.user!.id;
+        const draft = await api.createSession({ groupId, kind: 'expense', draft: true, name: 'Half-typed', category: 'other', amount: 0, splitMethod: 'equal', splitData: { [a]: 1 } });
+
+        expect((await api.getSession(draft)).draft).toBe(true); // the author can open it
+        expect((await api.listSessions(groupId)).some(x => x.id === draft && x.draft)).toBe(true); // ...and it is flagged as a draft
+
+        await as('b');
+        expect((await api.listSessions(groupId)).some(x => x.id === draft)).toBe(false); // other members never see it
+        await expect(api.getSession(draft)).rejects.toThrow();
+
+        await as('a');
+        await api.deleteStaleDrafts(); // a day-old cutoff: a fresh draft survives
+        expect((await api.getSession(draft)).draft).toBe(true);
+
+        await api.updateSession(draft, { name: 'Real now', draft: false });
+        await as('b');
+        expect((await api.listSessions(groupId)).find(x => x.id === draft)).toMatchObject({ name: 'Real now', draft: false });
+        await as('a');
+        await api.deleteSession(draft);
+    });
+
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
         await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();

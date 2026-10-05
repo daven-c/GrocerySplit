@@ -17,7 +17,8 @@ interface GroupDetailProps {
     initialTab?: GroupTab;
     narrow: boolean;
     onBack: () => void;
-    onOpenRecord: (id: string, kind: 'receipt' | 'expense') => void;
+    /** `draft` is true for a record that was just created and is not saved until its author says so. */
+    onOpenRecord: (id: string, kind: 'receipt' | 'expense', draft?: boolean) => void;
 }
 
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
@@ -128,9 +129,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         if (creating.current) return; // a double click must not create two records (stays locked: success navigates away)
         creating.current = true;
         try {
-            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries' });
+            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
             await refresh();
-            onOpenRecord(id, 'receipt');
+            onOpenRecord(id, 'receipt', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
     };
 
@@ -140,11 +141,11 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         creating.current = true;
         try {
             const id = await createSession({
-                groupId, kind: 'expense', name: 'New expense', category: 'other', amount: 0,
+                groupId, kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
                 splitMethod: 'equal', splitData: everyoneEqual(group.members.map(m => m.user_id)),
             });
             await refresh();
-            onOpenRecord(id, 'expense');
+            onOpenRecord(id, 'expense', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
     };
 

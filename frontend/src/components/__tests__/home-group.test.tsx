@@ -166,8 +166,8 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Split groceries'));
-        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries' }));
-        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'receipt'));
+        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries', draft: true }));
+        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'receipt', true)); // a draft: not saved until Save
     });
 
     it('"Split a bill or cost" creates a standalone expense split equally among everyone', async () => {
@@ -176,10 +176,10 @@ describe('Group detail', () => {
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Split a bill or cost'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
-            groupId: 'g1', kind: 'expense', name: 'New expense', category: 'other', amount: 0,
+            groupId: 'g1', kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
             splitMethod: 'equal', splitData: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 },
         }));
-        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense'));
+        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense', true));
     });
 
     it('a double click on "Split a bill or cost" creates only one record', async () => {

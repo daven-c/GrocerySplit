@@ -19,15 +19,15 @@ let groups: Group[] = [
     ] },
 ];
 let sessions: Session[] = [
-    { id: 's1', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'receipt', category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Costco', session_date: '2026-10-01', tax: 3.2, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-01T10:00:00Z', items: [
+    { id: 's1', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Costco', session_date: '2026-10-01', tax: 3.2, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-01T10:00:00Z', items: [
         { id: 'i1', name: 'Oat Milk', price: 8, assigned_users: ['Daven', 'Amy'] },
         { id: 'i2', name: 'Eggs', price: 6.5, assigned_users: ['Amy', 'Bo'] },
         { id: 'i3', name: 'Chicken Breast', price: 22.4, assigned_users: [] },
     ] },
-    { id: 's2', group_id: 'g1', user_id: 'u-amy', paid_by: 'u-amy', kind: 'receipt', category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Trader Joe\'s', session_date: '2026-10-03', tax: 1, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-03T10:00:00Z', items: [
+    { id: 's2', group_id: 'g1', user_id: 'u-amy', paid_by: 'u-amy', kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Trader Joe\'s', session_date: '2026-10-03', tax: 1, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-03T10:00:00Z', items: [
         { id: 'i4', name: 'Pasta', price: 4, assigned_users: ['Daven', 'Amy', 'Bo'] },
     ] },
-    { id: 's3', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'expense', category: 'rent', amount: 2400, split_method: 'shares', split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 }, name: 'October rent', session_date: '2026-10-01', tax: 0, tip: 0, participants: [], updated_at: '2026-10-01T09:00:00Z', items: [] },
+    { id: 's3', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'expense', draft: false, category: 'rent', amount: 2400, split_method: 'shares', split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 }, name: 'October rent', session_date: '2026-10-01', tax: 0, tip: 0, participants: [], updated_at: '2026-10-01T09:00:00Z', items: [] },
 ];
 let settlements: Settlement[] = [];
 let invites: Invite[] = [{ id: 'inv1', group_id: 'g9', group_name: 'Book Club', inviter_name: 'Sam', created_at: '2026-10-04' }];
@@ -51,7 +51,7 @@ export const respondToInvite = async (iid: string) => { invites = invites.filter
 export const listSessions = (gid?: string) => wait(structuredClone(sessions.filter(s => !gid || s.group_id === gid)));
 export const getSession = (sid: string) => wait(structuredClone(sessions.find(s => s.id === sid)!));
 export const createSession = async (input: any) => {
-    const s: Session = { id: id('s'), group_id: input.groupId, user_id: ME, paid_by: ME, kind: input.kind ?? 'receipt', category: input.category ?? 'groceries', amount: input.kind === 'expense' ? input.amount ?? 0 : null, split_method: input.kind === 'expense' ? input.splitMethod ?? 'equal' : null, split_data: input.splitData ?? {}, name: input.name, session_date: input.date ?? '2026-10-05', tax: input.tax ?? 0, tip: input.tip ?? 0, participants: input.participants ?? [], updated_at: new Date().toISOString(),
+    const s: Session = { id: id('s'), group_id: input.groupId, user_id: ME, paid_by: ME, kind: input.kind ?? 'receipt', draft: !!input.draft, category: input.category ?? 'groceries', amount: input.kind === 'expense' ? input.amount ?? 0 : null, split_method: input.kind === 'expense' ? input.splitMethod ?? 'equal' : null, split_data: input.splitData ?? {}, name: input.name, session_date: input.date ?? '2026-10-05', tax: input.tax ?? 0, tip: input.tip ?? 0, participants: input.participants ?? [], updated_at: new Date().toISOString(),
         items: (input.items ?? []).map((i: any) => ({ id: id('i'), name: i.name, price: i.price, assigned_users: [] })) };
     sessions = [s, ...sessions];
     return wait(s.id);
@@ -62,6 +62,7 @@ export const importReceiptIntoSession = async (sid: string, input: any) => {
     return wait(undefined);
 };
 export const updateSession = async (sid: string, patch: any) => { sessions = sessions.map(s => s.id === sid ? { ...s, ...patch } : s); return wait(undefined); };
+export const deleteStaleDrafts = async () => wait(undefined);
 export const deleteSession = async (sid: string) => { sessions = sessions.filter(s => s.id !== sid); return wait(undefined); };
 export const addItem = async (sid: string, name: string, price: number): Promise<Item> => { const it = { id: id('i'), name, price, assigned_users: [] }; sessions = sessions.map(s => s.id === sid ? { ...s, items: [...s.items, it] } : s); return wait(it); };
 export const updateItem = async (sid: string, iid: string, patch: any) => { sessions = sessions.map(s => s.id === sid ? { ...s, items: s.items.map(i => i.id === iid ? { ...i, ...patch } : i) } : s); return wait(undefined); };

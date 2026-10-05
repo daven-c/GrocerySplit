@@ -5,12 +5,14 @@ import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, Icon } from './ui';
+import { Avatar, Button, Card, DraftBar, Icon } from './ui';
 
 interface ExpenseEditorProps {
     sessionId: string;
     narrow: boolean;
     onBack: () => void;
+    onSaved: () => void;
+    onDiscard: () => void;
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
@@ -21,7 +23,7 @@ const dateMeta = (iso: string) => {
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
 
-export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEditorProps) {
+export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDiscard }: ExpenseEditorProps) {
     const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [name, setName] = useState('');
@@ -33,6 +35,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
     const [included, setIncluded] = useState<string[]>([]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState('');
     const [error, setError] = useState('');
     const savedMeta = useRef('');
@@ -88,7 +91,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
     // Details (name, date, category, payer) always autosave. The amount and split only save when the split
     // adds up, so a half-edited split is never written; edits made meanwhile are not lost either.
     useEffect(() => {
-        if (!record) return;
+        if (!record || record.draft) return; // a new draft saves when you press Save
         const metaSig = JSON.stringify([name.trim() || 'Expense', date || record.session_date, category, paidBy]);
         const splitSig = JSON.stringify([total, method, data]);
         const metaDirty = metaSig !== savedMeta.current;
@@ -127,6 +130,23 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
         setValues(v => ({ ...Object.fromEntries(members.map(m => [m.user_id, method === 'exact' || method === 'percent' ? '0' : '1'])), ...v }));
     };
 
+    const handleSaveDraft = async () => {
+        if (!record || !split.valid) return;
+        setSaving(true);
+        setError('');
+        try {
+            await updateSession(sessionId, {
+                name: name.trim() || 'Expense', session_date: date || record.session_date, category, amount: total,
+                ...(paidBy ? { paid_by: paidBy } : {}), split_method: method, split_data: data, draft: false,
+            });
+            await refresh();
+            onSaved();
+        } catch (err: any) {
+            setError(err.message || 'Could not save the expense');
+            setSaving(false);
+        }
+    };
+
     const handleDelete = async () => {
         setConfirmDelete(false);
         try { await deleteSession(sessionId); await refresh(); onBack(); }
@@ -140,7 +160,9 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
     const payerLabel = paidBy === me ? 'you' : payer?.name ?? 'someone';
     const display = (id: string, n: string) => (id === me ? 'You' : n);
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
-    const status = !split.valid
+    const status = record.draft
+        ? { text: split.valid ? 'Not saved yet' : `Not saved yet: ${split.problem}`, bad: !split.valid }
+        : !split.valid
         ? { text: `Not saved yet: ${split.problem}`, bad: true }
         : { text: autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically', bad: autosave.state === 'error' };
     const hint = METHODS.find(m => m.value === method)?.hint;
@@ -169,6 +191,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
                     <AnimatedNumber value={total} prefix="$" className="text-[34px] font-semibold tracking-[-0.03em]" />
                 </div>
             </div>
+
+            {record.draft && <DraftBar what="expense" canSave={split.valid} problem={split.valid ? null : split.problem} saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
 
             {error && <p role="alert" className="m-0 text-[13px] text-coral-strong">{error}</p>}
 
@@ -279,7 +303,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
                             </select>
                         </label>
                         <div className="flex items-center justify-between pt-1 gap-3">
-                            <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral shrink-0">Delete expense</motion.button>
+                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral shrink-0">Delete expense</motion.button>}
                             <span className={`text-xs text-right ${status.bad ? 'text-coral' : 'text-faint'}`} aria-live="polite">{status.text}</span>
                         </div>
                     </Card>

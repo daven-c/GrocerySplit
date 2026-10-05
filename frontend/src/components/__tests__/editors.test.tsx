@@ -20,7 +20,7 @@ afterEach(cleanup);
 const SLOW = { timeout: 3000 }; // autosave debounces for 600ms
 
 describe('Receipt editor (grocery split)', () => {
-    const props = { sessionId: 's1', narrow: false, onBack: vi.fn(), onImport: vi.fn() };
+    const props = { sessionId: 's1', narrow: false, onBack: vi.fn(), onImport: vi.fn(), onSaved: vi.fn(), onDiscard: vi.fn() };
     const rowOf = (name: string) => screen.getByText(name).closest('div[class*="flex-col"]') as HTMLElement;
 
     it('is one screen: name, meta, total, people, items and who pays what (no tabs)', async () => {
@@ -190,7 +190,7 @@ describe('Receipt editor (grocery split)', () => {
 });
 
 describe('Expense editor (general cost splitting)', () => {
-    const props = { sessionId: 's2', narrow: false, onBack: vi.fn() };
+    const props = { sessionId: 's2', narrow: false, onBack: vi.fn(), onSaved: vi.fn(), onDiscard: vi.fn() };
     const shareFor = (name: string) => screen.getByLabelText(`${name} is in on this`).closest('div')!;
 
     it('shows the amount, split method, per-person shares and a validity check', async () => {
@@ -408,3 +408,99 @@ describe('Import from JSON (fills an existing receipt)', () => {
         expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeEnabled();
     });
 });
+
+describe('New records are drafts: nothing is saved until you press Save', () => {
+    const draftReceipt = async () => ({ ...(await import('../../test/apiMock')).receipt, id: 's9', draft: true, name: 'Receipt', items: [], tax: 0 });
+    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'equal' as const, split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
+    const idle = () => new Promise(r => setTimeout(r, 1000)); // longer than the 600ms autosave debounce
+
+    it('a new receipt shows a draft bar, does not autosave, and Save writes the details and publishes it', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue(await draftReceipt());
+        const onSaved = vi.fn();
+        renderWithData(<Split sessionId="s9" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={onSaved} onDiscard={vi.fn()} />);
+        const bar = await screen.findByRole('region', { name: 'Unsaved draft' });
+        expect(within(bar).getByText('New receipt, not saved yet')).toBeInTheDocument();
+        expect(screen.getByText('Not saved yet')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Delete receipt' })).not.toBeInTheDocument();
+
+        const name = screen.getByLabelText('Receipt name');
+        await u.clear(name);
+        await u.type(name, 'Trader Joes');
+        await u.type(screen.getByLabelText('Tax'), '2');
+        await idle();
+        expect(api.updateSession).not.toHaveBeenCalledWith('s9', expect.objectContaining({ name: 'Trader Joes' })); // no autosave
+
+        await u.click(within(bar).getByRole('button', { name: 'Save receipt' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s9', expect.objectContaining({ name: 'Trader Joes', tax: 2, draft: false })));
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    });
+
+    it('Discard on a new receipt hands control back without saving', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue(await draftReceipt());
+        const onDiscard = vi.fn();
+        renderWithData(<Split sessionId="s9" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={vi.fn()} onDiscard={onDiscard} />);
+        await u.click(await screen.findByRole('button', { name: 'Discard' }));
+        expect(onDiscard).toHaveBeenCalled();
+        expect(api.updateSession).not.toHaveBeenCalledWith('s9', expect.objectContaining({ draft: false }));
+    });
+
+    it('an existing receipt has no draft bar and still autosaves', async () => {
+        renderWithData(<Split sessionId="s1" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} />);
+        await screen.findByDisplayValue('Costco');
+        expect(screen.queryByRole('region', { name: 'Unsaved draft' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Delete receipt' })).toBeInTheDocument();
+    });
+
+    it('a new expense: Save is blocked while the split does not add up, and nothing autosaves', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue(await draftExpense());
+        renderWithData(<ExpenseEditor sessionId="s9" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} />);
+        const bar = await screen.findByRole('region', { name: 'Unsaved draft' });
+        expect(within(bar).getByText('New expense, not saved yet')).toBeInTheDocument();
+        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled(); // $0 split equally is valid
+        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
+        await u.type(screen.getByLabelText('How much was it?'), '100'); // amounts are still 0 each: 100.00 to assign
+        expect(await within(bar).findByText('100.00 still to assign.')).toBeInTheDocument();
+        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeDisabled();
+        await idle();
+        expect(api.updateSession).not.toHaveBeenCalled(); // never saved by itself
+    });
+
+    it('a new expense: Save writes everything at once and publishes it', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue(await draftExpense());
+        const onSaved = vi.fn();
+        renderWithData(<ExpenseEditor sessionId="s9" narrow={false} onBack={vi.fn()} onSaved={onSaved} onDiscard={vi.fn()} />);
+        const name = await screen.findByLabelText('Expense name');
+        await u.clear(name);
+        await u.type(name, 'Dinner');
+        await u.type(screen.getByLabelText('How much was it?'), '90');
+        await u.selectOptions(screen.getByLabelText('Category'), 'dining');
+        await idle();
+        expect(api.updateSession).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Save expense' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s9', expect.objectContaining({
+            name: 'Dinner', amount: 90, category: 'dining', split_method: 'equal', split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 }, draft: false,
+        })));
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    });
+
+    it('a new expense can be discarded; an existing one has no draft bar and keeps its delete option', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue(await draftExpense());
+        const onDiscard = vi.fn();
+        const first = renderWithData(<ExpenseEditor sessionId="s9" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={onDiscard} />);
+        await u.click(await screen.findByRole('button', { name: 'Discard' }));
+        expect(onDiscard).toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Delete expense' })).not.toBeInTheDocument();
+        first.unmount();
+        api.getSession.mockImplementation(async (id: string) => structuredClone((await import('../../test/apiMock')).sessions.find(x => x.id === id)!));
+        renderWithData(<ExpenseEditor sessionId="s2" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} />);
+        await screen.findByDisplayValue('October rent');
+        expect(screen.queryByRole('region', { name: 'Unsaved draft' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Delete expense' })).toBeInTheDocument();
+    });
+});
+

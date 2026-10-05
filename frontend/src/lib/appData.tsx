@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { listGroups, listSessions, listSettlements, myInvites, isAdmin, Group, Session, Settlement, Invite } from './api';
+import { listGroups, listSessions, listSettlements, myInvites, isAdmin, deleteStaleDrafts, Group, Session, Settlement, Invite } from './api';
 
 export interface AppData {
     me: string;
@@ -48,7 +48,8 @@ export function AppDataProvider({ userId, children }: { userId: string; children
                 listGroups(), listSessions(), listSettlements(), myInvites(), isAdmin().catch(() => false),
             ]);
             if (!alive.current || ticket !== latest.current) return;
-            setGroups(g); setSessions(s); setSettlements(st); setInvites(inv); setAdmin(adm);
+            // An unsaved draft is not an expense yet, so it never reaches lists or balances.
+            setGroups(g); setSessions(s.filter(x => !x.draft)); setSettlements(st); setInvites(inv); setAdmin(adm);
             setError('');
         } catch (err: any) {
             if (alive.current && ticket === latest.current) setError(err.message || 'Failed to load your data');
@@ -70,7 +71,10 @@ export function AppDataProvider({ userId, children }: { userId: string; children
         });
     }, []);
 
-    useEffect(() => { void refresh(); }, [refresh, userId]);
+    useEffect(() => {
+        void deleteStaleDrafts().catch(() => {});
+        void refresh();
+    }, [refresh, userId]);
 
     const value = useMemo<AppData>(
         () => ({ me: userId, groups, sessions, settlements, invites, isAdmin: admin, loading, error, refresh, patchSession }),
