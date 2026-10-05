@@ -162,14 +162,14 @@ describe('Group detail', () => {
         await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     });
 
-    it('"Add an expense" creates a draft expense split equally among everyone, to be refined in the editor', async () => {
+    it('"Add an expense" creates a draft expense shared evenly among everyone, to be refined in the editor', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Add an expense'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
             groupId: 'g1', kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
-            splitMethod: 'equal', splitData: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 },
+            splitMethod: 'exact', splitData: { [ME]: 0, 'u-amy': 0, 'u-bo': 0 },
         }));
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense', true));
     });

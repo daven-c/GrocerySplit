@@ -210,7 +210,7 @@ describe('App shell', () => {
 });
 
 describe('Drafts in the app shell', () => {
-    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'equal' as const, split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
+    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'exact' as const, split_data: { [ME]: 0, 'u-amy': 0, 'u-bo': 0 } });
     const startDraft = async () => {
         const u = userEvent.setup();
         signIn();

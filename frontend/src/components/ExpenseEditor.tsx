@@ -3,6 +3,7 @@ import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '..
 import { useAppData } from '../lib/appData';
 import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
+import { allocate } from '../lib/calc';
 import { CATEGORIES, METHODS, SplitBy, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
@@ -33,7 +34,9 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const [date, setDate] = useState('');
     const [category, setCategory] = useState('other');
     const [paidBy, setPaidBy] = useState('');
-    const [method, setMethod] = useState<SplitMethod>('equal');
+    const [method, setMethod] = useState<SplitMethod>('exact');
+    // While true (amounts mode), amounts follow the total and are shared evenly among the people included.
+    const [even, setEven] = useState(true);
     const [included, setIncluded] = useState<string[]>([]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -42,6 +45,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const [error, setError] = useState('');
     const savedMeta = useRef('');
     const savedSplit = useRef('');
+    const legacyRef = useRef<{ method: SplitMethod; data: SplitData } | null>(null);
     const autosave = useAutosave(600);
 
     const group = groups.find(g => g.id === record?.group_id);
@@ -59,11 +63,17 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             setDate(s.session_date);
             setCategory(s.category || 'other');
             setPaidBy(s.paid_by ?? s.user_id ?? '');
-            setMethod(s.split_method ?? 'equal');
-            setIncluded(Object.keys(data));
+            // Equal/shares expenses (from before those were removed) open as the same amounts, once members are known.
+            const legacy = s.split_method === 'equal' || s.split_method === 'shares';
+            const ids = Object.keys(data);
+            const evenParts = allocate(Math.round((s.amount ?? 0) * 100), ids.map(() => 1));
+            legacyRef.current = legacy ? { method: s.split_method!, data } : null;
+            setMethod(legacy ? 'exact' : s.split_method ?? 'exact');
+            setEven(s.split_method === 'equal' || (!legacy && (!s.split_method || s.split_method === 'exact') && ids.every((id, i) => Math.round((data[id] ?? 0) * 100) === evenParts[i])));
+            setIncluded(ids);
             setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
             savedMeta.current = JSON.stringify([s.name.trim() || 'Expense', s.session_date, s.category, s.paid_by ?? s.user_id ?? '']);
-            savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}]);
+            savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'exact', s.split_data ?? {}]);
         }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
         return () => { cancelled = true; };
     }, [sessionId]);
@@ -74,11 +84,34 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
         return ids.size ? included.filter(id => ids.has(id)) : included;
     }, [included, members]);
     const data: SplitData = useMemo(
-        () => Object.fromEntries(active.map(id => [id, method === 'equal' ? 1 : num(values[id] ?? '')])),
-        [active, values, method]
+        () => Object.fromEntries(active.map(id => [id, num(values[id] ?? '')])),
+        [active, values]
     );
     const total = num(amount);
     const split = useMemo(() => splitExpense(total, method, data), [total, method, data]);
+
+    // Convert an older equal/shares split into amounts, dropping anyone who has left. Nothing is written unless
+    // someone was dropped (then the cleaned split is saved).
+    useEffect(() => {
+        const old = legacyRef.current;
+        if (!old || !record || members.length === 0) return;
+        legacyRef.current = null;
+        const kept = Object.fromEntries(active.map(id => [id, old.data[id] ?? 0]));
+        const shares = splitExpense(total, old.method, kept).shares;
+        setValues(Object.fromEntries(active.map(id => [id, String(shares[id] ?? 0)])));
+        savedSplit.current = active.length === Object.keys(old.data).length
+            ? JSON.stringify([total, 'exact', Object.fromEntries(active.map(id => [id, shares[id] ?? 0]))])
+            : '';
+    }, [record, members, active, total]);
+
+    // Even amounts follow the total and who is included, until someone types an amount.
+    const activeKey = active.join(',');
+    useEffect(() => {
+        if (method !== 'exact' || !even) return;
+        const ids = activeKey ? activeKey.split(',') : [];
+        const parts = allocate(Math.round(total * 100), ids.map(() => 1));
+        setValues(Object.fromEntries(ids.map((id, i) => [id, String(parts[i] / 100)])));
+    }, [method, even, total, activeKey]);
 
     // Mirror edits into the shared copy right away so balances elsewhere update immediately. The amount and split
     // are only mirrored while the split adds up, matching what will actually be saved.
@@ -134,6 +167,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const changeMethod = (to: SplitMethod) => {
         const next = convertSplit(method, to, data, total);
         setMethod(to);
+        setEven(to === 'exact');
         setValues(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])));
     };
 
@@ -253,14 +287,14 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                                             {m.name[0].toUpperCase()}
                                         </motion.button>
                                         <span className={`flex-1 min-w-0 text-[15px] font-medium truncate ${on ? '' : 'text-ghost'}`}>{display(m.user_id, m.name)}</span>
-                                        {on && method !== 'equal' && (
+                                        {on && (
                                             <span className="flex items-center gap-1 font-mono text-sm text-muted">
                                                 {method === 'exact' && '$'}
                                                 <input
                                                     aria-label={`${m.name} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
                                                     inputMode="decimal"
                                                     value={values[m.user_id] ?? ''}
-                                                    onChange={e => setValues(v => ({ ...v, [m.user_id]: e.target.value }))}
+                                                    onChange={e => { setEven(false); setValues(v => ({ ...v, [m.user_id]: e.target.value })); }}
                                                     className="w-20 h-9 px-2 border border-line rounded-lg text-right font-mono text-sm text-ink bg-white"
                                                 />
                                                 {method !== 'exact' && UNIT[method]}

@@ -5,7 +5,7 @@ Split any shared cost with the people you share it with: groceries, rent, bills,
 ## Two ways to add a cost
 
 - **Groceries (itemized receipt):** open a blank receipt and type the items in, or press **Import from JSON** to fill it from a photo read by any AI chat. Pick a person, then tap the items they had; tax and tip are shared in proportion to what each person bought.
-- **One expense editor:** rent, utilities, dinner, a trip, a grocery run. Choose who paid and who shares it, then pick **Split by**: **equally**, **amounts**, **percent**, **shares** (e.g. two shares for the bigger room), or **by item** (the itemized receipt editor, with tax, tip and JSON import). Switching keeps the name, payer and date. The editor shows live per-person amounts and won't save a split that doesn't add up.
+- **One expense editor:** rent, utilities, dinner, a trip, a grocery run. Choose who paid and who shares it, then pick **Split by**: **amounts** (the default, starting as an even split you can adjust), **percent**, or **by item** (the itemized receipt editor, with tax, tip and JSON import). Switching keeps the name, payer and date. The editor shows live per-person amounts and won't save a split that doesn't add up.
 
 **Nothing is added until you press Save.** A new bill or receipt opens as a draft that nobody else in the group sees and that doesn't count toward balances; **Save** publishes it and **Discard** (or leaving the screen) throws it away. Existing expenses autosave as you edit them.
 

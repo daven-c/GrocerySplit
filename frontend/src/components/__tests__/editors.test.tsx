@@ -28,7 +28,7 @@ describe('Receipt editor (grocery split)', () => {
         expect(await screen.findByDisplayValue('Costco')).toBeInTheDocument();
         expect(screen.getByText(/Oct 1, 2026 · 3 items · paid by you/)).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument(); // the Split by control, on By item
-        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Equally', 'Amounts', 'Percent', 'Shares', 'By item']);
+        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Percent', 'By item']);
         expect(screen.getByText('Pick a person, then tap their items')).toBeInTheDocument();
         expect(screen.getByText('2 of 3 assigned')).toBeInTheDocument();
         expect(screen.getByText('Oat Milk')).toBeInTheDocument();
@@ -199,51 +199,58 @@ describe('Expense editor (general cost splitting)', () => {
         expect(await screen.findByDisplayValue('October rent')).toBeInTheDocument();
         expect(screen.getByLabelText('How much was it?')).toHaveValue('2400');
         expect(screen.getByText(/Oct 1, 2026 · Rent & home · paid by you/)).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Shares' })).toHaveAttribute('aria-selected', 'true');
+        // an older 2:1:1 "shares" split opens as the same amounts
+        expect(screen.getByRole('tab', { name: 'Amounts' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByLabelText('Amy amount')).toHaveValue('600');
         expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument();
         expect(within(shareFor('Amy')).getByText('$600.00')).toBeInTheDocument();
         expect(screen.getByText('Adds up to $2,400.00')).toBeInTheDocument();
         expect(screen.getByText('paid the bill')).toBeInTheDocument();
     });
 
-    it('switching to Equally splits evenly, to the penny', async () => {
+    it('an even split follows the total to the penny and saves as amounts, until an amount is edited by hand', async () => {
         const u = userEvent.setup();
+        const { rent } = await import('../../test/apiMock');
+        api.getSession.mockResolvedValue({ ...rent, split_method: 'equal', split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
-        await u.click(screen.getByRole('tab', { name: 'Equally' }));
         expect(within(shareFor('Daven')).getByText('$800.00')).toBeInTheDocument();
         await u.clear(screen.getByLabelText('How much was it?'));
         await u.type(screen.getByLabelText('How much was it?'), '100');
         // 100 / 3: the odd cent goes to one person, never lost
         await waitFor(() => {
-            const cents = ['Daven', 'Amy', 'Bo'].map(n => within(shareFor(n)).getByText(/^\$/).textContent);
+            const cents = ['Daven', 'Amy', 'Bo'].map(n => within(shareFor(n)).getAllByText(/^\$\d/).at(-1)!.textContent);
             expect(cents.sort()).toEqual(['$33.33', '$33.33', '$33.34']);
         });
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ amount: 100, split_method: 'equal', split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } })), SLOW);
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ amount: 100, split_method: 'exact', split_data: { [ME]: 33.34, 'u-amy': 33.33, 'u-bo': 33.33 } })), SLOW);
+        await u.clear(screen.getByLabelText('Amy amount'));
+        await u.type(screen.getByLabelText('Amy amount'), '10');
+        await u.clear(screen.getByLabelText('How much was it?'));
+        await u.type(screen.getByLabelText('How much was it?'), '90');
+        expect(screen.getByLabelText('Amy amount')).toHaveValue('10'); // no longer follows the total
     });
 
     it('Amounts: flags an over- or under-assigned split and does not save it, then saves once it adds up', async () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
-        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
         const amy = screen.getByLabelText('Amy amount');
-        expect(amy).toHaveValue('800');
+        expect(amy).toHaveValue('600'); // rent opens as 1200 / 600 / 600
         await u.clear(amy);
-        await u.type(amy, '700');
+        await u.type(amy, '500');
         expect(await screen.findByText('100.00 still to assign.')).toBeInTheDocument();
         expect(screen.getByText('Not saved yet: 100.00 still to assign.')).toBeInTheDocument();
         await new Promise(r => setTimeout(r, 900)); // longer than the debounce
         expect(api.updateSession).not.toHaveBeenCalled();
 
         await u.clear(amy);
-        await u.type(amy, '900');
-        expect(await screen.findByText('100.00 over the total.')).toBeInTheDocument(); // 800 + 900 + 800 = 2500
+        await u.type(amy, '700');
+        expect(await screen.findByText('100.00 over the total.')).toBeInTheDocument(); // 1200 + 700 + 600 = 2500
         const bo = screen.getByLabelText('Bo amount');
         await u.clear(bo);
-        await u.type(bo, '700');
-        expect(await screen.findByText('Adds up to $2,400.00')).toBeInTheDocument(); // 800 + 900 + 700
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 800, 'u-amy': 900, 'u-bo': 700 } })), SLOW);
+        await u.type(bo, '500');
+        expect(await screen.findByText('Adds up to $2,400.00')).toBeInTheDocument(); // 1200 + 700 + 500
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 700, 'u-bo': 500 } })), SLOW);
     });
 
     it('Percent: must add up to 100', async () => {
@@ -258,14 +265,16 @@ describe('Expense editor (general cost splitting)', () => {
         expect(await screen.findByText('16.67% over 100.')).toBeInTheDocument();
     });
 
-    it('toggling someone out recomputes everyone else and saves who is included', async () => {
+    it('toggling someone out re-evens the others and saves who is included', async () => {
         const u = userEvent.setup();
+        const { rent } = await import('../../test/apiMock');
+        api.getSession.mockResolvedValue({ ...rent, split_method: 'equal', split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
         await u.click(screen.getByLabelText('Bo is in on this'));
-        await waitFor(() => expect(within(shareFor('Daven')).getByText('$1,600.00')).toBeInTheDocument());
+        await waitFor(() => expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument());
         expect(within(shareFor('Bo')).getByText('—')).toBeInTheDocument();
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_data: { [ME]: 2, 'u-amy': 1 } })), SLOW);
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 1200 } })), SLOW);
     });
 
     it('Select everyone / Clear everyone, and an empty split cannot be saved', async () => {
@@ -291,15 +300,15 @@ describe('Expense editor (general cost splitting)', () => {
         expect(await screen.findByText(/paid by Bo/)).toBeInTheDocument();
     });
 
-    it('shows the equal-split hint and who pays what with the payer labelled', async () => {
+    it('shows the amounts hint and who pays what with the payer labelled', async () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...{ ...props, sessionId: 's3' }} />);
         expect(await screen.findByDisplayValue('Pizza night')).toBeInTheDocument();
-        expect(screen.getByText('Everyone ticked pays the same.')).toBeInTheDocument();
+        expect(screen.getByText('Starts split evenly. Change any amount to adjust it.')).toBeInTheDocument();
         expect(screen.getByText('paid the bill')).toBeInTheDocument(); // Amy paid
         expect(screen.getByText('owes Amy')).toBeInTheDocument();
-        await u.click(screen.getByRole('tab', { name: 'Shares' }));
-        expect(screen.getByText('Split in proportion, e.g. 2 shares for a bigger room.')).toBeInTheDocument();
+        await u.click(screen.getByRole('tab', { name: 'Percent' }));
+        expect(screen.getByText('Percentages must add up to 100.')).toBeInTheDocument();
     });
 
     it('drops someone who has left the group from the split, and saves the cleaned split', async () => {
@@ -308,18 +317,17 @@ describe('Expense editor (general cost splitting)', () => {
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
         // 2:1:1 of 2400 among the three current members; the departed member takes no share
-        expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument();
+        await waitFor(() => expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument());
         expect(screen.getByText('Adds up to $2,400.00')).toBeInTheDocument();
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 } })), SLOW);
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 600, 'u-bo': 600 } })), SLOW);
     });
 
     it('edits to the name, payer and category still save while the split is invalid, without writing the split', async () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
-        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
         await u.clear(screen.getByLabelText('Amy amount'));
-        await u.type(screen.getByLabelText('Amy amount'), '700'); // now 100 short: invalid
+        await u.type(screen.getByLabelText('Amy amount'), '500'); // now 100 short: invalid
         expect(await screen.findByText('100.00 still to assign.')).toBeInTheDocument();
         const name = screen.getByLabelText('Expense name');
         await u.clear(name);
@@ -412,7 +420,7 @@ describe('Import from JSON (fills an existing receipt)', () => {
 
 describe('New records are drafts: nothing is saved until you press Save', () => {
     const draftReceipt = async () => ({ ...(await import('../../test/apiMock')).receipt, id: 's9', draft: true, name: 'Receipt', items: [], tax: 0 });
-    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'equal' as const, split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
+    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'exact' as const, split_data: { [ME]: 0, 'u-amy': 0, 'u-bo': 0 } });
     const idle = () => new Promise(r => setTimeout(r, 1000)); // longer than the 600ms autosave debounce
 
     it('a new itemized expense shows a draft bar, does not autosave, and Save writes the details and publishes it', async () => {
@@ -460,10 +468,11 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         renderWithData(<ExpenseEditor sessionId="s9" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={vi.fn()} />);
         const bar = await screen.findByRole('region', { name: 'Unsaved draft' });
         expect(within(bar).getByText('New expense, not saved yet')).toBeInTheDocument();
-        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled(); // $0 split equally is valid
-        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
-        await u.type(screen.getByLabelText('How much was it?'), '100'); // amounts are still 0 each: 100.00 to assign
-        expect(await within(bar).findByText('100.00 still to assign.')).toBeInTheDocument();
+        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled(); // $0 is a valid split
+        await u.type(screen.getByLabelText('How much was it?'), '100');
+        await u.clear(screen.getByLabelText('Amy amount'));
+        await u.type(screen.getByLabelText('Amy amount'), '10'); // hand-edited, so no longer even: 33.34 + 10 + 33.33
+        expect(await within(bar).findByText('23.33 still to assign.')).toBeInTheDocument();
         expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeDisabled();
         await idle();
         expect(api.updateSession).not.toHaveBeenCalled(); // never saved by itself
@@ -483,7 +492,7 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         expect(api.updateSession).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save expense' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s9', expect.objectContaining({
-            name: 'Dinner', amount: 90, category: 'dining', split_method: 'equal', split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 }, draft: false,
+            name: 'Dinner', amount: 90, category: 'dining', split_method: 'exact', split_data: { [ME]: 30, 'u-amy': 30, 'u-bo': 30 }, draft: false,
         })));
         await waitFor(() => expect(onSaved).toHaveBeenCalled());
     });
@@ -511,7 +520,7 @@ describe('One editor: switching how an expense is split', () => {
         const onSwitched = vi.fn();
         renderWithData(<ExpenseEditor sessionId="s2" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={onSwitched} />);
         await screen.findByDisplayValue('October rent');
-        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Equally', 'Amounts', 'Percent', 'Shares', 'By item']);
+        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Percent', 'By item']);
         await u.click(screen.getByRole('tab', { name: 'By item' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({
             kind: 'receipt', name: 'October rent', category: 'rent', paid_by: ME, participants: ['Daven', 'Amy', 'Bo'],
@@ -539,7 +548,7 @@ describe('One editor: switching how an expense is split', () => {
         const onSwitched = vi.fn();
         renderWithData(<Split sessionId="s1" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={onSwitched} />);
         await screen.findByDisplayValue('Costco');
-        await u.click(screen.getByRole('tab', { name: 'Equally' }));
+        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
         expect(await screen.findByText('Could not switch how this is split.')).toBeInTheDocument();
         expect(onSwitched).not.toHaveBeenCalled();
         spy.mockRestore();

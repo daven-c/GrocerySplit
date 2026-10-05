@@ -130,7 +130,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         try {
             const id = await createSession({
                 groupId, kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
-                splitMethod: 'equal', splitData: everyoneEqual(group.members.map(m => m.user_id)),
+                splitMethod: 'exact', splitData: Object.fromEntries(group.members.map(m => [m.user_id, 0])),
             });
             await refresh();
             onOpenRecord(id, 'expense', true);
