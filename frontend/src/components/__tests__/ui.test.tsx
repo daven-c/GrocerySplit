@@ -31,12 +31,13 @@ const api = vi.hoisted(() => ({
     adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
 }));
 vi.mock('../../lib/api', () => api);
+const authMock = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn() }));
 vi.mock('../../lib/supabase', () => ({
     supabase: {
         auth: {
             getUser: async () => ({ data: { user: { id: ME } } }),
-            getSession: async () => ({ data: { session: null } }),
-            onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+            getSession: () => authMock.getSession(),
+            onAuthStateChange: (cb: any) => authMock.onAuthStateChange(cb),
             signInWithPassword: vi.fn(async () => ({ error: null })),
             signUp: vi.fn(async () => ({ data: { session: null }, error: null })),
             signOut: vi.fn(),
@@ -53,12 +54,15 @@ import Account from '../Account';
 import Auth from '../Auth';
 import ReceiptUpload from '../ReceiptUpload';
 import App from '../../App';
+import ErrorBoundary from '../ErrorBoundary';
 
 afterEach(cleanup);
 
 beforeEach(() => {
     vi.clearAllMocks();
     window.scrollTo = vi.fn() as any;
+    authMock.getSession.mockResolvedValue({ data: { session: null } });
+    authMock.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe() {} } } });
     (window as any).matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
     api.listGroups.mockResolvedValue([group]);
     api.listSessions.mockResolvedValue([mkSession()]);
@@ -379,6 +383,46 @@ describe('Auth + App shell', () => {
     it('App renders the sign-in screen when signed out', async () => {
         render(<App />);
         expect(await screen.findByText('Precise, simple shared expenses.')).toBeInTheDocument();
+    });
+
+    it('App shows the dashboard when a session is restored', async () => {
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME, email: 'me@x.com', user_metadata: { name: 'Daven Chang' } } } } });
+        render(<App />);
+        expect(await screen.findByText('Roomies')).toBeInTheDocument();
+        expect(screen.getByText(/Welcome back, Daven/)).toBeInTheDocument();
+    });
+
+    it('App never stays blank: a failed session restore falls back to sign-in', async () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        authMock.getSession.mockRejectedValue(new Error('Lock timed out'));
+        render(<App />);
+        expect(await screen.findByText('Precise, simple shared expenses.')).toBeInTheDocument();
+        spy.mockRestore();
+    });
+
+    it('App never stays blank: a hung session restore times out to sign-in, and a late session still reaches the app', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        let listener: any;
+        authMock.getSession.mockReturnValue(new Promise(() => {}));
+        authMock.onAuthStateChange.mockImplementation((cb: any) => { listener = cb; return { data: { subscription: { unsubscribe() {} } } }; });
+        render(<App />);
+        expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+        await vi.advanceTimersByTimeAsync(6100);
+        expect(await screen.findByText('Precise, simple shared expenses.')).toBeInTheDocument();
+        listener('SIGNED_IN', { user: { id: ME, email: 'me@x.com', user_metadata: { name: 'Daven' } } });
+        expect(await screen.findByText('Roomies')).toBeInTheDocument();
+        warn.mockRestore();
+        vi.useRealTimers();
+    });
+
+    it('ErrorBoundary shows a reload option instead of a blank page', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const Boom = () => { throw new Error('boom'); };
+        render(<ErrorBoundary><Boom /></ErrorBoundary>);
+        expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+        spy.mockRestore();
     });
 });
 
