@@ -1,141 +1,164 @@
-import React, { useMemo, useState } from 'react';
-import { createSession, getGroup } from '../lib/api';
+import React, { useMemo, useRef, useState } from 'react';
+import { motion, Pop, enter, tapFlat } from '../lib/motion';
+import { useAppData } from '../lib/appData';
+import { createSession } from '../lib/api';
 import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
-import { motion, FROM, AnimatePresence, Pop, enter, tap, tapFlat } from '../lib/motion';
+import { fmt } from '../lib/people';
+import { Button, Card, Icon } from './ui';
 
 interface ReceiptUploadProps {
     groupId: string;
+    narrow: boolean;
     onImported: (sessionId: string) => void;
     onBack: () => void;
 }
 
-export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUploadProps) {
+const dateLabel = (iso?: string) => (iso ? new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+
+export default function ReceiptUpload({ groupId, narrow, onImported, onBack }: ReceiptUploadProps) {
+    const { groups, refresh } = useAppData();
+    const group = groups.find(g => g.id === groupId);
     const [json, setJson] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
+    const file = useRef<HTMLInputElement>(null);
 
     const parsed = useMemo(() => {
         if (!json.trim()) return null;
         try {
             return { ok: parseReceiptJson(json) };
         } catch (e: any) {
-            return { err: e.message as string };
+            return { err: /valid JSON/i.test(e.message) ? "That doesn't look like receipt JSON yet. Make sure you copied the whole reply." : (e.message as string) };
         }
     }, [json]);
+    const receipt = parsed && 'ok' in parsed ? parsed.ok : null;
+    const subtotal = receipt ? receipt.items.reduce((a, i) => a + i.price, 0) : 0;
 
     const copyPrompt = async () => {
         try {
             await navigator.clipboard.writeText(RECEIPT_PROMPT);
             setCopied(true);
-            setTimeout(() => setCopied(false), 2500);
+            setTimeout(() => setCopied(false), 2000);
         } catch {
-            setError('Could not access the clipboard. Select the prompt text below and copy it manually.');
+            setError('Could not access the clipboard. Copy the prompt from the page source or try another browser.');
         }
     };
 
     const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) setJson(await file.text());
+        const f = e.target.files?.[0];
+        if (f) setJson(await f.text());
         e.target.value = '';
     };
 
     const handleImport = async () => {
-        if (!parsed || !('ok' in parsed) || !parsed.ok) return;
-        const r = parsed.ok;
+        if (!receipt || !group) return;
         setLoading(true);
         setError('');
         try {
-            const group = await getGroup(groupId);
             const id = await createSession({
-                groupId,
-                participants: group.members.map(m => m.name),
-                name: r.store || 'Grocery Trip',
-                date: r.date,
-                tax: r.tax,
-                tip: r.tip,
-                items: r.items,
+                groupId, name: receipt.store || 'Receipt', date: receipt.date, tax: receipt.tax, tip: receipt.tip,
+                items: receipt.items, participants: group.members.map(m => m.name), category: 'groceries',
             });
+            await refresh();
             onImported(id);
         } catch (err: any) {
-            setError(err.message || 'Failed to import receipt');
+            setError(err.message || 'Failed to import the receipt');
         } finally {
             setLoading(false);
         }
     };
 
-    const receipt = parsed && 'ok' in parsed ? parsed.ok : null;
-    const subtotal = receipt ? receipt.items.reduce((a, i) => a + i.price, 0) : 0;
-
     return (
-        <div className="bg-slate-50 font-body text-slate-900 min-h-screen">
-            <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
-                <div className="flex items-center justify-between px-6 py-4 max-w-2xl mx-auto">
-                    <div className="flex items-center gap-3">
-                        <motion.button {...tap} onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors">
-                            <span className="material-symbols-outlined">arrow_back</span>
-                        </motion.button>
-                        <h1 className="font-headline font-bold text-lg text-slate-900">Import Receipt</h1>
-                    </div>
+        <div className="max-w-[980px] mx-auto flex flex-col gap-7">
+            <div className="flex flex-col gap-2">
+                {!narrow && (
+                    <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink">
+                        <Icon name="arrow_back" size={16} />{group?.name ?? 'Back'}
+                    </motion.button>
+                )}
+                <h1 className="m-0 text-[28px] font-semibold tracking-title">Import a receipt</h1>
+                <p className="m-0 text-[15px] leading-normal text-muted max-w-[540px]">Your AI chat of choice reads the photo; Splitpot does the splitting. Nothing is uploaded here.</p>
+            </div>
+
+            <div className="flex flex-wrap gap-6 items-start">
+                <div className="flex-[999_1_400px] min-w-0 flex flex-col gap-3.5">
+                    <motion.div {...enter(0)}>
+                        <Card className="flex gap-4 p-5">
+                            <span className="w-[26px] h-[26px] rounded-full bg-ink text-white grid place-items-center text-[13px] font-semibold shrink-0">1</span>
+                            <div className="flex-1 flex flex-col gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[15px] font-semibold">Copy the prompt</span>
+                                    <span className="text-sm leading-normal text-muted">Paste it into ChatGPT, Claude or Gemini along with a photo of your receipt.</span>
+                                </div>
+                                <Button variant="secondary" height={38} className="self-start" onClick={copyPrompt}>
+                                    <Icon name={copied ? 'check' : 'content_copy'} size={18} />{copied ? 'Copied' : 'Copy prompt'}
+                                </Button>
+                            </div>
+                        </Card>
+                    </motion.div>
+                    <motion.div {...enter(1)}>
+                        <Card className="flex gap-4 p-5">
+                            <span className="w-[26px] h-[26px] rounded-full bg-ink text-white grid place-items-center text-[13px] font-semibold shrink-0">2</span>
+                            <div className="flex-1 min-w-0 flex flex-col gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[15px] font-semibold">Paste what it sends back</span>
+                                    <span className="text-sm leading-normal text-muted">Extra chatter around the JSON is fine. We'll find it.</span>
+                                </div>
+                                <textarea
+                                    value={json}
+                                    onChange={e => { setJson(e.target.value); setError(''); }}
+                                    rows={9}
+                                    spellCheck={false}
+                                    aria-label="Receipt JSON"
+                                    placeholder={'{ "store": "Corner Market", "items": [ … ] }'}
+                                    className="w-full p-3 border border-line rounded-[10px] bg-wash font-mono text-[12.5px] leading-[1.55] resize-y"
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                    <Button variant="secondary" height={36} className="text-[13px] px-3" onClick={() => file.current?.click()}>
+                                        <Icon name="upload_file" size={18} />Choose .json file
+                                    </Button>
+                                    <input ref={file} type="file" accept=".json,application/json,text/plain" className="hidden" onChange={handleFile} aria-label="Choose a .json file" />
+                                    <Button variant="text" height={36} className="text-[13px] px-3" onClick={() => setJson(EXAMPLE_RECEIPT_JSON)}>Try an example</Button>
+                                </div>
+                                <Pop show={!!(parsed && 'err' in parsed)} className="text-[13px] text-coral-strong">{parsed && 'err' in parsed ? parsed.err : ''}</Pop>
+                                <Pop show={!!error} className="text-[13px] text-coral-strong">{error}</Pop>
+                            </div>
+                        </Card>
+                    </motion.div>
                 </div>
-            </header>
 
-            <main className="pt-8 px-6 pb-16 max-w-2xl mx-auto space-y-8">
-                <motion.section {...enter(0)} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">1.</span> Copy the prompt</h2>
-                    <p className="text-sm text-slate-500">Paste it into your favorite AI chat together with a photo of your receipt. It will reply with JSON.</p>
-                    <motion.button {...tapFlat} onClick={copyPrompt} className="w-full flex items-center justify-center gap-2 h-12 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors">
-                        <span className="material-symbols-outlined">{copied ? 'check' : 'content_copy'}</span>
-                        {copied ? 'Copied!' : 'Copy prompt'}
-                    </motion.button>
-                    <details className="text-sm">
-                        <summary className="cursor-pointer text-slate-500 font-semibold">View prompt</summary>
-                        <pre className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap text-xs text-slate-700 select-all">{RECEIPT_PROMPT}</pre>
-                    </details>
-                </motion.section>
-
-                <motion.section {...enter(1)} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">2.</span> Paste the JSON it returns</h2>
-                    <textarea
-                        value={json}
-                        onChange={e => { setJson(e.target.value); setError(''); }}
-                        placeholder={EXAMPLE_RECEIPT_JSON}
-                        rows={10}
-                        spellCheck={false}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-xs text-slate-900 focus:ring-2 focus:ring-slate-900 outline-none"
-                    />
-                    <div className="flex gap-3">
-                        <label className="flex-1 flex items-center justify-center gap-2 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl cursor-pointer hover:bg-slate-50 active:scale-[0.98]">
-                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                            Choose .json file
-                            <input type="file" accept=".json,application/json,text/plain" className="hidden" onChange={handleFile} />
-                        </label>
-                        <motion.button {...tapFlat} onClick={() => setJson(EXAMPLE_RECEIPT_JSON)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50">
-                            Try example
-                        </motion.button>
-                    </div>
-
-                    <Pop show={!!(parsed && 'err' in parsed)} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{parsed && 'err' in parsed ? parsed.err : ''}</Pop>
-                    <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
-
-                    <AnimatePresence>
-                    {receipt && (
-                        <motion.div initial={{ opacity: FROM, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} style={{ overflow: 'hidden' }} className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
-                            <p className="font-bold">{receipt.store || 'Grocery Trip'}{receipt.date ? ` · ${receipt.date}` : ''}</p>
-                            <p>{receipt.items.length} items · subtotal ${subtotal.toFixed(2)} · tax ${receipt.tax.toFixed(2)}{receipt.tip ? ` · tip $${receipt.tip.toFixed(2)}` : ''}</p>
-                            {receipt.skipped > 0 && <p className="text-amber-700">{receipt.skipped} invalid line(s) will be skipped.</p>}
-                        </motion.div>
-                    )}
-                    </AnimatePresence>
-
-                    <motion.button {...tapFlat}
-                        onClick={handleImport}
-                        disabled={!receipt || loading}
-                        className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-sm disabled:opacity-40 transition-colors">
-                        {loading ? 'Importing...' : 'Import & split'}
-                    </motion.button>
-                </motion.section>
-            </main>
+                <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
+                    <motion.div {...enter(2)}>
+                        <Card className="p-[22px] flex flex-col gap-3.5 font-mono text-[13px]">
+                            {receipt ? (
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col items-center gap-0.5 pb-3 border-b border-dashed border-dash">
+                                        <span className="text-sm font-medium">{receipt.store || 'Receipt'}</span>
+                                        <span className="text-faint">{dateLabel(receipt.date)}</span>
+                                    </div>
+                                    {receipt.items.map((it, i) => (
+                                        <div key={i} className="flex justify-between gap-3"><span>{it.name}</span><span>{fmt(it.price)}</span></div>
+                                    ))}
+                                    <div className="border-t border-dashed border-dash pt-3 flex flex-col gap-1.5">
+                                        <div className="flex justify-between text-muted"><span>Tax</span><span>{fmt(receipt.tax)}</span></div>
+                                        {receipt.tip > 0 && <div className="flex justify-between text-muted"><span>Tip</span><span>{fmt(receipt.tip)}</span></div>}
+                                        <div className="flex justify-between font-medium text-sm"><span>Total</span><span>{fmt(subtotal + receipt.tax + receipt.tip)}</span></div>
+                                        {receipt.skipped > 0 && <span className="text-coral-strong font-sans text-xs">{receipt.skipped} invalid line(s) will be skipped.</span>}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="min-h-[220px] flex items-center justify-center text-center text-faint font-sans text-sm leading-normal px-3">
+                                    Your receipt shows up here as soon as you paste it.
+                                </div>
+                            )}
+                        </Card>
+                    </motion.div>
+                    <Button height={46} wide className="text-[15px]" disabled={!receipt || loading || !group} onClick={handleImport}>
+                        {loading ? 'Importing…' : 'Import and split'}
+                    </Button>
+                </div>
+            </div>
         </div>
     );
 }

@@ -177,6 +177,58 @@ run('shared groups integration', () => {
         await api.deleteSession(rec);
     });
 
+    it('standalone expenses: created with a split, readable by members, editable by any member, hidden from outsiders', async () => {
+        const uid = async (u: 'a' | 'b' | 'c') => { await as(u); return (await supabase.auth.getUser()).data.user!.id; };
+        const [a, b] = [await uid('a'), await uid('b')];
+
+        await as('a');
+        const rent = await api.createSession({
+            groupId, kind: 'expense', name: 'October rent', category: 'rent', amount: 2400, splitMethod: 'shares', splitData: { [a]: 2, [b]: 1 },
+        });
+        const s = await api.getSession(rent);
+        expect(s).toMatchObject({ kind: 'expense', category: 'rent', amount: 2400, split_method: 'shares', split_data: { [a]: 2, [b]: 1 }, paid_by: a, items: [] });
+        expect((await api.listSessions(groupId)).find(x => x.id === rent)?.kind).toBe('expense');
+        expect((await api.listSessions(groupId)).filter(x => x.kind === 'receipt').length).toBeGreaterThan(0); // receipts untouched
+
+        const g = await api.getGroup(groupId);
+        expect(g.members.every(m => !!m.joined_at)).toBe(true);
+        expect(g.members[0].role).toBe('owner');
+
+        // Balances from real rows: B owes A a third of 2400 (shares 1 of 3)
+        let bal = computeBalances(a, [g], (await api.listSessions(groupId)).filter(x => x.id === rent), []);
+        expect(bal.friends[b].net).toBe(800);
+
+        await as('b'); // any member can edit an expense
+        await api.updateSession(rent, { amount: 3000, split_method: 'equal', split_data: { [a]: 1, [b]: 1 }, category: 'utilities' });
+        expect(await api.getSession(rent)).toMatchObject({ amount: 3000, split_method: 'equal', category: 'utilities' });
+        await as('a');
+        bal = computeBalances(a, [await api.getGroup(groupId)], (await api.listSessions(groupId)).filter(x => x.id === rent), []);
+        expect(bal.friends[b].net).toBe(1500);
+
+        await as('c'); // outsiders see nothing and cannot edit
+        expect((await api.listSessions()).some(x => x.id === rent)).toBe(false);
+        await api.updateSession(rent, { amount: 1 }); // RLS: affects 0 rows
+        await as('a');
+        expect((await api.getSession(rent)).amount).toBe(3000);
+        await api.deleteSession(rent);
+    });
+
+    it('the database rejects malformed expenses', async () => {
+        await as('a');
+        const bad = async (patch: Record<string, unknown>) =>
+            (await supabase.from('sessions').insert({ group_id: groupId, name: 'x', ...patch })).error;
+        expect(await bad({ kind: 'expense' })).toBeTruthy(); // needs an amount and a split method
+        expect(await bad({ kind: 'expense', amount: 10 })).toBeTruthy(); // needs a split method
+        expect(await bad({ kind: 'expense', amount: -5, split_method: 'equal' })).toBeTruthy(); // negative amount
+        expect(await bad({ kind: 'expense', amount: 5, split_method: 'bogus' })).toBeTruthy();
+        expect(await bad({ kind: 'invoice' })).toBeTruthy();
+        expect(await bad({ category: '' })).toBeTruthy();
+        expect(await bad({ category: 'x'.repeat(31) })).toBeTruthy();
+        const ok = await supabase.from('sessions').insert({ group_id: groupId, name: 'valid', kind: 'expense', amount: 0, split_method: 'equal' }).select('id').single();
+        expect(ok.error).toBeNull();
+        await api.deleteSession(ok.data!.id);
+    });
+
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
         await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();

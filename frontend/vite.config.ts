@@ -16,8 +16,8 @@ export default defineConfig({
 			{ find: "@", replacement: resolve(__dirname, "src") },
 			...(mock
 				? [
-						{ find: /^(\.\.?\/)+lib\/api$/, replacement: resolve(__dirname, "src/mocks/api.ts") },
-						{ find: /^(\.\.?\/)+lib\/supabase$/, replacement: resolve(__dirname, "src/mocks/supabase.ts") },
+						{ find: /^(\.\.?\/)+(lib\/)?api$/, replacement: resolve(__dirname, "src/mocks/api.ts") },
+						{ find: /^(\.\.?\/)+(lib\/)?supabase$/, replacement: resolve(__dirname, "src/mocks/supabase.ts") },
 				  ]
 				: []),
 		],

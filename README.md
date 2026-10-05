@@ -1,18 +1,25 @@
-# GrocerySplit
+# Splitpot
 
-Import a grocery receipt, tap once per item to assign it to a friend, and get an exact split — tax and tip included.
+Split any shared cost with the people you share it with: groceries, rent, bills, dinners and trips. Add what was spent, say who shares it, and Splitpot works out who owes whom, with balances that carry across every group you're in. (Formerly GrocerySplit; itemized grocery receipts are still a first-class feature.)
+
+## Two ways to add a cost
+
+- **Grocery receipt (itemized):** import it from a photo via any AI chat, or type it in. Pick a person, then tap the items they had; tax and tip are shared in proportion to what each person bought.
+- **Bill or cost (standalone):** rent, utilities, dinner, a trip. Enter the total and who paid, choose who shares it, and split it **equally**, by **exact amounts**, by **percent**, or by **shares** (e.g. two shares for the bigger room). The editor shows live per-person amounts and won't save a split that doesn't add up.
+
+Both kinds live in the same group, have a category, a payer and a date, and feed the same balances.
 
 ## How it's organised
 
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
-- **Receipts live inside a group.** Every member can see and edit the group's receipts.
+- **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
-- **Friends** (home screen tab) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
-- **Admin** (menu, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
-- **Account** (menu button, top right) lets you change your display name, email and password, or sign out.
+- **Friends** (sidebar / tab bar) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
+- **Admin** (nav item, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
+- **Account** (sidebar / tab bar) lets you change your display name, email and password, or sign out.
 
-## How receipt import works
+## How receipt import works (grocery receipts)
 
 There is no built-in AI. Instead:
 
@@ -36,7 +43,7 @@ The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"`
 
 ## Split math
 
-All money is handled in integer cents. Each item is split evenly among its assignees, and tax and tip are shared in proportion to what each person's items cost. Leftover pennies are distributed by largest remainder, so per-person totals always add up exactly to items + tax + tip (see `frontend/src/lib/calc.ts`).
+All money is handled in integer cents with largest-remainder allocation, so per-person totals always add up exactly. Receipts split each item among its assignees, then share tax and tip by what each person bought (`frontend/src/lib/calc.ts`). Standalone expenses use the same allocator for all four split methods (`frontend/src/lib/expenses.ts`).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost-splitting app, not just groceries).
 
@@ -44,7 +51,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost
 
 | Layer    | Technology                                                     |
 | -------- | -------------------------------------------------------------- |
-| Frontend | React + TypeScript, Vite, Tailwind (CDN), Framer Motion        |
+| Frontend | React + TypeScript, Vite, Tailwind (build-time), Framer Motion |
 | Auth/DB  | Supabase (Auth + Postgres with row-level security)             |
 | Hosting  | Vercel (static build)                                          |
 
@@ -58,7 +65,7 @@ cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
 npm run dev                  # http://localhost:3000
 npm run dev:mock             # same UI with an in-memory fake backend (src/mocks): no Supabase or login needed
-npm test                     # unit + component tests (split math, balances, JSON import, every screen's interactions)
+npm test                     # unit + component tests (split math, balances, every screen's interactions)
 ```
 
 `npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.

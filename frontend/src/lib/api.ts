@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { SplitData, SplitMethod } from './expenses';
 
 export interface Item {
     id: string;
@@ -12,6 +13,12 @@ export interface Session {
     group_id: string;
     user_id: string | null;
     paid_by: string | null;
+    /** 'receipt' = itemized (the grocery flow); 'expense' = a standalone cost split by `split_method`. */
+    kind: 'receipt' | 'expense';
+    category: string;
+    amount: number | null;
+    split_method: SplitMethod | null;
+    split_data: SplitData;
     name: string;
     session_date: string;
     tax: number;
@@ -38,6 +45,11 @@ const mapSession = (r: any): Session => ({
     group_id: r.group_id,
     user_id: r.user_id ?? null,
     paid_by: r.paid_by ?? null,
+    kind: r.kind ?? 'receipt',
+    category: r.category ?? 'groceries',
+    amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
+    split_method: r.split_method ?? null,
+    split_data: r.split_data ?? {},
     name: r.name,
     session_date: r.session_date,
     tax: Number(r.tax),
@@ -65,6 +77,11 @@ export async function getSession(id: string): Promise<Session> {
 
 export async function createSession(input: {
     groupId: string;
+    kind?: 'receipt' | 'expense';
+    category?: string;
+    amount?: number;
+    splitMethod?: SplitMethod;
+    splitData?: SplitData;
     name: string;
     date?: string;
     tax?: number;
@@ -78,6 +95,9 @@ export async function createSession(input: {
             .insert({
                 group_id: input.groupId,
                 name: input.name,
+                ...(input.kind ? { kind: input.kind } : {}),
+                ...(input.category ? { category: input.category } : {}),
+                ...(input.kind === 'expense' ? { amount: input.amount ?? 0, split_method: input.splitMethod ?? 'equal', split_data: input.splitData ?? {} } : {}),
                 ...(input.date ? { session_date: input.date } : {}),
                 tax: input.tax ?? 0,
                 tip: input.tip ?? 0,
@@ -100,7 +120,7 @@ export async function createSession(input: {
 
 export async function updateSession(
     id: string,
-    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by'>>
+    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data'>>
 ) {
     check(await supabase.from('sessions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id));
 }
@@ -159,6 +179,7 @@ export async function changePassword(current: string, next: string) {
 // ---- Shared groups ----
 export interface Member {
     user_id: string;
+    joined_at: string;
     name: string;
     email: string;
     role: 'owner' | 'member';
@@ -193,11 +214,11 @@ const mapGroup = (r: any): Group => ({
     owner_id: r.owner_id,
     created_at: r.created_at,
     members: (r.group_members ?? [])
-        .map((m: any) => ({ user_id: m.user_id, role: m.role, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '' }))
-        .sort((a: Member, b: Member) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'owner' ? -1 : 1)),
+        .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '' }))
+        .sort((a: Member, b: Member) => (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name))),
 });
 
-const GROUP_SELECT = 'id, name, owner_id, created_at, group_members(user_id, role, profiles(name, email))';
+const GROUP_SELECT = 'id, name, owner_id, created_at, group_members(user_id, role, joined_at, profiles(name, email))';
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));

@@ -1,1 +1,57 @@
-/* Purged CSS. Handled entirely by Tailwind now. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	html,
+	body {
+		margin: 0;
+		background: #ffffff;
+		font-family: "Schibsted Grotesk", system-ui, sans-serif;
+		color: #1b1a17;
+		-webkit-font-smoothing: antialiased;
+	}
+	input,
+	select,
+	textarea,
+	button {
+		font-family: inherit;
+	}
+	/* Fields darken their border on focus; buttons keep a visible keyboard ring. */
+	input:focus,
+	select:focus,
+	textarea:focus {
+		outline: none;
+		border-color: #1b1a17 !important;
+	}
+	button:focus-visible,
+	a:focus-visible {
+		outline: 2px solid #1b1a17;
+		outline-offset: 2px;
+	}
+	input::placeholder,
+	textarea::placeholder {
+		color: #b3afa6;
+	}
+}
+
+@layer components {
+	.icon {
+		font-family: "Material Symbols Outlined";
+		font-weight: normal;
+		font-style: normal;
+		line-height: 1;
+		letter-spacing: normal;
+		text-transform: none;
+		display: inline-block;
+		white-space: nowrap;
+		direction: ltr;
+		font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+		-webkit-font-feature-settings: "liga";
+		font-feature-settings: "liga";
+		user-select: none;
+	}
+	.icon-fill {
+		font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+	}
+}

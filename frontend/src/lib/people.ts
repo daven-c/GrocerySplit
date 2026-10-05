@@ -1,0 +1,45 @@
+import type { Member } from './api';
+
+/** Person hues, assigned by position in the group (you first) and repeating after five. */
+export const HUES = [250, 30, 155, 75, 330];
+
+export interface Tone {
+    hue: number;
+    /** Avatar background / text, and the tint used to highlight a person's rows. */
+    bg: string;
+    fg: string;
+    tint: string;
+}
+
+export const toneFor = (hue: number): Tone => ({
+    hue,
+    bg: `oklch(0.89 0.09 ${hue})`,
+    fg: `oklch(0.42 0.15 ${hue})`,
+    tint: `oklch(0.965 0.035 ${hue})`,
+});
+
+/** Stable tones for a group's members: you are always the first hue, others follow join order. */
+export function memberTones(members: Pick<Member, 'user_id'>[], meId: string): Record<string, Tone> {
+    const ordered = [...members.filter(m => m.user_id === meId), ...members.filter(m => m.user_id !== meId)];
+    return Object.fromEntries(ordered.map((m, i) => [m.user_id, toneFor(HUES[i % HUES.length])]));
+}
+
+const GROUP_HUES = [155, 330, 75, 250, 30];
+/** Color of a group's dot in the sidebar. */
+export function groupDot(groupId: string): string {
+    let h = 0;
+    for (const c of groupId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return `oklch(0.68 0.17 ${GROUP_HUES[h % GROUP_HUES.length]})`;
+}
+
+export const initialOf = (name: string) => (name.trim()[0] ?? '?').toUpperCase();
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** "$1,234.56" (sign dropped; callers choose the wording). */
+export const fmt = (n: number) => `$${money.format(Math.abs(n))}`;
+
+export function greeting(date = new Date()): string {
+    const h = date.getHours();
+    return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+}

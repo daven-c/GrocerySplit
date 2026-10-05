@@ -1,23 +1,24 @@
 # Roadmap & ideas
 
-The app started as **GrocerySplit** (one receipt, tap items, split between people). The direction is a
+The app started as **GrocerySplit** (one receipt, tap items, split between people) and is now **Splitpot**, a
 general **cost-splitting app** for any shared expense: groceries, rent, utilities, trips, dinners, gifts.
-Live at https://costsplit.davenc.dev (domain already named for the broader product).
+Groceries remain a first-class, itemized flow inside it. Live at https://costsplit.davenc.dev.
 
 ## Where it is today
-- Groups at the top level, receipts inside, members invited by email.
+- Groups at the top level, expenses inside, members invited by email.
+- **Two kinds of expense:** itemized grocery receipts, and standalone bills split equally / by amount / by percent / by shares, each with a category.
 - Receipts imported from model-generated JSON (itemized), tax/tip shared proportionally, exact-penny math.
 - Friends view: what you owe / are owed across all groups, with manual "mark paid" settlements.
 
 ## Product ideas, roughly in priority order
 
-### 1. Expenses that aren't receipts
-Today every expense is an itemized receipt. Add a lightweight **expense** type so splitting rent, a
-utility bill or a taxi takes ten seconds:
-- Total + payer + who's in, no items.
-- **Split modes**: equally, by exact amounts, by percentage, by shares/weights (e.g. rooms or nights).
-- Keep itemized receipts as one expense type that happens to have line items.
-- Category + notes + optional photo of the receipt (Supabase Storage).
+### 1. Expenses that aren't receipts  (done, extend next)
+Shipped: standalone expenses with a total, payer, date, category and four split modes, with live validation.
+Still to do:
+- **Multiple payers** on one expense ("A paid 60, B paid 40").
+- **Recurring expenses** (rent on the 1st, subscriptions).
+- Photo attachments (Supabase Storage) and notes on any expense.
+- Category and monthly insights (see 8).
 
 ### 2. Better settling up
 - **Simplify debts** inside a group (A owes B, B owes C → A pays C) to minimise payments.
@@ -31,8 +32,9 @@ utility bill or a taxi takes ten seconds:
 - Shareable invite link/QR in addition to invite-by-email.
 
 ### 4. Identity and data model cleanup
-- Receipt participants are stored as **display-name strings** today. Move to member ids so duplicate
-  names can't collide and renaming a member doesn't orphan assignments. Prerequisite for most of the above.
+- Standalone expenses already key their split by **member id**. Itemized receipts still store assignees as
+  **display-name strings**; move them to member ids so duplicate names can't collide and renaming a member
+  doesn't orphan assignments.
 - Per-group currency, plus multi-currency groups with a stored exchange rate per expense.
 - Audit trail / activity feed per group ("Sam edited Costco, deleted Gum") and undo for deletes.
 - Roles beyond owner/member (e.g. read-only viewers, co-owners), configurable edit permissions.
@@ -56,9 +58,8 @@ utility bill or a taxi takes ten seconds:
 - Spend by category/month per group, CSV/PDF export, shareable read-only summary link.
 
 ## Engineering ideas
-- Rename the repo, README and UI strings from GrocerySplit to the new product name.
+- Rename the GitHub repo from GrocerySplit to Splitpot (UI, README and manifest are already renamed).
 - Supabase migrations applied automatically from CI on merge to `main` (needs an access token secret).
 - Playwright smoke tests against a preview deployment using a seeded test user.
-- Replace the Tailwind CDN script with a build-time Tailwind setup (faster first paint, no CDN dependency).
 - Code-split the bundle; add error reporting.
 - Make Supabase Auth Site URL / redirect URLs match the custom domain.

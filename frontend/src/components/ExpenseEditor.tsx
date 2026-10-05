@@ -1,0 +1,266 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, Modal, SegmentedTabs, AnimatedNumber, tap, tapFlat } from '../lib/motion';
+import { useAppData } from '../lib/appData';
+import { useAutosave } from '../lib/hooks';
+import { getSession, updateSession, deleteSession, Session } from '../lib/api';
+import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
+import { fmt, memberTones } from '../lib/people';
+import { Avatar, Button, Card, Icon } from './ui';
+
+interface ExpenseEditorProps {
+    sessionId: string;
+    narrow: boolean;
+    onBack: () => void;
+}
+
+const num = (s: string) => Math.max(0, parseFloat(s) || 0);
+const dateMeta = (iso: string) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
+const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
+
+export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEditorProps) {
+    const { me, groups, refresh } = useAppData();
+    const [record, setRecord] = useState<Session | null>(null);
+    const [name, setName] = useState('');
+    const [amount, setAmount] = useState('');
+    const [date, setDate] = useState('');
+    const [category, setCategory] = useState('other');
+    const [paidBy, setPaidBy] = useState('');
+    const [method, setMethod] = useState<SplitMethod>('equal');
+    const [included, setIncluded] = useState<string[]>([]);
+    const [values, setValues] = useState<Record<string, string>>({});
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [loadError, setLoadError] = useState('');
+    const [error, setError] = useState('');
+    const baseline = useRef('');
+    const autosave = useAutosave(600);
+
+    const group = groups.find(g => g.id === record?.group_id);
+    const members = group?.members ?? [];
+    const tones = useMemo(() => memberTones(members, me), [members, me]);
+
+    useEffect(() => {
+        let cancelled = false;
+        getSession(sessionId).then(s => {
+            if (cancelled) return;
+            const data = s.split_data ?? {};
+            setRecord(s);
+            setName(s.name);
+            setAmount(s.amount ? String(s.amount) : '');
+            setDate(s.session_date);
+            setCategory(s.category || 'other');
+            setPaidBy(s.paid_by ?? s.user_id ?? '');
+            setMethod(s.split_method ?? 'equal');
+            setIncluded(Object.keys(data));
+            setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
+            baseline.current = JSON.stringify([s.name, s.amount ?? 0, s.session_date, s.category, s.paid_by ?? s.user_id ?? '', s.split_method ?? 'equal', s.split_data ?? {}]);
+        }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
+        return () => { cancelled = true; };
+    }, [sessionId]);
+
+    const data: SplitData = useMemo(
+        () => Object.fromEntries(included.map(id => [id, method === 'equal' ? 1 : num(values[id] ?? '')])),
+        [included, values, method]
+    );
+    const total = num(amount);
+    const split = useMemo(() => splitExpense(total, method, data), [total, method, data]);
+
+    // Autosave only when the split adds up; otherwise say why it isn't saved yet.
+    useEffect(() => {
+        if (!record) return;
+        if (!split.valid) { autosave.cancel(); return; }
+        const current = JSON.stringify([name.trim() || 'Expense', total, date, category, paidBy, method, data]);
+        if (current === baseline.current) return;
+        autosave.schedule(async () => {
+            await updateSession(sessionId, {
+                name: name.trim() || 'Expense', amount: total, session_date: date || record.session_date, category,
+                ...(paidBy ? { paid_by: paidBy } : {}), split_method: method, split_data: data,
+            });
+            baseline.current = current;
+            void refresh();
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [name, total, date, category, paidBy, method, data, record, split.valid]);
+
+    const changeMethod = (to: SplitMethod) => {
+        const next = convertSplit(method, to, data, total);
+        setMethod(to);
+        setValues(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])));
+    };
+
+    const toggleMember = (id: string) => {
+        if (included.includes(id)) {
+            setIncluded(inc => inc.filter(i => i !== id));
+        } else {
+            setIncluded(inc => [...inc, id]);
+            setValues(v => ({ ...v, [id]: method === 'exact' || method === 'percent' ? '0' : '1' }));
+        }
+    };
+    const everyone = members.length > 0 && members.every(m => included.includes(m.user_id));
+    const toggleEveryone = () => {
+        if (everyone) return setIncluded([]);
+        setIncluded(members.map(m => m.user_id));
+        setValues(v => ({ ...Object.fromEntries(members.map(m => [m.user_id, method === 'exact' || method === 'percent' ? '0' : '1'])), ...v }));
+    };
+
+    const handleDelete = async () => {
+        setConfirmDelete(false);
+        try { await deleteSession(sessionId); await refresh(); onBack(); }
+        catch (err: any) { setError(err.message || 'Could not delete the expense'); }
+    };
+
+    if (loadError) return <p className="text-center text-coral py-16">{loadError}</p>;
+    if (!record || !group) return <p className="text-center text-faint py-16 animate-pulse">Loading expense…</p>;
+
+    const payer = members.find(m => m.user_id === paidBy);
+    const payerLabel = paidBy === me ? 'you' : payer?.name ?? 'someone';
+    const display = (id: string, n: string) => (id === me ? 'You' : n);
+    const maxShare = Math.max(...Object.values(split.shares), 0.01);
+    const status = !split.valid
+        ? { text: `Not saved yet: ${split.problem}`, bad: true }
+        : { text: autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically', bad: autosave.state === 'error' };
+    const hint = METHODS.find(m => m.value === method)?.hint;
+
+    return (
+        <div className="max-w-[1080px] mx-auto flex flex-col gap-6">
+            <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+                <h3 className="m-0 mb-2 text-xl font-semibold">Delete expense?</h3>
+                <p className="m-0 mb-6 text-muted leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</p>
+                <div className="flex gap-3">
+                    <Button variant="secondary" wide height={42} onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                    <Button wide height={42} className="!bg-coral-strong hover:opacity-90" onClick={handleDelete}>Delete</Button>
+                </div>
+            </Modal>
+
+            <div className="flex flex-wrap items-end justify-between gap-4">
+                <div className="flex flex-col gap-2 min-w-0 flex-1">
+                    {!narrow && (
+                        <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink"><Icon name="arrow_back" size={16} />{group.name}</motion.button>
+                    )}
+                    <input value={name} onChange={e => setName(e.target.value)} aria-label="Expense name" className="m-0 p-0 border-0 border-b border-dashed border-transparent hover:border-dash bg-transparent text-[30px] font-semibold tracking-title w-full max-w-[420px]" />
+                    <span className="text-sm text-muted">{dateMeta(date)} · {categoryOf(category).label} · paid by {payerLabel}</span>
+                </div>
+                <div className="flex flex-col items-end">
+                    <span className="text-[13px] text-faint">Total</span>
+                    <AnimatedNumber value={total} prefix="$" className="text-[34px] font-semibold tracking-[-0.03em]" />
+                </div>
+            </div>
+
+            {error && <p role="alert" className="m-0 text-[13px] text-coral-strong">{error}</p>}
+
+            <div className="flex flex-wrap gap-6 items-start">
+                <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
+                    <Card className="p-5 flex flex-col gap-3">
+                        <label htmlFor="amount" className="text-sm font-semibold">How much was it?</label>
+                        <div className="flex items-center gap-2 h-14 px-4 border border-line rounded-xl bg-white focus-within:border-ink">
+                            <span className="font-mono text-2xl text-faint">$</span>
+                            <input id="amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[28px] font-medium text-ink" />
+                        </div>
+                    </Card>
+
+                    <Card className="p-5 flex flex-col gap-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold">Split</span>
+                            <motion.button {...tapFlat} onClick={toggleEveryone} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{everyone ? 'Clear everyone' : 'Select everyone'}</motion.button>
+                        </div>
+                        <SegmentedTabs id="split-method" value={method} onChange={changeMethod} tabs={METHODS.map(m => ({ value: m.value, label: m.label }))} />
+                        <span className="text-[13px] text-muted -mt-1">{hint}</span>
+
+                        <div className="flex flex-col">
+                            {members.map((m, i) => {
+                                const on = included.includes(m.user_id);
+                                const t = tones[m.user_id];
+                                return (
+                                    <div key={m.user_id} className={`flex items-center gap-3 py-2.5 ${i ? 'border-t border-rule' : ''}`}>
+                                        <motion.button
+                                            {...tap}
+                                            aria-pressed={on}
+                                            aria-label={`${m.name} is in on this`}
+                                            onClick={() => toggleMember(m.user_id)}
+                                            className="w-9 h-9 rounded-full grid place-items-center text-sm font-semibold p-0 shrink-0"
+                                            style={{ background: on ? t.bg : 'transparent', color: on ? t.fg : '#B3AFA6', border: `1px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#CFCBC2'}` }}
+                                        >
+                                            {m.name[0].toUpperCase()}
+                                        </motion.button>
+                                        <span className={`flex-1 min-w-0 text-[15px] font-medium truncate ${on ? '' : 'text-ghost'}`}>{display(m.user_id, m.name)}</span>
+                                        {on && method !== 'equal' && (
+                                            <span className="flex items-center gap-1 font-mono text-sm text-muted">
+                                                {method === 'exact' && '$'}
+                                                <input
+                                                    aria-label={`${m.name} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
+                                                    inputMode="decimal"
+                                                    value={values[m.user_id] ?? ''}
+                                                    onChange={e => setValues(v => ({ ...v, [m.user_id]: e.target.value }))}
+                                                    className="w-20 h-9 px-2 border border-line rounded-lg text-right font-mono text-sm text-ink bg-white"
+                                                />
+                                                {method !== 'exact' && UNIT[method]}
+                                            </span>
+                                        )}
+                                        <span className={`w-[84px] text-right font-mono text-sm ${on ? 'font-medium' : 'text-ghost'}`}>{on ? fmt(split.shares[m.user_id] ?? 0) : '—'}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <AnimatePresence initial={false} mode="popLayout">
+                            <motion.div key={split.valid ? 'ok' : split.problem} layout initial={{ opacity: 0.8, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                className={`flex items-center gap-2 px-3 py-2.5 rounded-[10px] text-[13px] ${split.valid ? 'bg-green-tint text-green-on' : 'bg-coral-tint text-coral-on'}`} role="status">
+                                <Icon name={split.valid ? 'check_circle' : 'error'} size={18} fill />
+                                {split.valid ? `Adds up to ${fmt(total)}` : split.problem}
+                            </motion.div>
+                        </AnimatePresence>
+                    </Card>
+                </div>
+
+                <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
+                    <Card className="p-5 flex flex-col gap-4">
+                        <span className="text-[15px] font-semibold">Who pays what</span>
+                        {members.filter(m => included.includes(m.user_id)).map(m => {
+                            const amt = split.shares[m.user_id] ?? 0;
+                            const t = tones[m.user_id];
+                            return (
+                                <div key={m.user_id} className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-2.5">
+                                        <Avatar name={m.name} tone={t} size={28} />
+                                        <span className="flex-1 flex flex-col">
+                                            <span className="text-sm font-semibold">{display(m.user_id, m.name)}</span>
+                                            <span className="text-xs text-faint">{m.user_id === paidBy ? 'paid the bill' : `owes ${payerLabel}`}</span>
+                                        </span>
+                                        <AnimatedNumber value={amt} prefix="$" className="font-mono text-sm font-medium" />
+                                    </div>
+                                    <div className="h-[3px] ml-[38px] rounded-sm bg-surface">
+                                        <motion.div className="h-full rounded-sm opacity-55" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {included.length === 0 && <span className="text-sm text-faint">Choose who shares this cost.</span>}
+                        <div className="border-t border-rule pt-3.5 flex justify-between font-semibold text-[15px]"><span>Total</span><AnimatedNumber value={total} prefix="$" className="font-mono" /></div>
+                        <p className="m-0 text-xs leading-normal text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
+                    </Card>
+
+                    <Card className="px-5 py-4 flex flex-col gap-3">
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
+                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
+                                {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.user_id === me ? 'You' : m.name}</option>)}
+                            </select>
+                        </label>
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Date
+                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm text-ink" />
+                        </label>
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Category
+                            <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
+                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                        </label>
+                        <div className="flex items-center justify-between pt-1 gap-3">
+                            <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral shrink-0">Delete expense</motion.button>
+                            <span className={`text-xs text-right ${status.bad ? 'text-coral' : 'text-faint'}`} aria-live="polite">{status.text}</span>
+                        </div>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}

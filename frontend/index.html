@@ -4,68 +4,24 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="theme-color" content="#000000" />
-		<link rel="apple-touch-icon" href="/logo192.png" />
+		<meta name="theme-color" content="#FFFFFF" />
+		<meta name="description" content="Splitpot: split groceries, rent, bills and trips with the people you share them with." />
 		<link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
-		<title>Grocery Split</title>
-        
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-        <style>
-            .material-symbols-outlined {
-                font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-                display: inline-block;
-                line-height: 1;
-                text-transform: none;
-                letter-spacing: normal;
-                word-wrap: normal;
-                white-space: nowrap;
-                direction: ltr;
-            }
-            .glass-panel {
-                background: rgba(25, 37, 64, 0.4);
-                backdrop-filter: blur(24px);
-                -webkit-backdrop-filter: blur(24px);
-            }
-            .bg-vibrant {
-                background: radial-gradient(circle at 0% 0%, #ac8aff 0%, transparent 40%),
-                            radial-gradient(circle at 100% 100%, #69f6b8 0%, transparent 40%),
-                            #060e20;
-            }
-        </style>
-        <script>
-          tailwind.config = {
-            darkMode: "class",
-            theme: {
-              extend: {
-                colors: {
-                  "on-surface": "#dee5ff",
-                  "background": "#060e20",
-                  "primary": "#69f6b8",
-                  "primary-container": "#06b77f",
-                  "on-primary-container": "#002919",
-                  "surface-container-highest": "#192540",
-                  "on-surface-variant": "#a3aac4",
-                  "surface-container-low": "#091328",
-                  "surface-container": "#0f1930",
-                  "outline-variant": "#40485d",
-                  "surface-variant": "#192540",
-                  "secondary": "#ac8aff"
-                },
-                fontFamily: {
-                  "headline": ["Manrope"],
-                  "body": ["Inter"],
-                  "label": ["Inter"]
-                }
-              }
-            }
-          }
-        </script>
+		<title>Splitpot</title>
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+			rel="stylesheet"
+		/>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,300..500,0..1&display=swap"
+			rel="stylesheet"
+		/>
 	</head>
 	<body>
 		<div id="root"></div>
-		<!-- Script tag to load the application -->
 		<script type="module" src="/src/index.tsx"></script>
 	</body>
 </html>

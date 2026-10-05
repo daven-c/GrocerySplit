@@ -1,26 +1,38 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { motion, Pop, Collapse, SegmentedTabs, enter, tap, tapFlat } from '../lib/motion';
+import { motion, Pop, Collapse, SegmentedTabs, enter, tapFlat } from '../lib/motion';
+import { Icon, Logo, Button, inputCls, labelCls } from './ui';
+import { fmt, toneFor, HUES } from '../lib/people';
 
 interface AuthProps {
+    initialMode?: 'login' | 'signup';
     onLogin: () => void;
+    onBack?: () => void;
 }
 
-export default function Auth({ onLogin }: AuthProps) {
-    const [isLogin, setIsLogin] = useState(true);
+const PREVIEW = [
+    { name: 'Sam', amt: 21.84 },
+    { name: 'Priya', amt: 27.12 },
+    { name: 'Jonah', amt: 25.06 },
+    { name: 'Leo', amt: 22.25 },
+];
+
+export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthProps) {
+    const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
+    const isLogin = mode === 'login';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [notice, setNotice] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
         setNotice('');
+        setLoading(true);
         try {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -34,75 +46,85 @@ export default function Auth({ onLogin }: AuthProps) {
                 });
                 if (error) throw error;
                 if (data.session) onLogin();
-                else setNotice('Account created! Check your email for a confirmation link, then log in.');
+                else setNotice('Account created! Check your email for a confirmation link, then sign in.');
             }
         } catch (err: any) {
             const msg: string = err.message || 'Authentication failed';
-            setError(/rate limit/i.test(msg)
-                ? 'Too many sign-up emails were sent recently. Please wait about an hour and try again.'
-                : msg);
+            setError(/rate limit/i.test(msg) ? 'Too many sign-up emails were sent recently. Please wait about an hour and try again.' : msg);
         } finally {
             setLoading(false);
         }
     };
 
+    const total = PREVIEW.reduce((a, p) => a + p.amt, 0);
+
     return (
-        <div className="bg-slate-50 font-body text-slate-900 min-h-screen flex items-center justify-center p-6">
-            <motion.main {...enter(0)} className="w-full max-w-[400px]">
-                <div className="flex flex-col items-center mb-10">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center mb-6 shadow-sm">
-                        <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+        <div className="min-h-screen flex flex-wrap bg-white">
+            <div className="flex-[1_1_420px] flex items-center justify-center px-6 py-14">
+                <motion.div {...enter(0)} className="w-full max-w-[360px] flex flex-col gap-7">
+                    <button type="button" onClick={onBack} aria-label="Back to the home page" className="self-start"><Logo size={22} word={19} /></button>
+
+                    <div className="flex flex-col gap-2">
+                        <h1 className="m-0 text-[30px] leading-[1.15] font-semibold tracking-title">{isLogin ? 'Welcome back' : 'Start a pot'}</h1>
+                        <p className="m-0 text-[15px] leading-normal text-muted">
+                            {isLogin ? 'Sign in to see who owes what.' : 'Split groceries, rent and trips with the people you share them with.'}
+                        </p>
                     </div>
-                    <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-                        Grocery Split
-                    </h1>
-                    <p className="text-slate-500 mt-2 text-sm text-center">Precise, simple shared expenses.</p>
-                </div>
 
-                <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm">
-                    <SegmentedTabs id="auth" className="mb-8" value={isLogin ? 'login' : 'signup'} onChange={v => { setIsLogin(v === 'login'); setError(''); }} tabs={[{ value: 'login', label: 'Login' }, { value: 'signup', label: 'Sign Up' }]} />
+                    <SegmentedTabs id="auth" value={mode} onChange={m => { setMode(m); setError(''); setNotice(''); }} tabs={[{ value: 'login', label: 'Sign in' }, { value: 'signup', label: 'Create account' }]} />
 
-                    <form className="space-y-5" onSubmit={handleSubmit}>
-                        <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm text-center">{error}</Pop>
-                        <Pop show={!!notice} className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm text-center">{notice}</Pop>
-
+                    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                         <Collapse open={!isLogin}>
-                            <div className="space-y-2 px-1 pb-1 -mx-1">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest pl-1">Name</label>
-                                <input 
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none" 
-                                    value={name} onChange={e => setName(e.target.value)} placeholder="Your Name" type="text" required={!isLogin}/>
-                            </div>
+                            <label className={`flex flex-col gap-1.5 ${labelCls} px-1 pb-1 -mx-1`}>
+                                Your name
+                                <input className={`${inputCls} h-11 px-3.5`} value={name} onChange={e => setName(e.target.value)} placeholder="What your friends call you" type="text" autoComplete="name" required={!isLogin} />
+                            </label>
                         </Collapse>
-
-                        <div className="space-y-2">
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest pl-1">Email Address</label>
-                            <input 
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none" 
-                                value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" type="email" required/>
-                        </div>
-
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center pl-1">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Password</label>
-                            </div>
-                            <div className="relative">
-                                <input
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-4 pr-12 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none"
-                                    value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" type={showPassword ? 'text' : 'password'} minLength={6} required/>
-                                <motion.button {...tap} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                    className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-900 transition-colors">
-                                    <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                        <label className={`flex flex-col gap-1.5 ${labelCls}`}>
+                            Email
+                            <input className={`${inputCls} h-11 px-3.5`} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
+                        </label>
+                        <label className={`flex flex-col gap-1.5 ${labelCls}`}>
+                            Password
+                            <span className="relative">
+                                <input className={`${inputCls} h-11 px-3.5 pr-11`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
+                                <motion.button {...tapFlat} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3 flex items-center text-faint hover:text-ink">
+                                    <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={20} />
                                 </motion.button>
-                            </div>
-                        </div>
+                            </span>
+                        </label>
 
-                        <motion.button {...tapFlat} disabled={loading} type="submit" className="w-full py-4 mt-6 bg-slate-900 text-white font-bold rounded-xl shadow-sm hover:bg-slate-800 transition-colors duration-200 disabled:opacity-50">
-                            {loading ? 'Processing...' : 'Continue'}
-                        </motion.button>
+                        <Pop show={!!error} className="text-[13px] text-coral-strong">{error}</Pop>
+                        <Pop show={!!notice} className="px-3 py-2.5 rounded-[10px] bg-green-tint text-green-on text-[13px]">{notice}</Pop>
+
+                        <Button type="submit" height={46} wide disabled={loading} className="mt-1 text-[15px]">
+                            {loading ? 'Just a moment...' : isLogin ? 'Sign in' : 'Create account'}
+                        </Button>
                     </form>
-                </div>
-            </motion.main>
+
+                    <p className="m-0 text-[13px] leading-normal text-faint">Invites are matched to your email, so sign up with the address your friends know.</p>
+                </motion.div>
+            </div>
+
+            <div className="hidden min-[760px]:flex flex-[1_1_420px] bg-ink text-white flex-col justify-center gap-9 p-14">
+                <motion.p {...enter(1)} className="m-0 text-[28px] leading-[1.25] font-medium tracking-[-0.02em] max-w-[420px] text-[#FDFDFC]" style={{ textWrap: 'pretty' } as React.CSSProperties}>
+                    Tap an item, pick who had it. Tax and tip land where they belong.
+                </motion.p>
+                <motion.div {...enter(2)} className="bg-white text-ink rounded-[14px] p-5 max-w-[380px] flex flex-col gap-3.5">
+                    <div className="flex justify-between text-[13px] text-muted"><span>Corner Market · Oct 3</span><span>12 items</span></div>
+                    {PREVIEW.map((p, i) => {
+                        const t = toneFor(HUES[i % HUES.length]);
+                        return (
+                            <div key={p.name} className="flex items-center gap-2.5">
+                                <span className="w-[26px] h-[26px] rounded-full grid place-items-center text-xs font-semibold" style={{ background: t.bg, color: t.fg }}>{p.name[0]}</span>
+                                <span className="flex-1 text-sm font-medium">{p.name}</span>
+                                <span className="font-mono text-sm">{fmt(p.amt)}</span>
+                            </div>
+                        );
+                    })}
+                    <div className="border-t border-dashed border-dash pt-3 flex justify-between font-semibold text-sm"><span>Total</span><span className="font-mono">{fmt(total)}</span></div>
+                </motion.div>
+            </div>
         </div>
     );
 }

@@ -1,54 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { listGroups, listSessions, updateDisplayName, requestEmailChange, changePassword } from '../lib/api';
-import { motion, Pop, AnimatedNumber, enter, tap, tapFlat } from '../lib/motion';
+import React, { useState } from 'react';
+import { motion, Pop, enter, tapFlat } from '../lib/motion';
+import { useAppData } from '../lib/appData';
+import { updateDisplayName, requestEmailChange, changePassword } from '../lib/api';
+import { HUES, toneFor } from '../lib/people';
+import { Avatar, Button, Card, Icon, inputCls } from './ui';
 
 interface AccountProps {
     user: { id: string; email?: string; name: string } | null;
-    onBack: () => void;
     onLogout: () => void;
 }
 
 type Msg = { type: 'ok' | 'err'; text: string } | null;
 
-const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none';
-const labelCls = 'block text-xs font-semibold text-slate-500 uppercase tracking-widest pl-1 mb-1.5';
-const btnCls = 'w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed';
-
 function Banner({ msg }: { msg: Msg }) {
     return (
-        <Pop show={!!msg} className={`p-3 rounded-xl text-sm border ${msg?.type === 'err' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>
+        <Pop show={!!msg} className={`text-[13px] ${msg?.type === 'err' ? 'text-coral-strong' : 'px-3 py-2.5 rounded-[10px] bg-green-tint text-green-on'}`}>
             {msg?.text}
         </Pop>
     );
 }
 
-function Card({ title, i = 0, children }: { title: string; i?: number; children: React.ReactNode }) {
-    return (
-        <motion.section {...enter(i)} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-            <h3 className="font-headline font-bold text-lg text-slate-900">{title}</h3>
-            {children}
-        </motion.section>
-    );
-}
-
-function PasswordField({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
+function PasswordField({ placeholder, label, value, onChange, autoComplete, className = '' }: { placeholder: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string; className?: string }) {
     const [show, setShow] = useState(false);
     return (
-        <div>
-            <label className={labelCls}>{label}</label>
-            <div className="relative">
-                <input className={inputCls + ' pr-12'} type={show ? 'text' : 'password'} value={value} onChange={e => onChange(e.target.value)} autoComplete={autoComplete} required />
-                <motion.button {...tap} type="button" onClick={() => setShow(v => !v)} aria-label={show ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-900">
-                    <span className="material-symbols-outlined text-[20px]">{show ? 'visibility_off' : 'visibility'}</span>
-                </motion.button>
-            </div>
-        </div>
+        <span className={`relative ${className}`}>
+            <input aria-label={label} placeholder={placeholder} className={`${inputCls} pr-11`} type={show ? 'text' : 'password'} value={value} onChange={e => onChange(e.target.value)} autoComplete={autoComplete} required />
+            <motion.button {...tapFlat} type="button" onClick={() => setShow(v => !v)} aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} className="absolute inset-y-0 right-0 px-3 flex items-center text-faint hover:text-ink">
+                <Icon name={show ? 'visibility_off' : 'visibility'} size={20} />
+            </motion.button>
+        </span>
     );
 }
 
-export default function Account({ user, onBack, onLogout }: AccountProps) {
-    const [counts, setCounts] = useState<{ receipts: number; groups: number } | null>(null);
-
+export default function Account({ user, onLogout }: AccountProps) {
+    const { groups, refresh } = useAppData();
     const [name, setName] = useState(user?.name ?? '');
     const [nameMsg, setNameMsg] = useState<Msg>(null);
     const [nameBusy, setNameBusy] = useState(false);
@@ -63,10 +48,6 @@ export default function Account({ user, onBack, onLogout }: AccountProps) {
     const [pwMsg, setPwMsg] = useState<Msg>(null);
     const [pwBusy, setPwBusy] = useState(false);
 
-    useEffect(() => {
-        Promise.all([listSessions(), listGroups()]).then(([s, g]) => setCounts({ receipts: s.length, groups: g.length })).catch(() => {});
-    }, []);
-
     const saveName = async (e: React.FormEvent) => {
         e.preventDefault();
         setNameBusy(true);
@@ -74,6 +55,7 @@ export default function Account({ user, onBack, onLogout }: AccountProps) {
         try {
             await updateDisplayName(name);
             setNameMsg({ type: 'ok', text: 'Name updated.' });
+            void refresh();
         } catch (err: any) {
             setNameMsg({ type: 'err', text: err.message });
         } finally {
@@ -114,83 +96,57 @@ export default function Account({ user, onBack, onLogout }: AccountProps) {
         }
     };
 
+    const tone = toneFor(HUES[0]);
     return (
-        <div className="bg-slate-50 font-body text-slate-900 min-h-screen pb-16">
-            <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
-                <div className="flex items-center gap-3 px-6 py-4 max-w-2xl mx-auto">
-                    <motion.button {...tap} onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900">
-                        <span className="material-symbols-outlined">arrow_back</span>
-                    </motion.button>
-                    <h1 className="font-headline font-extrabold text-xl text-slate-900">Account</h1>
+        <div className="max-w-[620px] mx-auto flex flex-col gap-7">
+            <motion.div {...enter(0)} className="flex items-center gap-4">
+                <Avatar name={user?.name || 'U'} tone={tone} size={56} />
+                <div className="flex flex-col gap-0.5 min-w-0">
+                    <h1 className="m-0 text-2xl font-semibold tracking-[-0.02em] truncate">{user?.name || 'You'}</h1>
+                    <span className="text-sm text-muted truncate">{user?.email} · {groups.length} {groups.length === 1 ? 'group' : 'groups'}</span>
                 </div>
-            </header>
+            </motion.div>
 
-            <main className="pt-8 px-6 max-w-2xl mx-auto space-y-6">
-                <motion.section {...enter(0)} className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-3xl p-6 shadow-lg flex items-center gap-5 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                    <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl font-extrabold border border-white/30 uppercase shrink-0">
-                        {user?.name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="z-10 min-w-0">
-                        <h2 className="font-headline font-extrabold text-2xl tracking-tight truncate">{user?.name || 'User'}</h2>
-                        <p className="text-sm font-medium opacity-90 truncate">{user?.email}</p>
-                    </div>
-                </motion.section>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <motion.div {...enter(1)} className="bg-white border text-center border-slate-200 rounded-3xl p-5 shadow-sm">
-                        <span className="block text-3xl font-black text-indigo-600 mb-1">{counts ? <AnimatedNumber value={counts.receipts} decimals={0} /> : '–'}</span>
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Receipts</span>
-                    </motion.div>
-                    <motion.div {...enter(2)} className="bg-white border text-center border-slate-200 rounded-3xl p-5 shadow-sm">
-                        <span className="block text-3xl font-black text-pink-600 mb-1">{counts ? <AnimatedNumber value={counts.groups} decimals={0} /> : '–'}</span>
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Groups</span>
-                    </motion.div>
-                </div>
-
-                <Card i={3} title="Profile">
-                    <form className="space-y-4" onSubmit={saveName}>
-                        <div>
-                            <label className={labelCls}>Display name</label>
-                            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
-                            <p className="text-xs text-slate-400 mt-1.5 pl-1">Shown to the people in your groups and used as your name on receipts.</p>
+            <motion.div {...enter(1)}>
+                <Card>
+                    <form className="p-5 flex flex-col gap-2.5" onSubmit={saveName}>
+                        <label htmlFor="display-name" className="text-[15px] font-semibold">Display name</label>
+                        <div className="flex gap-2">
+                            <input id="display-name" className={`${inputCls} flex-1 min-w-0`} value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
+                            <Button variant="secondary" type="submit" height={42} disabled={nameBusy || !name.trim() || name.trim() === user?.name}>{nameBusy ? 'Saving…' : 'Save'}</Button>
                         </div>
+                        <span className="text-[13px] text-faint">This is how you appear on receipts and in your groups.</span>
                         <Banner msg={nameMsg} />
-                        <motion.button {...tap} className={btnCls} disabled={nameBusy || !name.trim() || name.trim() === user?.name}>{nameBusy ? 'Saving...' : 'Save name'}</motion.button>
                     </form>
-                </Card>
 
-                <Card i={4} title="Email">
-                    <form className="space-y-4" onSubmit={saveEmail}>
-                        <div>
-                            <label className={labelCls}>Current email</label>
-                            <input className={inputCls + ' text-slate-500'} value={user?.email ?? ''} disabled />
+                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={saveEmail}>
+                        <label htmlFor="new-email" className="text-[15px] font-semibold">Email</label>
+                        <div className="flex gap-2">
+                            <input id="new-email" className={`${inputCls} flex-1 min-w-0`} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="new@example.com" autoComplete="email" required />
+                            <Button variant="secondary" type="submit" height={42} disabled={emailBusy || !email.trim() || email.trim().toLowerCase() === user?.email?.toLowerCase()}>{emailBusy ? 'Sending…' : 'Change'}</Button>
                         </div>
-                        <div>
-                            <label className={labelCls}>New email</label>
-                            <input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="new@example.com" autoComplete="email" required />
-                            <p className="text-xs text-slate-400 mt-1.5 pl-1">Group invitations are matched by email, so invites sent to your old address won't reach you after the change.</p>
-                        </div>
+                        <span className="text-[13px] leading-normal text-faint">Currently {user?.email}. Invites sent to your old address won't follow you after a change.</span>
                         <Banner msg={emailMsg} />
-                        <motion.button {...tap} className={btnCls} disabled={emailBusy || !email.trim() || email.trim().toLowerCase() === user?.email?.toLowerCase()}>{emailBusy ? 'Sending...' : 'Change email'}</motion.button>
                     </form>
-                </Card>
 
-                <Card i={5} title="Password">
-                    <form className="space-y-4" onSubmit={savePassword}>
-                        <PasswordField label="Current password" value={cur} onChange={setCur} autoComplete="current-password" />
-                        <PasswordField label="New password" value={next} onChange={setNext} autoComplete="new-password" />
-                        <PasswordField label="Confirm new password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
+                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={savePassword}>
+                        <span className="text-[15px] font-semibold">Password</span>
+                        <PasswordField label="Current password" placeholder="Current password" value={cur} onChange={setCur} autoComplete="current-password" />
+                        <div className="flex flex-wrap gap-2">
+                            <PasswordField label="New password" placeholder="New password" value={next} onChange={setNext} autoComplete="new-password" className="flex-[1_1_180px] min-w-0" />
+                            <PasswordField label="Confirm new password" placeholder="Confirm new password" value={confirm} onChange={setConfirm} autoComplete="new-password" className="flex-[1_1_180px] min-w-0" />
+                        </div>
                         <Banner msg={pwMsg} />
-                        <motion.button {...tap} className={btnCls} disabled={pwBusy || !cur || !next || !confirm}>{pwBusy ? 'Updating...' : 'Change password'}</motion.button>
+                        <Button type="submit" height={40} className="self-start" disabled={pwBusy || !cur || !next || !confirm}>{pwBusy ? 'Updating…' : 'Update password'}</Button>
                     </form>
                 </Card>
+            </motion.div>
 
-                <motion.button {...tapFlat} onClick={onLogout} className="w-full bg-white text-red-600 font-bold py-4 rounded-2xl hover:bg-red-50 transition-colors shadow-sm flex items-center justify-center gap-2 border border-red-200">
-                    <span className="material-symbols-outlined shrink-0">logout</span>
-                    Sign Out
-                </motion.button>
-            </main>
+            <motion.div {...enter(2)}>
+                <Button variant="secondary" height={40} className="self-start text-coral-strong px-3.5" onClick={onLogout}>
+                    <Icon name="logout" size={18} />Sign out
+                </Button>
+            </motion.div>
         </div>
     );
 }

@@ -56,4 +56,35 @@ describe('computeBalances', () => {
         const b = computeBalances('me', [group], [receipt({ participants: ['Me', 'Amy', 'Bo'], items: [{ price: 10, assigned_users: ['Me', 'Amy', 'Bo'] }] })], []);
         expect(Math.round((b.friends.amy.net + b.friends.bo.net) * 100)).toBe(667);
     });
+
+    describe('standalone expenses', () => {
+        const expense = (over: Partial<BalanceSession> = {}): BalanceSession => ({
+            kind: 'expense', group_id: 'g1', paid_by: 'me', amount: 100, split_method: 'equal',
+            split_data: { me: 1, amy: 1 }, tax: 0, tip: 0, participants: [], items: [], ...over,
+        });
+        it('others owe the payer their share, matched by member id', () => {
+            expect(computeBalances('me', [group], [expense()], []).friends.amy.net).toBe(50);
+        });
+        it('exact, percent and shares splits drive what is owed', () => {
+            expect(computeBalances('me', [group], [expense({ split_method: 'exact', split_data: { me: 70, amy: 30 } })], []).friends.amy.net).toBe(30);
+            expect(computeBalances('me', [group], [expense({ split_method: 'percent', split_data: { me: 25, amy: 75 } })], []).friends.amy.net).toBe(75);
+            expect(computeBalances('me', [group], [expense({ split_method: 'shares', split_data: { me: 1, amy: 3 } })], []).friends.amy.net).toBe(75);
+        });
+        it('you owe the payer when someone else paid, and non-participants owe nothing', () => {
+            expect(computeBalances('me', [group], [expense({ paid_by: 'amy' })], []).friends.amy.net).toBe(-50);
+            expect(computeBalances('me', [group], [expense({ split_data: { me: 1, bo: 1 } })], []).friends.amy).toBeUndefined();
+        });
+        it('is immune to duplicate display names, unlike receipts', () => {
+            const dup = { id: 'g1', members: [...group.members, { user_id: 'amy2', name: 'Amy' }] };
+            const b = computeBalances('me', [dup], [expense({ split_data: { me: 1, amy: 1, amy2: 1 } })], []);
+            // Both Amys are charged separately (a receipt would have ignored them); pennies still add up.
+            expect(Math.round((b.friends.amy.net + b.friends.amy2.net) * 100)).toBe(6667);
+            expect(b.friends.amy.net).toBeGreaterThan(33);
+            expect(b.friends.amy2.net).toBeGreaterThan(33);
+        });
+        it('mixes with receipts and settlements', () => {
+            const b = computeBalances('me', [group], [expense(), receipt()], [{ group_id: 'g1', from_user: 'amy', to_user: 'me', amount: 20 }]);
+            expect(b.friends.amy.net).toBe(50 + 5 - 20);
+        });
+    });
 });
