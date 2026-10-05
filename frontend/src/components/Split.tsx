@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getSession, getGroup, listPeople, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Group } from '../lib/api';
+import { getSession, getGroup, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Group } from '../lib/api';
 import { computeSplit } from '../lib/calc';
 
 interface SplitProps {
@@ -45,10 +45,10 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [people, session] = await Promise.all([listPeople(), getSession(sessionId)]);
+            const session = await getSession(sessionId);
             const g = await getGroup(session.group_id);
             setGroup(g);
-            setGlobalUsers(Array.from(new Set([...g.members.map(m => m.name), ...people])));
+            setGlobalUsers(g.members.map(m => m.name));
             setItems(session.items);
             setUsers(session.participants);
             setTotal(session.items.reduce((acc, i) => acc + i.price, 0));
@@ -503,7 +503,7 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                             }}
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-400 appearance-none"
                                         >
-                                            <option value="">+ Add someone...</option>
+                                            <option value="">+ Add a group member...</option>
                                             {globalUsers.filter(u => !users.includes(u)).map(u => (
                                                 <option key={u} value={u}>{u}</option>
                                             ))}

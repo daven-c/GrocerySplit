@@ -173,15 +173,34 @@ run('shared groups integration', () => {
         expect((await supabase.from('groups').select('id')).data ?? []).toEqual([]);
     });
 
-    it('saved people (guest contacts) are per-user', async () => {
+    it('users can rename themselves but cannot edit their stored profile email', async () => {
         await as('a');
-        await api.addPerson('Guest');
-        await api.addPerson('Guest');
-        expect(await api.listPeople()).toEqual(['Guest']);
+        const myGroup = await api.createGroup('Rename check');
+        await api.updateDisplayName('  Alice  ');
+        expect((await supabase.auth.getUser()).data.user?.user_metadata.name).toBe('Alice');
+        expect((await api.getGroup(myGroup)).members[0].name).toBe('Alice');
+        await expect(api.updateDisplayName('   ')).rejects.toThrow();
+
+        const me = (await supabase.auth.getUser()).data.user!.id;
+        const spoof = await supabase.from('profiles').update({ email: 'someone-else@example.com' }).eq('id', me);
+        expect(spoof.error).toBeTruthy();
+        const other = await supabase.from('profiles').update({ name: 'hijacked' }).neq('id', me).select();
+        expect(other.data ?? []).toEqual([]);
+
+        await api.updateDisplayName('Test A');
+        await api.deleteGroup(myGroup);
+    });
+
+    it('changing the password requires the current one, and the new one works', async () => {
         await as('b');
-        expect(await api.listPeople()).toEqual([]);
-        await as('a');
-        await api.removePerson('Guest');
-        expect(await api.listPeople()).toEqual([]);
+        await expect(api.changePassword('not-my-password', 'brand-new-pass-1')).rejects.toThrow(/incorrect/i);
+        await api.changePassword(password, 'brand-new-pass-1');
+        await supabase.auth.signOut();
+        expect((await supabase.auth.signInWithPassword({ email: email('b'), password })).error).toBeTruthy();
+        const ok = await supabase.auth.signInWithPassword({ email: email('b'), password: 'brand-new-pass-1' });
+        expect(ok.error).toBeNull();
+        await api.changePassword('brand-new-pass-1', password); // restore for reruns
+        await supabase.auth.signOut();
+        expect((await supabase.auth.signInWithPassword({ email: email('b'), password })).error).toBeNull();
     });
 });

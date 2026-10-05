@@ -8,7 +8,7 @@ Import a grocery receipt, tap once per item to assign it to a friend, and get an
 - **Receipts live inside a group.** Every member can see and edit the group's receipts.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
-- **People** (bottom nav) are saved guest names you can add to a receipt even if they don't have an account.
+- **Account** (menu button, top right) lets you change your display name, email and password, or sign out.
 
 ## How receipt import works
 

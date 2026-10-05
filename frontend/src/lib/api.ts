@@ -126,19 +126,30 @@ export async function deleteItem(sessionId: string, id: string) {
     await touch(sessionId);
 }
 
-// ---- People & groups ----
-export async function listPeople(): Promise<string[]> {
-    const data = check(await supabase.from('people').select('name').order('created_at'));
-    return data.map((r: any) => r.name);
+// ---- Account ----
+export async function updateDisplayName(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Name cannot be empty.');
+    const { data, error } = await supabase.auth.updateUser({ data: { name: trimmed } });
+    if (error) throw new Error(error.message);
+    check(await supabase.from('profiles').update({ name: trimmed }).eq('id', data.user.id));
 }
 
-export async function addPerson(name: string) {
-    const { error } = await supabase.from('people').insert({ name });
-    if (error && error.code !== '23505') throw new Error(error.message); // already exists is fine
+/** Supabase sends a confirmation link to the new address; the email only changes once it is clicked. */
+export async function requestEmailChange(email: string) {
+    const { error } = await supabase.auth.updateUser({ email: email.trim().toLowerCase() });
+    if (error) throw new Error(/rate limit/i.test(error.message) ? 'Too many emails were sent recently. Please wait about an hour and try again.' : error.message);
 }
 
-export async function removePerson(name: string) {
-    check(await supabase.from('people').delete().eq('name', name));
+export async function changePassword(current: string, next: string) {
+    const { data } = await supabase.auth.getUser();
+    const email = data.user?.email;
+    if (!email) throw new Error('You are not signed in.');
+    // Re-verify the current password so a borrowed, unlocked session can't change it.
+    const check1 = await supabase.auth.signInWithPassword({ email, password: current });
+    if (check1.error) throw new Error('Current password is incorrect.');
+    const { error } = await supabase.auth.updateUser({ password: next });
+    if (error) throw new Error(error.message);
 }
 
 // ---- Shared groups ----
