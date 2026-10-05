@@ -7,6 +7,8 @@ Split any shared cost with the people you share it with: groceries, rent, bills,
 - **Groceries (itemized receipt):** open a blank receipt and type the items in, or press **Import from JSON** to fill it from a photo read by any AI chat. Pick a person, then tap the items they had; tax and tip are shared in proportion to what each person bought.
 - **Bill or cost (standalone):** rent, utilities, dinner, a trip. Enter the total and who paid, choose who shares it, and split it **equally**, by **exact amounts**, by **percent**, or by **shares** (e.g. two shares for the bigger room). The editor shows live per-person amounts and won't save a split that doesn't add up.
 
+**Nothing is added until you press Save.** A new bill or receipt opens as a draft that nobody else in the group sees and that doesn't count toward balances; **Save** publishes it and **Discard** (or leaving the screen) throws it away. Existing expenses autosave as you edit them.
+
 Both kinds live in the same group, have a category, a payer and a date, and feed the same balances.
 
 ## How it's organised
@@ -15,7 +17,7 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
-- **Paybacks:** marking a balance paid records a *payback* that shows up in the group's list (with an undo), and you can record one by hand from the Add menu. Each group also has a **Balances** tab with every member's standing and who owes whom.
+- **Paybacks:** marking a balance paid records a *payback* that shows up in the group's list (with an undo). Record one by hand from the Add menu with two dropdowns, *who paid* and *who received*. Each group has a **Balances** tab that shows how much each person is up or down, with the fewest paybacks that would settle everyone below.
 - **Friends** (sidebar / tab bar) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
 - **Admin** (nav item, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 - **Account** (sidebar / tab bar) lets you change your display name, email and password, or sign out.

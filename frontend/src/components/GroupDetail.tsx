@@ -8,7 +8,6 @@ import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, AvatarStack, Button, Card, Icon, inputCls } from './ui';
-import { SegmentedTabs } from '../lib/motion';
 
 export type GroupTab = 'expenses' | 'balances' | 'members';
 
@@ -17,7 +16,8 @@ interface GroupDetailProps {
     initialTab?: GroupTab;
     narrow: boolean;
     onBack: () => void;
-    onOpenRecord: (id: string, kind: 'receipt' | 'expense') => void;
+    /** `draft` is true for a record that was just created and is not saved until its author says so. */
+    onOpenRecord: (id: string, kind: 'receipt' | 'expense', draft?: boolean) => void;
 }
 
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
@@ -49,8 +49,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [settling, setSettling] = useState(false);
     const [pbOpen, setPbOpen] = useState(false);
-    const [pbMember, setPbMember] = useState('');
-    const [pbDir, setPbDir] = useState<'paid' | 'received'>('paid');
+    const [pbFrom, setPbFrom] = useState('');
+    const [pbTo, setPbTo] = useState('');
     const [pbAmount, setPbAmount] = useState('');
     const creating = useRef(false);
     const addRef = useRef<HTMLDivElement>(null);
@@ -128,9 +128,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         if (creating.current) return; // a double click must not create two records (stays locked: success navigates away)
         creating.current = true;
         try {
-            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries' });
+            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
             await refresh();
-            onOpenRecord(id, 'receipt');
+            onOpenRecord(id, 'receipt', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
     };
 
@@ -140,41 +140,40 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         creating.current = true;
         try {
             const id = await createSession({
-                groupId, kind: 'expense', name: 'New expense', category: 'other', amount: 0,
+                groupId, kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
                 splitMethod: 'equal', splitData: everyoneEqual(group.members.map(m => m.user_id)),
             });
             await refresh();
-            onOpenRecord(id, 'expense');
+            onOpenRecord(id, 'expense', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
     };
 
-    // Prefill a payback with whatever is outstanding between you and the chosen member in this group.
-    const suggest = (memberId: string) => {
-        const d = ledger?.debts.find(x => (x.from === me && x.to === memberId) || (x.to === me && x.from === memberId));
-        return d ? { dir: (d.from === me ? 'paid' : 'received') as 'paid' | 'received', amount: d.amount } : null;
-    };
+    // The form opens on the first suggested payback; changing who paid / who received refills the amount when
+    // that exact payback is one of the suggestions.
     const openPayback = () => {
         setAddOpen(false);
-        const first = group.members.find(m => m.user_id !== me);
-        if (!first) { setError('Invite someone to this group first.'); return; }
-        const sg = suggest(first.user_id);
-        setPbMember(first.user_id);
-        setPbDir(sg?.dir ?? 'paid');
-        setPbAmount(sg ? String(sg.amount) : '');
+        if (group.members.length < 2) { setError('Invite someone to this group first.'); return; }
+        const t = ledger?.transfers[0];
+        const other = group.members.find(m => m.user_id !== me)!;
+        setPbFrom(t?.from ?? me);
+        setPbTo(t?.to ?? other.user_id);
+        setPbAmount(t ? String(t.amount) : '');
         setPbOpen(true);
     };
-    const pickPbMember = (id: string) => {
-        setPbMember(id);
-        const sg = suggest(id);
-        if (sg) { setPbDir(sg.dir); setPbAmount(String(sg.amount)); }
+    const changePayback = (from: string, to: string) => {
+        setPbFrom(from);
+        setPbTo(to);
+        const t = ledger?.transfers.find(x => x.from === from && x.to === to);
+        if (t) setPbAmount(String(t.amount));
     };
+    const pbAmountNum = Math.round((parseFloat(pbAmount) || 0) * 100) / 100;
+    const pbValid = !!pbFrom && !!pbTo && pbFrom !== pbTo && pbAmountNum > 0;
     const savePayback = async () => {
-        const amount = Math.round((parseFloat(pbAmount) || 0) * 100) / 100;
-        if (!pbMember || amount <= 0) return;
+        if (!pbValid) return;
         setSettling(true);
         setError('');
         try {
-            await (pbDir === 'paid' ? recordSettlement(groupId, me, pbMember, amount) : recordSettlement(groupId, pbMember, me, amount));
+            await recordSettlement(groupId, pbFrom, pbTo, pbAmountNum);
             setPbOpen(false);
             await refresh();
         } catch (err: any) {
@@ -254,12 +253,16 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
                 <h3 className="m-0 mb-1 text-xl font-semibold text-ink">Record a payback</h3>
-                <p className="m-0 mb-4 text-sm text-muted">Evens out what you and a member owe each other in {group.name}. It doesn't move money.</p>
+                <p className="m-0 mb-4 text-sm text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.</p>
                 <div className="flex flex-col gap-3">
-                    <SegmentedTabs id="payback-dir" value={pbDir} onChange={setPbDir} tabs={[{ value: 'paid', label: 'I paid them' }, { value: 'received', label: 'They paid me' }]} />
-                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Member
-                        <select value={pbMember} onChange={e => pickPbMember(e.target.value)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
-                            {group.members.filter(m => m.user_id !== me).map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who paid
+                        <select value={pbFrom} onChange={e => changePayback(e.target.value, pbTo)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
+                            {group.members.map(m => <option key={m.user_id} value={m.user_id}>{who(m.user_id)}</option>)}
+                        </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who received
+                        <select value={pbTo} onChange={e => changePayback(pbFrom, e.target.value)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
+                            {group.members.map(m => <option key={m.user_id} value={m.user_id}>{who(m.user_id)}</option>)}
                         </select>
                     </label>
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Amount
@@ -268,10 +271,11 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             <input aria-label="Payback amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[15px]" />
                         </span>
                     </label>
+                    {pbFrom && pbFrom === pbTo && <span role="alert" className="text-[13px] text-coral-strong">Pick two different people.</span>}
                 </div>
                 <div className="flex gap-3 mt-5">
                     <Button variant="secondary" wide height={42} onClick={() => setPbOpen(false)}>Cancel</Button>
-                    <Button wide height={42} disabled={settling || !(parseFloat(pbAmount) > 0)} onClick={savePayback}>Save payback</Button>
+                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>Save payback</Button>
                 </div>
             </Modal>
 
@@ -424,13 +428,10 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     <motion.div key={m.userId} {...listItem(i)} className={`flex flex-col gap-1.5 px-[18px] py-3.5 ${i ? 'border-t border-rule' : ''}`}>
                                         <div className="flex items-center gap-3">
                                             <Avatar name={member.name} tone={tones[m.userId]} size={36} />
-                                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                                <span className="text-[15px] font-semibold truncate">{who(m.userId)}</span>
-                                                <span className="text-[13px] text-faint">fronted {fmt(m.paid)} · owes {fmt(m.owes)}</span>
-                                            </span>
+                                            <span className="flex-1 min-w-0 text-[15px] font-semibold truncate">{who(m.userId)}</span>
                                             <span className="shrink-0 flex flex-col items-end gap-0.5">
                                                 {square ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix="$" className={`text-[15px] font-semibold ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
-                                                <span className="text-xs text-faint">{square ? 'all square' : m.net > 0 ? (m.userId === me ? "you're owed" : 'is owed') : m.userId === me ? 'you owe' : 'owes'}</span>
+                                                <span className="text-xs text-faint">{square ? 'all square' : m.net > 0 ? 'up' : 'down'}</span>
                                             </span>
                                         </div>
                                         <div className="h-[3px] ml-12 rounded-sm bg-surface">
@@ -442,32 +443,25 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         </Card>
 
                         <div className="flex flex-col gap-2">
-                            <span className="text-[15px] font-semibold">Who owes whom</span>
-                            {ledger.debts.length === 0 ? (
+                            <span className="text-[15px] font-semibold">Suggested paybacks</span>
+                            {ledger.transfers.length === 0 ? (
                                 <p className="m-0 px-4 py-3.5 rounded-[14px] bg-green-tint text-green-on text-sm font-medium">Everyone's square.</p>
                             ) : (
                                 <Card className="overflow-hidden">
                                     <AnimatePresence initial={false}>
-                                        {ledger.debts.map((d, i) => {
-                                            const mine = d.from === me || d.to === me;
-                                            return (
-                                                <motion.div key={`${d.from}-${d.to}`} {...listItem(i)} className={`flex flex-wrap items-center gap-3 px-[18px] py-3 ${i ? 'border-t border-rule' : ''}`}>
-                                                    <span className="flex-1 min-w-[160px] text-sm">
-                                                        <span className="font-semibold">{who(d.from)}</span> {d.from === me ? 'owe' : 'owes'} <span className="font-semibold">{who(d.to)}</span>
-                                                    </span>
-                                                    <span className="font-mono text-sm font-medium">{fmt(d.amount)}</span>
-                                                    {mine && (
-                                                        <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(d.from, d.to, d.amount)}>
-                                                            {d.from === me ? 'Mark paid' : 'Mark received'}
-                                                        </Button>
-                                                    )}
-                                                </motion.div>
-                                            );
-                                        })}
+                                        {ledger.transfers.map((t, i) => (
+                                            <motion.div key={`${t.from}-${t.to}`} {...listItem(i)} className={`flex flex-wrap items-center gap-3 px-[18px] py-3 ${i ? 'border-t border-rule' : ''}`}>
+                                                <span className="flex-1 min-w-[160px] text-sm">
+                                                    <span className="font-semibold">{who(t.from)}</span> {t.from === me ? 'pay' : 'pays'} <span className="font-semibold">{who(t.to)}</span>
+                                                </span>
+                                                <span className="font-mono text-sm font-medium">{fmt(t.amount)}</span>
+                                                <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(t.from, t.to, t.amount)}>Record payback</Button>
+                                            </motion.div>
+                                        ))}
                                     </AnimatePresence>
                                 </Card>
                             )}
-                            <span className="text-xs leading-normal text-faint">Marking something paid doesn't move money. It just clears the balance for both of you. Friends shows the same numbers across all your groups.</span>
+                            <span className="text-xs leading-normal text-faint">The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.</span>
                         </div>
                     </div>
                 )}

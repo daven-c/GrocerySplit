@@ -209,6 +209,52 @@ describe('App shell', () => {
     });
 });
 
+describe('Drafts in the app shell', () => {
+    const draftExpense = async () => ({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'equal' as const, split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 } });
+    const startDraft = async () => {
+        const u = userEvent.setup();
+        signIn();
+        const base = api.getSession.getMockImplementation()!;
+        api.getSession.mockImplementation(async (id: string) => (id === 's9' ? structuredClone(await draftExpense()) : base(id)));
+        render(<App />);
+        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
+        await u.click(await screen.findByText('Split a bill or cost'));
+        await screen.findByRole('region', { name: 'Unsaved draft' });
+        return { u, sidebar };
+    };
+
+    it('adding an expense opens an unsaved draft that nobody else sees', async () => {
+        await startDraft();
+        expect(api.createSession).toHaveBeenCalledWith(expect.objectContaining({ kind: 'expense', draft: true }));
+        expect(api.deleteSession).not.toHaveBeenCalled();
+    });
+
+    it('leaving without saving (sidebar, back) discards the draft', async () => {
+        const { u, sidebar } = await startDraft();
+        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('s9'));
+        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+    });
+
+    it('Discard deletes the draft and returns to the group', async () => {
+        const { u } = await startDraft();
+        await u.click(screen.getByRole('button', { name: 'Discard' }));
+        await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('s9'));
+        expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
+    });
+
+    it('Save publishes it (not deleted) and returns to the group', async () => {
+        const { u } = await startDraft();
+        await u.click(screen.getByRole('button', { name: 'Save expense' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s9', expect.objectContaining({ draft: false })));
+        expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
+        await new Promise(r => setTimeout(r, 300));
+        expect(api.deleteSession).not.toHaveBeenCalled();
+    });
+});
+
 describe('Startup never leaves a blank page', () => {
     it('shows a loading spinner while the session restores', () => {
         authMock.getSession.mockReturnValue(new Promise(() => {}));

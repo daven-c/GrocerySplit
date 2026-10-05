@@ -6,13 +6,15 @@ import { getSession, updateSession, addItem, updateItem, deleteItem, deleteSessi
 import { computeSplit } from '../lib/calc';
 import { CATEGORIES } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, Icon } from './ui';
+import { Avatar, Button, Card, DraftBar, Icon } from './ui';
 
 interface SplitProps {
     sessionId: string;
     narrow: boolean;
     onBack: () => void;
     onImport: () => void;
+    onSaved: () => void;
+    onDiscard: () => void;
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
@@ -24,7 +26,7 @@ const dateMeta = (iso: string) => {
 const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right font-mono text-sm bg-wash';
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
-export default function Split({ sessionId, narrow, onBack, onImport }: SplitProps) {
+export default function Split({ sessionId, narrow, onBack, onImport, onSaved, onDiscard }: SplitProps) {
     const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [items, setItems] = useState<Item[]>([]);
@@ -38,6 +40,7 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
     const [editing, setEditing] = useState<{ id: string; name: string; price: string } | null>(null);
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState('');
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const baseline = useRef('');
@@ -93,9 +96,9 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
         }));
     }, [record, items, name, date, tax, tip, paidBy, category, sessionId, patchSession, sharedSessions]);
 
-    // Debounced autosave of the receipt's details.
+    // Debounced autosave of the receipt's details (existing receipts only; a new draft saves when you press Save).
     useEffect(() => {
-        if (!record) return;
+        if (!record || record.draft) return;
         const current = JSON.stringify([name, date, num(tax), num(tip), paidBy, category]);
         if (current === baseline.current) return;
         autosave.schedule(async () => {
@@ -164,6 +167,23 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
         catch (err) { console.error(err); setItems(prev); flash('Could not delete that item.'); }
     };
 
+    const handleSaveDraft = async () => {
+        if (!record) return;
+        setSaving(true);
+        try {
+            await updateSession(sessionId, {
+                name: name.trim() || 'Receipt', session_date: date || record.session_date, tax: num(tax), tip: num(tip),
+                ...(paidBy ? { paid_by: paidBy } : {}), category, draft: false,
+            });
+            await refresh();
+            onSaved();
+        } catch (err) {
+            console.error(err);
+            flash('Could not save the receipt.');
+            setSaving(false);
+        }
+    };
+
     const handleDeleteReceipt = async () => {
         setConfirmDelete(false);
         try { await deleteSession(sessionId); await refresh(); onBack(); }
@@ -175,7 +195,7 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
 
     const maxShare = Math.max(...split.totals.map(([, v]) => v), 0.01);
     const paintTone = paint ? tones[memberByName(paint)?.user_id ?? ''] : null;
-    const saveText = autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically';
+    const saveText = record.draft ? 'Not saved yet' : autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically';
 
     return (
         <div className="max-w-[1080px] mx-auto flex flex-col gap-6">
@@ -223,6 +243,8 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
                     <AnimatedNumber value={total} prefix="$" className="text-[34px] font-semibold tracking-[-0.03em]" />
                 </div>
             </div>
+
+            {record.draft && <DraftBar what="receipt" canSave saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
 
             <div className="flex flex-wrap gap-6 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
@@ -375,7 +397,7 @@ export default function Split({ sessionId, narrow, onBack, onImport }: SplitProp
                             </select>
                         </label>
                         <div className="flex items-center justify-between pt-1">
-                            <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete receipt</motion.button>
+                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete receipt</motion.button>}
                             <span className="text-xs text-faint" aria-live="polite">{saveText}</span>
                         </div>
                     </Card>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
+import { deleteSession } from "./lib/api";
 import { MotionConfig, motion } from "./lib/motion";
 import { useNarrow } from "./lib/hooks";
 import { AppDataProvider } from "./lib/appData";
@@ -27,6 +28,8 @@ const App: React.FC = () => {
     const [groupTab, setGroupTab] = useState<GroupTab>('expenses');
     const [recordId, setRecordId] = useState<string | null>(null);
     const [newGroupTick, setNewGroupTick] = useState(0);
+    // A new expense/receipt is a draft until its author presses Save; leaving without saving discards it.
+    const [draftId, setDraftId] = useState<string | null>(null);
     const narrow = useNarrow();
 
     const user = auth ? { id: auth.user.id, email: auth.user.email, name: auth.user.user_metadata?.name || auth.user.email?.split('@')[0] || 'User' } : null;
@@ -70,10 +73,29 @@ const App: React.FC = () => {
         setView('group');
     }, []);
 
-    const openRecord = useCallback((id: string, kind: 'receipt' | 'expense') => {
+    const discard = useCallback((id: string) => { void deleteSession(id).catch(err => console.error('Could not discard draft', err)); }, []);
+
+    const openRecord = useCallback((id: string, kind: 'receipt' | 'expense', draft = false) => {
+        if (draftId && draftId !== id) discard(draftId); // opening something else abandons an unsaved draft
+        setDraftId(draft ? id : draftId === id ? id : null);
         setRecordId(id);
         setView(kind === 'expense' ? 'expense' : 'split');
-    }, []);
+    }, [draftId, discard]);
+
+    // Walking away from the editor (any screen outside the editor/import flow) discards an unsaved draft.
+    useEffect(() => {
+        if (draftId && !['split', 'expense', 'import'].includes(view)) {
+            discard(draftId);
+            setDraftId(null);
+        }
+    }, [view, draftId, discard]);
+
+    const handleSaved = () => { setDraftId(null); setView(groupId ? 'group' : 'home'); };
+    const handleDiscard = () => {
+        if (draftId) discard(draftId);
+        setDraftId(null);
+        setView(groupId ? 'group' : 'home');
+    };
 
     const handleNav = (v: NavView) => setView(v);
     const handleLogout = async () => {
@@ -130,8 +152,8 @@ const App: React.FC = () => {
                             />
                         )}
                         {view === 'import' && groupId && recordId && <ReceiptUpload groupId={groupId} sessionId={recordId} narrow={narrow} onImported={() => setView('split')} onBack={() => setView('split')} />}
-                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} />}
-                        {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} />}
+                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} onSaved={handleSaved} onDiscard={handleDiscard} />}
+                        {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onSaved={handleSaved} onDiscard={handleDiscard} />}
                         {view === 'friends' && <Friends />}
                         {view === 'account' && <Account user={user} onLogout={handleLogout} />}
                         {view === 'admin' && <Admin />}

@@ -72,4 +72,20 @@ describe('computeSplit', () => {
     it('handles no participants', () => {
         expect(computeSplit([{ price: 5, assigned_users: ['A'] }], [], 1, 1).totals).toEqual([]);
     });
+
+    it('shared items split fairly: odd pennies do not always land on the same person', () => {
+        // 16 items with an odd number of cents, every one shared by both people: the old per-item rounding gave
+        // the first person the extra cent every time (a 16 cent gap). Totals must differ by at most one cent.
+        const items = Array.from({ length: 16 }, () => ({ price: 6.11, assigned_users: ['Daven', 'You'] }));
+        const r = computeSplit(items, ['Daven', 'You'], 0, 0);
+        expect(sum(r.totals)).toBe(97.76);
+        expect(Math.abs(get(r.totals, 'Daven') - get(r.totals, 'You'))).toBeLessThanOrEqual(0.01);
+    });
+    it('an evenly shared receipt with tax comes out even to the cent', () => {
+        const items = [4.99, 6.5, 5.29, 6.79, 9.99, 3.49, 11.84, 14.99, 12.49, 3.79, 6.99].map(price => ({ price, assigned_users: ['Daven', 'You'] }));
+        const r = computeSplit(items, ['Daven', 'You'], 4.12, 0);
+        expect(sum(r.totals)).toBe(Math.round((items.reduce((a, i) => a + i.price, 0) + 4.12) * 100) / 100);
+        expect(Math.abs(get(r.totals, 'Daven') - get(r.totals, 'You'))).toBeLessThanOrEqual(0.01);
+    });
 });
+

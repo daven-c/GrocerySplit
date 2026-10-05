@@ -15,6 +15,8 @@ export interface Session {
     paid_by: string | null;
     /** 'receipt' = itemized (the grocery flow); 'expense' = a standalone cost split by `split_method`. */
     kind: 'receipt' | 'expense';
+    /** True until the author presses Save; drafts are hidden from everyone else and from lists and balances. */
+    draft: boolean;
     category: string;
     amount: number | null;
     split_method: SplitMethod | null;
@@ -46,6 +48,7 @@ const mapSession = (r: any): Session => ({
     user_id: r.user_id ?? null,
     paid_by: r.paid_by ?? null,
     kind: r.kind ?? 'receipt',
+    draft: !!r.draft,
     category: r.category ?? 'groceries',
     amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
     split_method: r.split_method ?? null,
@@ -78,6 +81,7 @@ export async function getSession(id: string): Promise<Session> {
 export async function createSession(input: {
     groupId: string;
     kind?: 'receipt' | 'expense';
+    draft?: boolean;
     category?: string;
     amount?: number;
     splitMethod?: SplitMethod;
@@ -96,6 +100,7 @@ export async function createSession(input: {
                 group_id: input.groupId,
                 name: input.name,
                 ...(input.kind ? { kind: input.kind } : {}),
+                ...(input.draft ? { draft: true } : {}),
                 ...(input.category ? { category: input.category } : {}),
                 ...(input.kind === 'expense' ? { amount: input.amount ?? 0, split_method: input.splitMethod ?? 'equal', split_data: input.splitData ?? {} } : {}),
                 ...(input.date ? { session_date: input.date } : {}),
@@ -139,9 +144,17 @@ export async function importReceiptIntoSession(
 
 export async function updateSession(
     id: string,
-    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data'>>
+    patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data' | 'draft'>>
 ) {
     check(await supabase.from('sessions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id));
+}
+
+/** Drafts you started but never saved (closed the tab, lost connection) are tidied away after a day. */
+export async function deleteStaleDrafts() {
+    const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+    check(await supabase.from('sessions').delete().eq('draft', true).eq('user_id', data.user.id).lt('updated_at', cutoff));
 }
 
 export async function deleteSession(id: string) {

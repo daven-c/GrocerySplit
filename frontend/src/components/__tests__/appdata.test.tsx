@@ -45,6 +45,15 @@ describe('AppDataProvider', () => {
         expect(screen.queryByText('Stale')).not.toBeInTheDocument();
     });
 
+    it('never exposes unsaved drafts, and tidies stale ones on load', async () => {
+        const { rent } = await import('../../test/apiMock');
+        api.listSessions.mockResolvedValue([rent, { ...rent, id: 'draft1', name: 'Half-typed', draft: true }]);
+        render(<AppDataProvider userId={ME}><Probe /></AppDataProvider>);
+        await screen.findByText('Roomies,Ski Trip');
+        expect(ctx.sessions.map(s => s.id)).toEqual(['s2']);
+        expect(api.deleteStaleDrafts).toHaveBeenCalled();
+    });
+
     it('surfaces a load error without crashing, and clears loading', async () => {
         api.listGroups.mockRejectedValue(new Error('offline'));
         render(<AppDataProvider userId={ME}><Probe /></AppDataProvider>);

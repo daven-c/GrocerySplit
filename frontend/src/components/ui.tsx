@@ -87,3 +87,20 @@ export function Notice({ tone, children }: { tone: 'error' | 'ok'; children: Rea
         </div>
     );
 }
+
+/** Shown on a new expense/receipt: nothing exists for the group until Save is pressed. */
+export function DraftBar({ what, canSave, problem, saving, onSave, onDiscard }: { what: string; canSave: boolean; problem?: string | null; saving: boolean; onSave: () => void; onDiscard: () => void }) {
+    return (
+        <div role="region" aria-label="Unsaved draft" className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-[14px] bg-surface border border-edge">
+            <Icon name="edit_note" size={20} className="text-body" />
+            <div className="flex-[1_1_200px] flex flex-col gap-0.5">
+                <span className="text-sm font-semibold">New {what}, not saved yet</span>
+                <span className={`text-[13px] ${problem ? 'text-coral' : 'text-muted'}`}>{problem || 'Nobody in the group sees it, and it won\'t count toward balances, until you save.'}</span>
+            </div>
+            <div className="flex gap-2">
+                <Button variant="secondary" height={38} onClick={onDiscard} disabled={saving}>Discard</Button>
+                <Button height={38} onClick={onSave} disabled={!canSave || saving}>{saving ? 'Saving…' : `Save ${what}`}</Button>
+            </div>
+        </div>
+    );
+}
