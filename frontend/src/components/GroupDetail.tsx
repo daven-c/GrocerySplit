@@ -23,7 +23,7 @@ interface GroupDetailProps {
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
 
 /** One line in the list: an expense/receipt, or a payback between two members. */
-type Entry = { type: 'record'; date: string; rec: Session } | { type: 'payback'; date: string; p: Settlement };
+type Entry = { type: 'record'; date: string; at: string; rec: Session } | { type: 'payback'; date: string; at: string; p: Settlement };
 const localDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -99,12 +99,13 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     if (!q) return true;
                     return r.name.toLowerCase().includes(q) || categoryOf(r.category).label.toLowerCase().includes(q) || r.items.some(i => i.name.toLowerCase().includes(q));
                 })
-                .map(rec => ({ type: 'record' as const, date: rec.session_date, rec })),
+                .map(rec => ({ type: 'record' as const, date: rec.session_date, at: rec.updated_at, rec })),
             ...(category ? [] : groupPaybacks)
                 .filter(p => !q || 'payback'.includes(q) || nm(p.from_user).includes(q) || nm(p.to_user).includes(q))
-                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), p })),
+                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), at: p.created_at, p })),
         ];
-        return entries.sort((a, b) => b.date.localeCompare(a.date));
+        // Newest first: by date, and within a day by when it was added or last saved.
+        return entries.sort((a, b) => b.date.localeCompare(a.date) || Date.parse(b.at) - Date.parse(a.at));
     }, [records, groupPaybacks, search, category, group, me]);
 
     const months = useMemo(() => {

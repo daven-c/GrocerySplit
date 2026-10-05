@@ -257,6 +257,20 @@ describe('Group detail', () => {
         await waitFor(() => expect(api.deleteSettlement).toHaveBeenCalledWith('p1'));
     });
 
+    it('on the same day, a payback added after an expense is listed above it (and one added before, below)', async () => {
+        const { rent } = await import('../../test/apiMock');
+        api.listSessions.mockResolvedValue([{ ...rent, session_date: '2026-10-04', updated_at: '2026-10-04T09:00:00' }]);
+        api.listSettlements.mockResolvedValue([
+            { ...payback, id: 'late', created_at: '2026-10-04T12:00:00' },
+            { ...payback, id: 'early', from_user: ME, to_user: 'u-bo', created_at: '2026-10-04T08:00:00' },
+        ]);
+        renderWithData(<GroupDetail {...props} />);
+        const [late, expense, early] = [await screen.findByText('Amy paid you'), screen.getByText('October rent'), screen.getByText('You paid Bo')];
+        const after = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(after(late, expense)).toBe(true);
+        expect(after(expense, early)).toBe(true);
+    });
+
     it('paybacks are searchable and hidden by a category filter', async () => {
         const u = userEvent.setup();
         api.listSettlements.mockResolvedValue([payback]);
