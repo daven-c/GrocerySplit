@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, listItem, spring, tapFlat } from '../lib/motion';
+import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, PendingInvite, Session } from '../lib/api';
+import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, PendingInvite, Session } from '../lib/api';
+import { groupLedger } from '../lib/ledger';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, AvatarStack, Button, Card, Icon, inputCls } from './ui';
 
-export type GroupTab = 'expenses' | 'members';
+export type GroupTab = 'expenses' | 'balances' | 'members';
 
 interface GroupDetailProps {
     groupId: string;
@@ -39,6 +40,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
+    const [settling, setSettling] = useState(false);
+    const creating = useRef(false);
     const addRef = useRef<HTMLDivElement>(null);
 
     // Keep the last dialog's content around while its exit animation plays.
@@ -62,8 +65,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const tones = useMemo(() => memberTones(group?.members ?? [], me), [group, me]);
     const nameOf = (id: string | null) => (id === me ? 'you' : group?.members.find(m => m.user_id === id)?.name ?? 'someone');
-    const net = computeBalances(me, groups, sessions, settlements).byGroup[groupId] ?? 0;
+    const net = useMemo(() => computeBalances(me, groups, sessions, settlements).byGroup[groupId] ?? 0, [me, groups, sessions, settlements, groupId]);
     const meMember = group?.members.find(m => m.user_id === me);
+
+    const ledger = useMemo(
+        () => (group ? groupLedger(group, records, settlements.filter(p => p.group_id === groupId)) : null),
+        [group, records, settlements, groupId]
+    );
+    const maxNet = Math.max(0.01, ...(ledger?.members.map(m => Math.abs(m.net)) ?? []));
 
     const categoriesPresent = useMemo(() => CATEGORIES.filter(c => records.some(r => r.category === c.id)), [records]);
 
@@ -94,15 +103,19 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const addReceiptByHand = async () => {
         setAddOpen(false);
+        if (creating.current) return; // a double click must not create two records (stays locked: success navigates away)
+        creating.current = true;
         try {
             const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries' });
             await refresh();
             onOpenRecord(id, 'receipt');
-        } catch (err: any) { setError(err.message || 'Could not create the receipt'); }
+        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
     };
 
     const addExpense = async () => {
         setAddOpen(false);
+        if (creating.current) return;
+        creating.current = true;
         try {
             const id = await createSession({
                 groupId, kind: 'expense', name: 'New expense', category: 'other', amount: 0,
@@ -110,7 +123,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             });
             await refresh();
             onOpenRecord(id, 'expense');
-        } catch (err: any) { setError(err.message || 'Could not create the expense'); }
+        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
     };
 
     const handleInvite = async () => {
@@ -137,6 +150,21 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             await refresh();
         } catch (err: any) { setError(err.message || 'Action failed'); }
     };
+
+    const settle = async (from: string, to: string, amount: number) => {
+        if (settling) return;
+        setSettling(true);
+        setError('');
+        try {
+            await recordSettlement(groupId, from, to, amount);
+            await refresh();
+        } catch (err: any) {
+            setError(err.message || 'Could not record that payment');
+        } finally {
+            setSettling(false);
+        }
+    };
+    const who = (id: string) => (id === me ? 'You' : group.members.find(m => m.user_id === id)?.name ?? 'Someone');
 
     const confirmText = {
         delete: { title: 'Delete group?', body: `This permanently deletes "${group.name}" and all ${records.length} of its expenses for every member.`, action: 'Delete' },
@@ -201,6 +229,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
             <UnderlineTabs id="group" value={tab} onChange={setTab} tabs={[
                 { value: 'expenses', label: `Expenses · ${records.length}` },
+                { value: 'balances', label: 'Balances' },
                 { value: 'members', label: `Members · ${group.members.length}` },
             ]} />
 
@@ -272,6 +301,65 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 {records.length ? 'Nothing matches that search.' : 'No expenses yet. Add one and everyone in the group can see it.'}
                             </p>
                         )}
+                    </div>
+                )}
+
+                {tab === 'balances' && ledger && (
+                    <div className="flex flex-col gap-5">
+                        <Card className="overflow-hidden">
+                            <div className="px-[18px] pt-4 pb-1 text-[15px] font-semibold">Where everyone stands</div>
+                            {ledger.members.map((m, i) => {
+                                const member = group.members.find(x => x.user_id === m.userId)!;
+                                const square = Math.abs(m.net) < 0.005;
+                                return (
+                                    <motion.div key={m.userId} {...listItem(i)} className={`flex flex-col gap-1.5 px-[18px] py-3.5 ${i ? 'border-t border-rule' : ''}`}>
+                                        <div className="flex items-center gap-3">
+                                            <Avatar name={member.name} tone={tones[m.userId]} size={36} />
+                                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                <span className="text-[15px] font-semibold truncate">{who(m.userId)}</span>
+                                                <span className="text-[13px] text-faint">fronted {fmt(m.paid)} · owes {fmt(m.owes)}</span>
+                                            </span>
+                                            <span className="shrink-0 flex flex-col items-end gap-0.5">
+                                                {square ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix="$" className={`text-[15px] font-semibold ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                                <span className="text-xs text-faint">{square ? 'all square' : m.net > 0 ? (m.userId === me ? "you're owed" : 'is owed') : m.userId === me ? 'you owe' : 'owes'}</span>
+                                            </span>
+                                        </div>
+                                        <div className="h-[3px] ml-12 rounded-sm bg-surface">
+                                            <motion.div className={`h-full rounded-sm opacity-60 ${m.net > 0 ? 'bg-green' : 'bg-coral'}`} initial={false} animate={{ width: `${(Math.abs(m.net) / maxNet) * 100}%` }} transition={{ duration: 0.25 }} />
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </Card>
+
+                        <div className="flex flex-col gap-2">
+                            <span className="text-[15px] font-semibold">Who owes whom</span>
+                            {ledger.debts.length === 0 ? (
+                                <p className="m-0 px-4 py-3.5 rounded-[14px] bg-green-tint text-green-on text-sm font-medium">Everyone's square.</p>
+                            ) : (
+                                <Card className="overflow-hidden">
+                                    <AnimatePresence initial={false}>
+                                        {ledger.debts.map((d, i) => {
+                                            const mine = d.from === me || d.to === me;
+                                            return (
+                                                <motion.div key={`${d.from}-${d.to}`} {...listItem(i)} className={`flex flex-wrap items-center gap-3 px-[18px] py-3 ${i ? 'border-t border-rule' : ''}`}>
+                                                    <span className="flex-1 min-w-[160px] text-sm">
+                                                        <span className="font-semibold">{who(d.from)}</span> {d.from === me ? 'owe' : 'owes'} <span className="font-semibold">{who(d.to)}</span>
+                                                    </span>
+                                                    <span className="font-mono text-sm font-medium">{fmt(d.amount)}</span>
+                                                    {mine && (
+                                                        <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(d.from, d.to, d.amount)}>
+                                                            {d.from === me ? 'Mark paid' : 'Mark received'}
+                                                        </Button>
+                                                    )}
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+                                </Card>
+                            )}
+                            <span className="text-xs leading-normal text-faint">Marking something paid doesn't move money. It just clears the balance for both of you. Friends shows the same numbers across all your groups.</span>
+                        </div>
                     </div>
                 )}
 

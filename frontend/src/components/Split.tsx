@@ -15,13 +15,16 @@ interface SplitProps {
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
-const dateMeta = (iso: string) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const dateMeta = (iso: string) => {
+    const d = new Date(iso + 'T00:00');
+    return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+};
 
 const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right font-mono text-sm bg-wash';
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
 export default function Split({ sessionId, narrow, onBack }: SplitProps) {
-    const { me, groups, refresh } = useAppData();
+    const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [items, setItems] = useState<Item[]>([]);
     const [name, setName] = useState('');
@@ -73,9 +76,21 @@ export default function Split({ sessionId, narrow, onBack }: SplitProps) {
         if (!record || !group) return;
         const everyone = group.members.map(m => m.name);
         if (everyone.length !== record.participants.length || everyone.some(n => !record.participants.includes(n))) {
+            // Reflect it locally first so this effect doesn't write the same change again on every refresh.
+            setRecord(r => (r ? { ...r, participants: everyone } : r));
             updateSession(sessionId, { participants: everyone }).catch(err => console.error('Participant sync failed', err));
         }
     }, [record, group, sessionId]);
+
+    // Mirror every edit into the shared copy right away (assignments, items, tax, tip, payer...) so balances
+    // elsewhere update immediately. Re-runs when a server refresh replaces the shared copy with older data.
+    useEffect(() => {
+        if (!record) return;
+        patchSession(sessionId, s => ({
+            ...s, items, name: name.trim() || s.name, session_date: date || s.session_date, tax: num(tax), tip: num(tip),
+            paid_by: paidBy || s.paid_by, category,
+        }));
+    }, [record, items, name, date, tax, tip, paidBy, category, sessionId, patchSession, sharedSessions]);
 
     // Debounced autosave of the receipt's details.
     useEffect(() => {

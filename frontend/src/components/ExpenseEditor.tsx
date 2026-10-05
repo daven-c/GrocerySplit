@@ -14,12 +14,15 @@ interface ExpenseEditorProps {
 }
 
 const num = (s: string) => Math.max(0, parseFloat(s) || 0);
-const dateMeta = (iso: string) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const dateMeta = (iso: string) => {
+    const d = new Date(iso + 'T00:00');
+    return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+};
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
 
 export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEditorProps) {
-    const { me, groups, refresh } = useAppData();
+    const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [name, setName] = useState('');
     const [amount, setAmount] = useState('');
@@ -32,7 +35,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [loadError, setLoadError] = useState('');
     const [error, setError] = useState('');
-    const baseline = useRef('');
+    const savedMeta = useRef('');
+    const savedSplit = useRef('');
     const autosave = useAutosave(600);
 
     const group = groups.find(g => g.id === record?.group_id);
@@ -53,30 +57,50 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
             setMethod(s.split_method ?? 'equal');
             setIncluded(Object.keys(data));
             setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
-            baseline.current = JSON.stringify([s.name, s.amount ?? 0, s.session_date, s.category, s.paid_by ?? s.user_id ?? '', s.split_method ?? 'equal', s.split_data ?? {}]);
+            savedMeta.current = JSON.stringify([s.name.trim() || 'Expense', s.session_date, s.category, s.paid_by ?? s.user_id ?? '']);
+            savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}]);
         }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
         return () => { cancelled = true; };
     }, [sessionId]);
 
+    // Someone who has left the group can't owe anything, so drop them (saving then cleans the stored split).
+    const active = useMemo(() => {
+        const ids = new Set(members.map(m => m.user_id));
+        return ids.size ? included.filter(id => ids.has(id)) : included;
+    }, [included, members]);
     const data: SplitData = useMemo(
-        () => Object.fromEntries(included.map(id => [id, method === 'equal' ? 1 : num(values[id] ?? '')])),
-        [included, values, method]
+        () => Object.fromEntries(active.map(id => [id, method === 'equal' ? 1 : num(values[id] ?? '')])),
+        [active, values, method]
     );
     const total = num(amount);
     const split = useMemo(() => splitExpense(total, method, data), [total, method, data]);
 
-    // Autosave only when the split adds up; otherwise say why it isn't saved yet.
+    // Mirror edits into the shared copy right away so balances elsewhere update immediately. The amount and split
+    // are only mirrored while the split adds up, matching what will actually be saved.
     useEffect(() => {
         if (!record) return;
-        if (!split.valid) { autosave.cancel(); return; }
-        const current = JSON.stringify([name.trim() || 'Expense', total, date, category, paidBy, method, data]);
-        if (current === baseline.current) return;
+        patchSession(sessionId, s => ({
+            ...s, name: name.trim() || s.name, session_date: date || s.session_date, category, paid_by: paidBy || s.paid_by,
+            ...(split.valid ? { amount: total, split_method: method, split_data: data } : {}),
+        }));
+    }, [record, name, date, category, paidBy, total, method, data, split.valid, sessionId, patchSession, sharedSessions]);
+
+    // Details (name, date, category, payer) always autosave. The amount and split only save when the split
+    // adds up, so a half-edited split is never written; edits made meanwhile are not lost either.
+    useEffect(() => {
+        if (!record) return;
+        const metaSig = JSON.stringify([name.trim() || 'Expense', date || record.session_date, category, paidBy]);
+        const splitSig = JSON.stringify([total, method, data]);
+        const metaDirty = metaSig !== savedMeta.current;
+        const splitDirty = split.valid && splitSig !== savedSplit.current;
+        if (!metaDirty && !splitDirty) { autosave.cancel(); return; } // nothing to write (or only an invalid split)
         autosave.schedule(async () => {
             await updateSession(sessionId, {
-                name: name.trim() || 'Expense', amount: total, session_date: date || record.session_date, category,
-                ...(paidBy ? { paid_by: paidBy } : {}), split_method: method, split_data: data,
+                ...(metaDirty ? { name: name.trim() || 'Expense', session_date: date || record.session_date, category, ...(paidBy ? { paid_by: paidBy } : {}) } : {}),
+                ...(splitDirty ? { amount: total, split_method: method, split_data: data } : {}),
             });
-            baseline.current = current;
+            if (metaDirty) savedMeta.current = metaSig;
+            if (splitDirty) savedSplit.current = splitSig;
             void refresh();
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,14 +113,14 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
     };
 
     const toggleMember = (id: string) => {
-        if (included.includes(id)) {
+        if (active.includes(id)) {
             setIncluded(inc => inc.filter(i => i !== id));
         } else {
             setIncluded(inc => [...inc, id]);
             setValues(v => ({ ...v, [id]: method === 'exact' || method === 'percent' ? '0' : '1' }));
         }
     };
-    const everyone = members.length > 0 && members.every(m => included.includes(m.user_id));
+    const everyone = members.length > 0 && members.every(m => active.includes(m.user_id));
     const toggleEveryone = () => {
         if (everyone) return setIncluded([]);
         setIncluded(members.map(m => m.user_id));
@@ -168,7 +192,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
 
                         <div className="flex flex-col">
                             {members.map((m, i) => {
-                                const on = included.includes(m.user_id);
+                                const on = active.includes(m.user_id);
                                 const t = tones[m.user_id];
                                 return (
                                     <div key={m.user_id} className={`flex items-center gap-3 py-2.5 ${i ? 'border-t border-rule' : ''}`}>
@@ -215,7 +239,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
                 <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
                     <Card className="p-5 flex flex-col gap-4">
                         <span className="text-[15px] font-semibold">Who pays what</span>
-                        {members.filter(m => included.includes(m.user_id)).map(m => {
+                        {members.filter(m => active.includes(m.user_id)).map(m => {
                             const amt = split.shares[m.user_id] ?? 0;
                             const t = tones[m.user_id];
                             return (
@@ -234,7 +258,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack }: ExpenseEdit
                                 </div>
                             );
                         })}
-                        {included.length === 0 && <span className="text-sm text-faint">Choose who shares this cost.</span>}
+                        {active.length === 0 && <span className="text-sm text-faint">Choose who shares this cost.</span>}
                         <div className="border-t border-rule pt-3.5 flex justify-between font-semibold text-[15px]"><span>Total</span><AnimatedNumber value={total} prefix="$" className="font-mono" /></div>
                         <p className="m-0 text-xs leading-normal text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
                     </Card>

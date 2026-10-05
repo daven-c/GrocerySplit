@@ -56,6 +56,11 @@ export const createSession = async (input: any) => {
     sessions = [s, ...sessions];
     return wait(s.id);
 };
+export const importReceiptIntoSession = async (sid: string, input: any) => {
+    sessions = sessions.map(s => s.id === sid ? { ...s, tax: s.tax + input.tax, tip: s.tip + input.tip, ...(input.date ? { session_date: input.date } : {}), name: s.name === 'Receipt' && input.store ? input.store : s.name,
+        items: [...s.items, ...input.items.map((i: any) => ({ id: id('i'), name: i.name, price: i.price, assigned_users: [] }))] } : s);
+    return wait(undefined);
+};
 export const updateSession = async (sid: string, patch: any) => { sessions = sessions.map(s => s.id === sid ? { ...s, ...patch } : s); return wait(undefined); };
 export const deleteSession = async (sid: string) => { sessions = sessions.filter(s => s.id !== sid); return wait(undefined); };
 export const addItem = async (sid: string, name: string, price: number): Promise<Item> => { const it = { id: id('i'), name, price, assigned_users: [] }; sessions = sessions.map(s => s.id === sid ? { ...s, items: [...s.items, it] } : s); return wait(it); };

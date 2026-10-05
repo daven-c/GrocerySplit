@@ -187,6 +187,15 @@ describe('Group detail', () => {
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense'));
     });
 
+    it('a double click on "Split a bill or cost" creates only one record', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
+        await u.dblClick(await screen.findByText('Split a bill or cost'));
+        await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalled());
+        expect(api.createSession).toHaveBeenCalledTimes(1);
+    });
+
     it('members tab: invites by email with validation, lists members, owner can remove with confirmation', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} initialTab="members" />);

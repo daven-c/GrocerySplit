@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, tapFlat, spring } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { groupDot, HUES, toneFor } from '../lib/people';
@@ -24,13 +24,21 @@ interface ShellProps {
 const navFor = (view: ShellView): NavView => (['home', 'group', 'import', 'split', 'expense'].includes(view) ? 'home' : (view as NavView));
 
 export default function Shell({ view, narrow, user, groupId, recordId, onNav, onOpenGroup, onNewGroup, onBack, children }: ShellProps) {
-    const { groups, sessions, invites, isAdmin } = useAppData();
+    const { groups, sessions, invites, isAdmin, refresh } = useAppData();
     const activeNav = navFor(view);
     const inGroup = ['group', 'import', 'split', 'expense'].includes(view);
 
     // Scroll to the top on every view change.
     const pageKey = `${view}:${groupId ?? ''}:${recordId ?? ''}`;
     useEffect(() => { window.scrollTo?.(0, 0); }, [pageKey]);
+
+    // Re-sync with the server on every screen change, so other people's changes (and anything saved on the
+    // way out of an editor) show up without a reload. The provider already loads on mount, so skip the first.
+    const first = useRef(true);
+    useEffect(() => {
+        if (first.current) { first.current = false; return; }
+        void refresh();
+    }, [pageKey, refresh]);
 
     const nav: { id: NavView; label: string; icon: string; badge?: number }[] = [
         { id: 'home', label: 'Home', icon: 'home', badge: invites.length || undefined },

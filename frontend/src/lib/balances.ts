@@ -48,7 +48,9 @@ export function computeBalances(me: string, groups: BalanceGroup[], sessions: Ba
     };
 
     const nameToId = new Map<string, Map<string, string | null>>();
+    const memberIds = new Map<string, Set<string>>();
     for (const g of groups) {
+        memberIds.set(g.id, new Set(g.members.map(m => m.user_id)));
         const m = new Map<string, string | null>();
         for (const mem of g.members) m.set(mem.name, m.has(mem.name) ? null : mem.user_id);
         nameToId.set(g.id, m);
@@ -62,7 +64,8 @@ export function computeBalances(me: string, groups: BalanceGroup[], sessions: Ba
         // carry their split by member id, so they never suffer from duplicate names.
         const owed: [string | null | undefined, number][] =
             s.kind === 'expense'
-                ? Object.entries(splitExpense(s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}).shares)
+                ? // Someone who has left the group can't be settled with, so they are not charged.
+                  Object.entries(splitExpense(s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}).shares).filter(([id]) => memberIds.get(s.group_id)?.has(id))
                 : computeSplit(s.items, s.participants, s.tax, s.tip).totals.map(([name, amt]) => [lookup.get(name), amt] as [string | null | undefined, number]);
         for (const [debtor, amount] of owed) {
             if (!debtor || debtor === payer || amount <= 0) continue;

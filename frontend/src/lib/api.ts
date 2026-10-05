@@ -118,6 +118,25 @@ export async function createSession(input: {
     return s.id;
 }
 
+/**
+ * Add the items from an imported receipt to an existing (usually blank) receipt. Tax and tip are added to what is
+ * already there, the date is taken from the import, and a placeholder name is replaced by the store name.
+ */
+export async function importReceiptIntoSession(
+    sessionId: string,
+    input: { store?: string; date?: string; tax: number; tip: number; items: { name: string; price: number }[] }
+) {
+    const cur = check(await supabase.from('sessions').select('name, tax, tip').eq('id', sessionId).single());
+    check(await supabase.from('items').insert(input.items.map(i => ({ session_id: sessionId, name: i.name, price: i.price }))));
+    const placeholder = ['Receipt', 'Manual Receipt', 'Grocery Trip'].includes(cur.name);
+    await updateSession(sessionId, {
+        tax: Math.round((Number(cur.tax) + input.tax) * 100) / 100,
+        tip: Math.round((Number(cur.tip) + input.tip) * 100) / 100,
+        ...(input.date ? { session_date: input.date } : {}),
+        ...(placeholder && input.store ? { name: input.store } : {}),
+    });
+}
+
 export async function updateSession(
     id: string,
     patch: Partial<Pick<Session, 'name' | 'session_date' | 'tax' | 'tip' | 'participants' | 'paid_by' | 'category' | 'amount' | 'split_method' | 'split_data'>>

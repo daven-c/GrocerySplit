@@ -49,8 +49,10 @@ export function computeSplit(items: SplitItem[], participants: string[], tax: nu
         allocate(price, payers.map(() => 1)).forEach((c, i) => (cents[payers[i]] += c));
     }
 
-    // Tax and tip are shared in proportion to what each person's items cost.
-    if (people.length > 0) {
+    // Tax and tip are shared in proportion to what each person's items cost. If nobody has claimed an item
+    // yet there is nothing to base a share on, so nobody is charged (splitting it evenly would make people owe
+    // money on a receipt that isn't theirs).
+    if (people.length > 0 && people.some(p => cents[p] > 0)) {
         const weights = people.map(p => cents[p]);
         for (const extra of [toCents(tax), toCents(tip)]) {
             allocate(extra, weights).forEach((c, i) => (cents[people[i]] += c));

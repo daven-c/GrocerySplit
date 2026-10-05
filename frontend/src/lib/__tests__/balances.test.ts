@@ -82,6 +82,11 @@ describe('computeBalances', () => {
             expect(b.friends.amy.net).toBeGreaterThan(33);
             expect(b.friends.amy2.net).toBeGreaterThan(33);
         });
+        it('does not charge someone who has left the group', () => {
+            const b = computeBalances('me', [group], [expense({ split_data: { me: 1, amy: 1, gone: 1 } })], []);
+            expect(b.friends.amy.net).toBeCloseTo(33.34, 2); // still split three ways, but no debt to a departed member
+            expect(Object.keys(b.friends)).toEqual(['amy']);
+        });
         it('mixes with receipts and settlements', () => {
             const b = computeBalances('me', [group], [expense(), receipt()], [{ group_id: 'g1', from_user: 'amy', to_user: 'me', amount: 20 }]);
             expect(b.friends.amy.net).toBe(50 + 5 - 20);

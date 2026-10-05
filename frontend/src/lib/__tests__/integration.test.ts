@@ -213,20 +213,44 @@ run('shared groups integration', () => {
         await api.deleteSession(rent);
     });
 
-    it('the database rejects malformed expenses', async () => {
+    it('the database rejects malformed expenses and locks kind and group', async () => {
         await as('a');
-        const bad = async (patch: Record<string, unknown>) =>
-            (await supabase.from('sessions').insert({ group_id: groupId, name: 'x', ...patch })).error;
-        expect(await bad({ kind: 'expense' })).toBeTruthy(); // needs an amount and a split method
-        expect(await bad({ kind: 'expense', amount: 10 })).toBeTruthy(); // needs a split method
-        expect(await bad({ kind: 'expense', amount: -5, split_method: 'equal' })).toBeTruthy(); // negative amount
-        expect(await bad({ kind: 'expense', amount: 5, split_method: 'bogus' })).toBeTruthy();
-        expect(await bad({ kind: 'invoice' })).toBeTruthy();
-        expect(await bad({ category: '' })).toBeTruthy();
-        expect(await bad({ category: 'x'.repeat(31) })).toBeTruthy();
-        const ok = await supabase.from('sessions').insert({ group_id: groupId, name: 'valid', kind: 'expense', amount: 0, split_method: 'equal' }).select('id').single();
+        const a = (await supabase.auth.getUser()).data.user!.id;
+        const b = (await api.getGroup(groupId)).members.find(m => m.user_id !== a)!.user_id;
+        const insert = async (patch: Record<string, unknown>) =>
+            (await supabase.from('sessions').insert({ group_id: groupId, name: 'x', kind: 'expense', amount: 100, split_method: 'equal', split_data: { [a]: 1, [b]: 1 }, ...patch })).error;
+
+        // column constraints
+        expect((await supabase.from('sessions').insert({ group_id: groupId, name: 'x', kind: 'expense' })).error).toBeTruthy(); // no amount / method
+        expect(await insert({ amount: -5 })).toBeTruthy();
+        expect(await insert({ split_method: 'bogus' })).toBeTruthy();
+        expect((await supabase.from('sessions').insert({ group_id: groupId, name: 'x', kind: 'invoice' })).error).toBeTruthy();
+        expect((await supabase.from('sessions').insert({ group_id: groupId, name: 'x', category: '' })).error).toBeTruthy();
+        expect((await supabase.from('sessions').insert({ group_id: groupId, name: 'x', category: 'x'.repeat(31) })).error).toBeTruthy();
+
+        // split validation (trigger)
+        expect((await insert({ split_data: {} }))?.message).toMatch(/at least one person/i);
+        expect((await insert({ split_data: { [a]: 1, 'not-a-member': 1 } }))?.message).toMatch(/not in the group/i);
+        expect((await insert({ split_data: { [a]: -1, [b]: 101 }, split_method: 'exact' }))?.message).toMatch(/negative/i);
+        expect((await insert({ split_method: 'exact', split_data: { [a]: 60, [b]: 30 } }))?.message).toMatch(/add up to the total/i);
+        expect((await insert({ split_method: 'percent', split_data: { [a]: 60, [b]: 30 } }))?.message).toMatch(/add up to 100/i);
+        expect((await insert({ split_method: 'shares', split_data: { [a]: 0, [b]: 0 } }))?.message).toMatch(/at least one person a share/i);
+        expect((await insert({ split_data: [a] as unknown }))?.message).toBeTruthy();
+
+        // valid ones go through
+        const ok = await supabase.from('sessions').insert({ group_id: groupId, name: 'valid', kind: 'expense', amount: 100, split_method: 'exact', split_data: { [a]: 60, [b]: 40 } }).select('id').single();
         expect(ok.error).toBeNull();
-        await api.deleteSession(ok.data!.id);
+        const id = ok.data!.id;
+
+        // kind and group cannot change; unrelated edits are never blocked by the split
+        expect((await supabase.from('sessions').update({ kind: 'receipt' }).eq('id', id)).error?.message).toMatch(/cannot change between/i);
+        const other = await api.createGroup('Elsewhere');
+        expect((await supabase.from('sessions').update({ group_id: other }).eq('id', id)).error?.message).toMatch(/cannot move/i);
+        await api.deleteGroup(other);
+        expect((await supabase.from('sessions').update({ name: 'renamed' }).eq('id', id)).error).toBeNull();
+        expect((await supabase.from('sessions').update({ amount: 200 }).eq('id', id)).error?.message).toMatch(/add up to the total/i); // amount changed, split now stale
+        expect((await supabase.from('sessions').update({ amount: 200, split_data: { [a]: 120, [b]: 80 } }).eq('id', id)).error).toBeNull();
+        await api.deleteSession(id);
     });
 
     it('non-owner members cannot invite, remove others, or delete the group', async () => {

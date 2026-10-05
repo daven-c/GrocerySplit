@@ -40,7 +40,7 @@ export const apiMock = {
     createGroup: vi.fn(), isAdmin: vi.fn(), getGroup: vi.fn(), getSession: vi.fn(), createSession: vi.fn(),
     deleteGroup: vi.fn(), removeMember: vi.fn(), inviteToGroup: vi.fn(), listPendingInvites: vi.fn(), revokeInvite: vi.fn(),
     recordSettlement: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
-    deleteItem: vi.fn(), deleteSession: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
+    deleteItem: vi.fn(), deleteSession: vi.fn(), importReceiptIntoSession: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
     adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
 };
 
@@ -83,7 +83,7 @@ export function resetMocks() {
         { id: 'a', email: 'ddchang@x.com', name: 'Daven', created_at: '2026-10-01T00:00:00Z', last_sign_in_at: new Date().toISOString(), email_confirmed: true, is_admin: true, groups_count: 2, receipts_count: 4 },
         { id: 'b', email: 'pending@x.com', name: 'Pending', created_at: '2026-10-04T00:00:00Z', last_sign_in_at: null, email_confirmed: false, is_admin: false, groups_count: 0, receipts_count: 0 },
     ]);
-    for (const k of ['respondToInvite', 'deleteGroup', 'removeMember', 'inviteToGroup', 'revokeInvite', 'recordSettlement', 'deleteSettlement', 'updateSession', 'updateItem', 'deleteItem', 'deleteSession', 'updateDisplayName', 'requestEmailChange', 'changePassword', 'adminConfirmUser'] as const) apiMock[k].mockResolvedValue(undefined);
+    for (const k of ['respondToInvite', 'deleteGroup', 'removeMember', 'inviteToGroup', 'revokeInvite', 'recordSettlement', 'deleteSettlement', 'updateSession', 'updateItem', 'deleteItem', 'deleteSession', 'importReceiptIntoSession', 'updateDisplayName', 'requestEmailChange', 'changePassword', 'adminConfirmUser'] as const) apiMock[k].mockResolvedValue(undefined);
     apiMock.createGroup.mockResolvedValue('g9');
     apiMock.createSession.mockResolvedValue('s9');
     apiMock.addItem.mockResolvedValue({ id: 'i9', name: 'New item', price: 0, assigned_users: [] });

@@ -151,6 +151,26 @@ describe('Receipt editor (grocery split)', () => {
         await waitFor(() => expect(onBack).toHaveBeenCalled());
     });
 
+    it('syncs participants once, not again on every later refresh', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: ['Daven'] });
+        renderWithData(<Split {...props} />);
+        await screen.findByDisplayValue('Costco');
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: ['Daven', 'Amy', 'Bo'] }));
+        await u.type(screen.getByLabelText('Tip'), '2'); // autosave -> refresh() -> new group objects
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', expect.objectContaining({ tip: 2 })), SLOW);
+        await new Promise(r => setTimeout(r, 300));
+        const syncs = api.updateSession.mock.calls.filter(c => Object.keys(c[1]).length === 1 && 'participants' in c[1]);
+        expect(syncs).toHaveLength(1);
+    });
+
+    it('a cleared date shows "No date" on receipts too', async () => {
+        renderWithData(<Split {...props} />);
+        await screen.findByDisplayValue('Costco');
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
+        expect(await screen.findByText(/No date · 3 items/)).toBeInTheDocument();
+    });
+
     it('keeps the stored participant list in step with the group', async () => {
         api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: ['Daven'] });
         renderWithData(<Split {...props} />);
@@ -269,6 +289,45 @@ describe('Expense editor (general cost splitting)', () => {
         expect(screen.getByText('owes Amy')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Shares' }));
         expect(screen.getByText('Split in proportion, e.g. 2 shares for a bigger room.')).toBeInTheDocument();
+    });
+
+    it('drops someone who has left the group from the split, and saves the cleaned split', async () => {
+        const { rent } = await import('../../test/apiMock');
+        api.getSession.mockResolvedValue({ ...rent, split_data: { ...rent.split_data, 'u-gone': 1 } });
+        renderWithData(<ExpenseEditor {...props} />);
+        await screen.findByDisplayValue('October rent');
+        // 2:1:1 of 2400 among the three current members; the departed member takes no share
+        expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument();
+        expect(screen.getByText('Adds up to $2,400.00')).toBeInTheDocument();
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 } })), SLOW);
+    });
+
+    it('edits to the name, payer and category still save while the split is invalid, without writing the split', async () => {
+        const u = userEvent.setup();
+        renderWithData(<ExpenseEditor {...props} />);
+        await screen.findByDisplayValue('October rent');
+        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
+        await u.clear(screen.getByLabelText('Amy amount'));
+        await u.type(screen.getByLabelText('Amy amount'), '700'); // now 100 short: invalid
+        expect(await screen.findByText('100.00 still to assign.')).toBeInTheDocument();
+        const name = screen.getByLabelText('Expense name');
+        await u.clear(name);
+        await u.type(name, 'Rent (Oct)');
+        await u.selectOptions(screen.getByLabelText('Paid by'), 'Amy');
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledTimes(1), SLOW);
+        const patch = api.updateSession.mock.calls[0][1];
+        expect(patch).toMatchObject({ name: 'Rent (Oct)', paid_by: 'u-amy' });
+        expect(patch).not.toHaveProperty('split_data');
+        expect(patch).not.toHaveProperty('amount');
+        expect(patch).not.toHaveProperty('split_method');
+    });
+
+    it('a cleared date shows "No date" instead of "Invalid Date" and keeps the stored date', async () => {
+        renderWithData(<ExpenseEditor {...props} />);
+        await screen.findByDisplayValue('October rent');
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
+        expect(await screen.findByText(/No date · Rent & home/)).toBeInTheDocument();
+        expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
     });
 
     it('deleting asks first', async () => {
