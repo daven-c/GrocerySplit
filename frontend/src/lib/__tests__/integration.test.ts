@@ -275,6 +275,37 @@ run('shared groups integration', () => {
         await api.deleteSession(draft);
     });
 
+    it('any member can record a payback between two other members; outsiders cannot; only the recorder can undo', async () => {
+        const uid = async (u: 'a' | 'b' | 'c') => { await as(u); return (await supabase.auth.getUser()).data.user!.id; };
+        const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
+
+        await as('a'); // bring C into the group so there are three members
+        await api.inviteToGroup(groupId, email('c'));
+        await as('c');
+        await api.respondToInvite((await api.myInvites())[0].id, true);
+
+        await as('b'); // B is neither the payer nor the receiver
+        await api.recordSettlement(groupId, a, c, 12.5);
+        const [pb] = (await api.listSettlements()).filter(x => x.from_user === a && x.to_user === c);
+        expect(pb).toMatchObject({ group_id: groupId, amount: 12.5, created_by: b });
+
+        await as('a'); // everyone in the group can see it, but only B can undo it
+        expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
+        await api.deleteSettlement(pb.id);
+        expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
+
+        await expect(api.recordSettlement(groupId, a, a, 5)).rejects.toThrow(); // can't pay yourself
+
+        await as('b');
+        await api.deleteSettlement(pb.id);
+        expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(false);
+
+        await as('a'); // put C back outside the group for the tests that follow
+        await api.removeMember(groupId, c);
+        await as('c');
+        await expect(api.recordSettlement(groupId, a, b, 1)).rejects.toThrow(); // outsiders cannot record paybacks
+    });
+
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
         await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();

@@ -278,49 +278,80 @@ describe('Group detail', () => {
         expect(screen.queryByText('Amy paid you')).not.toBeInTheDocument();
     });
 
-    it('"Record a payback" prefills what is outstanding, and records it in this group', async () => {
-        const u = userEvent.setup();
-        renderWithData(<GroupDetail {...props} />);
+    const openPaybackForm = async (u: ReturnType<typeof userEvent.setup>) => {
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Record a payback'));
-        const dialog = await screen.findByRole('dialog');
-        // Amy owes you 578.85 in the fixtures, so it starts as "They paid me" for that amount
-        expect(within(dialog).getByRole('tab', { name: 'They paid me', selected: true })).toBeInTheDocument();
-        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('578.85');
-        await u.clear(within(dialog).getByLabelText('Payback amount'));
-        await u.type(within(dialog).getByLabelText('Payback amount'), '100');
+        return await screen.findByRole('dialog');
+    };
+
+    it('"Record a payback" is two dropdowns (who paid, who received) and an amount, opening on the first suggested payback', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} />);
+        const dialog = await openPaybackForm(u);
+        expect(within(dialog).queryByRole('tab')).not.toBeInTheDocument(); // no direction toggle any more
+        // Bo owes the most, so the first suggestion is Bo paying you
+        expect(within(dialog).getByLabelText('Who paid')).toHaveDisplayValue('Bo');
+        expect(within(dialog).getByLabelText('Who received')).toHaveDisplayValue('You');
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('603.97');
+        expect(within(within(dialog).getByLabelText('Who paid')).getAllByRole('option').map(o => o.textContent)).toEqual(['You', 'Amy', 'Bo']);
         await u.click(within(dialog).getByRole('button', { name: 'Save payback' }));
-        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-amy', ME, 100));
+        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-bo', ME, 603.97));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
-    it('a payback can go the other way and pick another member', async () => {
+    it('a payback can be between any two members, and changing the pair refills a suggested amount', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
-        await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Record a payback'));
-        const dialog = await screen.findByRole('dialog');
-        await u.click(within(dialog).getByRole('tab', { name: 'I paid them' }));
-        await u.selectOptions(within(dialog).getByLabelText('Member'), 'Bo');
-        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('603.97'); // Bo owes you
-        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeEnabled();
+        const dialog = await openPaybackForm(u);
+        await u.selectOptions(within(dialog).getByLabelText('Who paid'), 'Amy');
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('578.85'); // Amy -> You is a suggested payback
+        await u.selectOptions(within(dialog).getByLabelText('Who received'), 'Bo'); // Amy -> Bo is not a suggestion: amount is kept
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('578.85');
         await u.clear(within(dialog).getByLabelText('Payback amount'));
-        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeDisabled();
         await u.type(within(dialog).getByLabelText('Payback amount'), '7.5');
-        await u.click(within(dialog).getByRole('tab', { name: 'I paid them' }));
         await u.click(within(dialog).getByRole('button', { name: 'Save payback' }));
-        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', ME, 'u-bo', 7.5));
+        await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-amy', 'u-bo', 7.5));
     });
 
-    it('Balances tab shows each member\'s standing and who owes whom, and can record the payment', async () => {
+    it('the same person cannot pay themselves, and an empty amount cannot be saved', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} />);
+        const dialog = await openPaybackForm(u);
+        await u.selectOptions(within(dialog).getByLabelText('Who received'), 'Bo'); // Bo paid, Bo received
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent('Pick two different people.');
+        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeDisabled();
+        await u.selectOptions(within(dialog).getByLabelText('Who received'), 'Amy');
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+        await u.clear(within(dialog).getByLabelText('Payback amount'));
+        expect(within(dialog).getByRole('button', { name: 'Save payback' })).toBeDisabled();
+        expect(api.recordSettlement).not.toHaveBeenCalled();
+    });
+
+    it('Balances tab shows how much each person is up or down, then the fewest paybacks to settle', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} initialTab="balances" />);
         expect(await screen.findByText('Where everyone stands')).toBeInTheDocument();
-        expect(screen.getByText('Who owes whom')).toBeInTheDocument();
-        expect((await screen.findAllByText('Amy', { selector: 'span.font-semibold' })).length).toBeGreaterThan(0); // in standings and in who-owes-whom
-        expect(screen.getByText('$603.97', { selector: 'span.font-mono' })).toBeInTheDocument();
-        await u.click(screen.getAllByRole('button', { name: 'Mark received' })[0]);
+        // positions only: no "fronted/owes" detail and no pair-by-pair "who owes whom"
+        expect(screen.queryByText(/fronted/)).not.toBeInTheDocument();
+        expect(screen.queryByText('Who owes whom')).not.toBeInTheDocument();
+        const you = screen.getByText('You', { selector: 'span.truncate' }).closest('div')!;
+        await waitFor(() => expect(within(you).getByText('up')).toBeInTheDocument());
+        expect(screen.getAllByText('down')).toHaveLength(2);
+        expect(await screen.findByText('$1,182.82')).toBeInTheDocument(); // you are up by what both owe you
+        // suggested paybacks below
+        expect(screen.getByText('Suggested paybacks')).toBeInTheDocument();
+        expect(screen.getByText("The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.")).toBeInTheDocument();
+        const buttons = screen.getAllByRole('button', { name: 'Record payback' });
+        expect(buttons).toHaveLength(2);
+        await u.click(buttons[0]); // the biggest first: Bo pays you
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-bo', ME, 603.97));
+    });
+
+    it('Balances: everyone square shows no suggested paybacks', async () => {
+        api.listSessions.mockResolvedValue([]);
+        renderWithData(<GroupDetail {...props} initialTab="balances" />);
+        expect(await screen.findByText("Everyone's square.")).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Record payback' })).not.toBeInTheDocument();
     });
 
     it('on narrow screens the back link lives in the header, not the page', async () => {

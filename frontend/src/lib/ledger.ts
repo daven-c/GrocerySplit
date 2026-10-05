@@ -27,34 +27,32 @@ export interface LedgerSettlement {
 
 export interface MemberStanding {
     userId: string;
-    /** Dollars this person fronted for others (what they paid, minus their own share). */
-    paid: number;
-    /** Dollars they owe in shares of things other people paid for. */
-    owes: number;
-    /** Positive = owed money, negative = owes money, after payments. */
+    /** Dollars: positive = up (is owed), negative = down (owes), after recorded paybacks. */
     net: number;
 }
-export interface Debt {
-    from: string; // owes
-    to: string; // is owed
+export interface Transfer {
+    from: string; // pays
+    to: string; // receives
     amount: number;
 }
 export interface GroupLedger {
+    /** Everyone's position, biggest first. Always sums to zero. */
     members: MemberStanding[];
-    /** Who owes whom, pair by pair (the same numbers Friends shows), largest first. */
-    debts: Debt[];
+    /** A short list of paybacks that would settle everyone (at most one fewer than the number of people). */
+    transfers: Transfer[];
 }
 
 /**
  * The whole group's books. For every record the payer fronted the money and each other member owes their share to
- * the payer; recorded payments reduce those debts. Net positions always sum to zero.
+ * the payer; a recorded payback moves money from the person who paid to the person who received it. Each person's
+ * net position is what they are owed minus what they owe. Net positions always sum to zero.
  */
 export function groupLedger(group: LedgerGroup, records: LedgerRecord[], settlements: LedgerSettlement[]): GroupLedger {
-    const owe = new Map<string, number>(); // `${debtor}|${creditor}` -> cents
-    const bump = (debtor: string, creditor: string, c: number) => owe.set(`${debtor}|${creditor}`, (owe.get(`${debtor}|${creditor}`) ?? 0) + c);
+    const net = new Map<string, number>(group.members.map(m => [m.user_id, 0])); // cents
     const ids = new Set(group.members.map(m => m.user_id));
     const byName = new Map<string, string | null>();
     for (const m of group.members) byName.set(m.name, byName.has(m.name) ? null : m.user_id);
+    const move = (id: string, c: number) => net.set(id, (net.get(id) ?? 0) + c);
 
     for (const r of records) {
         if (r.group_id !== group.id) continue;
@@ -66,38 +64,32 @@ export function groupLedger(group: LedgerGroup, records: LedgerRecord[], settlem
                 : computeSplit(r.items, r.participants, r.tax, r.tip).totals.map(([name, amt]) => [byName.get(name), amt] as [string | null | undefined, number]);
         for (const [debtor, amt] of shares) {
             if (!debtor || debtor === payer || amt <= 0) continue;
-            bump(debtor, payer, Math.round(amt * 100));
+            const c = Math.round(amt * 100);
+            move(payer, c); // fronted it
+            move(debtor, -c); // owes it
         }
     }
     for (const p of settlements) {
-        if (p.group_id !== group.id) continue;
-        bump(p.from_user, p.to_user, -Math.round(p.amount * 100)); // the payer of a settlement owes less
+        if (p.group_id !== group.id || !ids.has(p.from_user) || !ids.has(p.to_user)) continue;
+        const c = Math.round(p.amount * 100);
+        move(p.from_user, c); // paying someone back brings you up
+        move(p.to_user, -c); // and takes them down
     }
 
-    const debts: Debt[] = [];
-    const net = new Map<string, number>();
-    const paid = new Map<string, number>();
-    const owes = new Map<string, number>();
-    const seen = new Set<string>();
-    for (const key of owe.keys()) {
-        const [x, y] = key.split('|');
-        const pair = [x, y].sort().join('|');
-        if (seen.has(pair)) continue;
-        seen.add(pair);
-        const d = (owe.get(`${x}|${y}`) ?? 0) - (owe.get(`${y}|${x}`) ?? 0);
-        if (d === 0) continue;
-        const [debtor, creditor] = d > 0 ? [x, y] : [y, x];
-        const c = Math.abs(d);
-        debts.push({ from: debtor, to: creditor, amount: c / 100 });
-        net.set(creditor, (net.get(creditor) ?? 0) + c);
-        net.set(debtor, (net.get(debtor) ?? 0) - c);
-        paid.set(creditor, (paid.get(creditor) ?? 0) + c);
-        owes.set(debtor, (owes.get(debtor) ?? 0) + c);
+    // Greedy: the biggest debtor pays the biggest creditor, repeat. Never more than (people - 1) payments.
+    const creditors = [...net].filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([id, c]) => ({ id, c }));
+    const debtors = [...net].filter(([, c]) => c < 0).sort((a, b) => a[1] - b[1]).map(([id, c]) => ({ id, c: -c }));
+    const transfers: Transfer[] = [];
+    let i = 0, j = 0;
+    while (i < creditors.length && j < debtors.length) {
+        const c = Math.min(creditors[i].c, debtors[j].c);
+        transfers.push({ from: debtors[j].id, to: creditors[i].id, amount: c / 100 });
+        creditors[i].c -= c;
+        debtors[j].c -= c;
+        if (creditors[i].c === 0) i++;
+        if (debtors[j].c === 0) j++;
     }
-    debts.sort((a, b) => b.amount - a.amount || a.from.localeCompare(b.from));
 
-    const members = group.members
-        .map(m => ({ userId: m.user_id, paid: (paid.get(m.user_id) ?? 0) / 100, owes: (owes.get(m.user_id) ?? 0) / 100, net: (net.get(m.user_id) ?? 0) / 100 }))
-        .sort((a, b) => b.net - a.net);
-    return { members, debts };
+    const members = group.members.map(m => ({ userId: m.user_id, net: (net.get(m.user_id) ?? 0) / 100 })).sort((a, b) => b.net - a.net);
+    return { members, transfers };
 }
