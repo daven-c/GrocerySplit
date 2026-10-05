@@ -1,63 +1,64 @@
 # GrocerySplit
 
-Snap a photo of your grocery receipt, tap once per item to assign it to a friend, and get an exact split — no more mental math over Venmo. GrocerySplit uses Gemini Vision (with a Tesseract OCR fallback) to itemize receipts automatically, then persists every shared session so you can settle up later.
+Import a grocery receipt, tap once per item to assign it to a friend, and get an exact split — tax and tip included.
 
-## Why it exists
+## How it's organised
 
-Splitwise-style apps ask you to type every item. Receipt-scanning apps read *totals* but not *per-item* prices. GrocerySplit closes that gap for the specific case people care about most — shared groceries between roommates or partners — where the friction of manual entry is the reason splits don't happen.
+- **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
+- **Receipts live inside a group.** Every member can see and edit the group's receipts.
+- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
+- The owner can invite, remove members and delete the group; any member can leave.
+- **People** (bottom nav) are saved guest names you can add to a receipt even if they don't have an account.
 
-## Features
+## How receipt import works
 
-- **Receipt → itemized list, automatically.** Gemini Vision parses physical receipt images and pulls out per-line names + prices. Tesseract OCR + OpenCV pre-processing serve as a fallback for tricky scans.
-- **Persistent sessions.** SQLite stores users, receipts, and splits, so a running grocery tab across a household is a first-class concept, not a one-shot calculation.
-- **User accounts.** Passwords hashed with Werkzeug, tokens signed with itsdangerous — no plaintext, no third-party auth vendor.
-- **Per-item assignment UI.** Tap an item, tap a friend, done. Totals and per-person balances update live.
-- **Glassmorphic UI.** Tailwind + custom design using Stitch — the app should feel premium enough that people actually reach for it at checkout.
+There is no built-in AI. Instead:
+
+1. Open **Import Receipt** and tap **Copy prompt**.
+2. Paste the prompt into any AI chat (ChatGPT, Claude, Gemini, ...) along with a photo of your receipt.
+3. Paste the JSON it returns (or upload it as a `.json` file) and tap **Import & split**.
+
+Expected JSON (the prompt asks the model for exactly this):
+
+```json
+{
+  "store": "Corner Market",
+  "date": "2026-10-05",
+  "items": [{ "name": "Oat Milk", "price": 7.5 }],
+  "tax": 1.25,
+  "tip": 0
+}
+```
+
+The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"` strings and a bare `[...]` array.
+
+## Split math
+
+All money is handled in integer cents. Each item is split evenly among its assignees, and tax and tip are shared in proportion to what each person's items cost. Leftover pennies are distributed by largest remainder, so per-person totals always add up exactly to items + tax + tip (see `frontend/src/lib/calc.ts`).
 
 ## Tech stack
 
-| Layer         | Technology                                                 |
-| ------------- | ---------------------------------------------------------- |
-| Frontend      | React + TypeScript, Vite, Tailwind CSS                     |
-| Backend       | Python, Flask, Werkzeug, itsdangerous                      |
-| Database      | SQLite                                                     |
-| AI / Vision   | Google Generative AI (Gemini Vision), Tesseract, OpenCV    |
+| Layer    | Technology                                                     |
+| -------- | -------------------------------------------------------------- |
+| Frontend | React + TypeScript, Vite, Tailwind (CDN)                       |
+| Auth/DB  | Supabase (Auth + Postgres with row-level security)             |
+| Hosting  | Vercel (static build)                                          |
+
+Access is enforced in Postgres with row-level security: you can only see groups you belong to and their receipts, and only owners can invite or remove people (`profiles`, `groups`, `group_members`, `group_invites`, `sessions`, `items`, `people`).
 
 ## Local development
 
-### Backend
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Add your Gemini key (optional but recommended for AI parsing)
-echo "GEMINI_API_KEY=your_key_here" > .env
-
-# Runs on port 6000 (set in config.json)
-python app.py
-```
-
-### Frontend
-
 ```bash
 cd frontend
+cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
-npm run dev
+npm run dev                  # http://localhost:3000
+npm test                     # unit tests (split math + JSON import)
 ```
 
-Vite serves the app on `http://localhost:3000` and proxies `/api` requests to the Flask backend on `http://localhost:6000`.
+`npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.
 
-## Repository layout
+## Deploying
 
-```
-backend/            # Flask app, auth, receipt parsing, SQLite models
-frontend/           # React + Vite + Tailwind UI
-config.json         # Ports and runtime configuration
-```
-
-## Status
-
-Personal side project. Working end-to-end; not deployed publicly.
+- **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
+- **Vercel:** set the project root to `frontend`, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables, and deploy.

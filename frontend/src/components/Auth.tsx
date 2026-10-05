@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 interface AuthProps {
-    onLogin: (token: string, user: any) => void;
+    onLogin: () => void;
 }
 
 export default function Auth({ onLogin }: AuthProps) {
@@ -12,20 +12,34 @@ export default function Auth({ onLogin }: AuthProps) {
     const [name, setName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [notice, setNotice] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+        setNotice('');
         try {
-            const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-            const payload = isLogin ? { email, password } : { email, password, name };
-            const res = await axios.post(endpoint, payload);
-            if (res.data.token) {
-                onLogin(res.data.token, res.data.user);
+            if (isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+                if (error) throw error;
+                onLogin();
+            } else {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email.trim(),
+                    password,
+                    options: { data: { name: name.trim() } },
+                });
+                if (error) throw error;
+                if (data.session) onLogin();
+                else setNotice('Account created! Check your email for a confirmation link, then log in.');
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Authentication failed');
+            const msg: string = err.message || 'Authentication failed';
+            setError(/rate limit/i.test(msg)
+                ? 'Too many sign-up emails were sent recently. Please wait about an hour and try again.'
+                : msg);
         } finally {
             setLoading(false);
         }
@@ -65,6 +79,12 @@ export default function Auth({ onLogin }: AuthProps) {
                             </div>
                         )}
 
+                        {notice && (
+                            <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm text-center">
+                                {notice}
+                            </div>
+                        )}
+
                         {!isLogin && (
                             <div className="space-y-2">
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest pl-1">Name</label>
@@ -85,9 +105,15 @@ export default function Auth({ onLogin }: AuthProps) {
                             <div className="flex justify-between items-center pl-1">
                                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Password</label>
                             </div>
-                            <input 
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none" 
-                                value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" type="password" required/>
+                            <div className="relative">
+                                <input
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-4 pr-12 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-all outline-none"
+                                    value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" type={showPassword ? 'text' : 'password'} minLength={6} required/>
+                                <button type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-900 transition-colors">
+                                    <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                                </button>
+                            </div>
                         </div>
 
                         <button disabled={loading} type="submit" className="w-full py-4 mt-6 bg-slate-900 text-white font-bold rounded-xl shadow-sm hover:bg-slate-800 active:scale-[0.98] transition-all duration-200 disabled:opacity-50">

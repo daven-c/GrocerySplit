@@ -1,55 +1,70 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useMemo, useState } from 'react';
+import { createSession, getGroup } from '../lib/api';
+import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
 
 interface ReceiptUploadProps {
-    onUploadComplete: () => void;
+    groupId: string;
+    onImported: (sessionId: string) => void;
     onBack: () => void;
 }
 
-export default function ReceiptUpload({ onUploadComplete, onBack }: ReceiptUploadProps) {
+export default function ReceiptUpload({ groupId, onImported, onBack }: ReceiptUploadProps) {
+    const [json, setJson] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [copied, setCopied] = useState(false);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const parsed = useMemo(() => {
+        if (!json.trim()) return null;
+        try {
+            return { ok: parseReceiptJson(json) };
+        } catch (e: any) {
+            return { err: e.message as string };
+        }
+    }, [json]);
+
+    const copyPrompt = async () => {
+        try {
+            await navigator.clipboard.writeText(RECEIPT_PROMPT);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2500);
+        } catch {
+            setError('Could not access the clipboard. Select the prompt text below and copy it manually.');
+        }
+    };
+
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (file) setJson(await file.text());
+        e.target.value = '';
+    };
 
+    const handleImport = async () => {
+        if (!parsed || !('ok' in parsed) || !parsed.ok) return;
+        const r = parsed.ok;
         setLoading(true);
         setError('');
-        const formData = new FormData();
-        formData.append('receipt', file);
-
         try {
-            await axios.post('/api/scan-receipt', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            const group = await getGroup(groupId);
+            const id = await createSession({
+                groupId,
+                participants: group.members.map(m => m.name),
+                name: r.store || 'Grocery Trip',
+                date: r.date,
+                tax: r.tax,
+                tip: r.tip,
+                items: r.items,
             });
-            onUploadComplete();
+            onImported(id);
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to upload receipt');
+            setError(err.message || 'Failed to import receipt');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleMockData = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            await axios.post('/api/scan-receipt-json', {
-                items: [
-                    { name: "Organic Honey Crisp", price: 12.40 },
-                    { name: "Artisanal Oat Milk", price: 7.50 },
-                    { name: "Free Range Eggs", price: 5.99 },
-                    { name: "Avocados (Bag)", price: 8.25 }
-                ]
-            });
-            onUploadComplete();
-        } catch (err: any) {
-            setError('Failed to load mock data');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const receipt = parsed && 'ok' in parsed ? parsed.ok : null;
+    const subtotal = receipt ? receipt.items.reduce((a, i) => a + i.price, 0) : 0;
 
     return (
         <div className="bg-slate-50 font-body text-slate-900 min-h-screen">
@@ -59,49 +74,66 @@ export default function ReceiptUpload({ onUploadComplete, onBack }: ReceiptUploa
                         <button onClick={onBack} className="text-slate-500 hover:text-slate-900 transition-colors active:scale-95">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-bold text-lg text-slate-900">Upload Receipt</h1>
+                        <h1 className="font-headline font-bold text-lg text-slate-900">Import Receipt</h1>
                     </div>
                 </div>
             </header>
 
-            <main className="pt-8 px-6 max-w-2xl mx-auto space-y-8">
-                <div className="text-center mt-6">
-                    <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-6">
-                        <span className="material-symbols-outlined text-4xl text-slate-400">document_scanner</span>
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-900">Scan Your Grocery Bill</h2>
-                    <p className="text-slate-500 mt-2 text-sm max-w-[280px] mx-auto">Upload a clear photo of your receipt and let the AI extract all the items instantly.</p>
-                </div>
-
-                {error && (
-                    <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm text-center">
-                        {error}
-                    </div>
-                )}
-
-                <div className="space-y-4">
-                    <label className="flex items-center justify-center w-full h-16 bg-slate-900 text-white font-bold rounded-xl cursor-pointer hover:bg-slate-800 transition-all shadow-sm active:scale-[0.98]">
-                        {loading ? 'Processing...' : (
-                            <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined">photo_camera</span>
-                                <span>Upload Image</span>
-                            </div>
-                        )}
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={loading} />
-                    </label>
-
-                    <div className="relative flex items-center justify-center py-4">
-                        <div className="h-px w-full bg-slate-200 absolute"></div>
-                        <span className="bg-slate-50 px-4 text-xs font-semibold text-slate-400 uppercase tracking-widest relative">Or</span>
-                    </div>
-
-                    <button 
-                        onClick={handleMockData} disabled={loading}
-                        className="w-full flex items-center justify-center gap-2 h-16 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-[0.98]">
-                        <span className="material-symbols-outlined">bug_report</span>
-                        <span>Use Mock Data (Test Flow)</span>
+            <main className="pt-8 px-6 pb-16 max-w-2xl mx-auto space-y-8">
+                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">1.</span> Copy the prompt</h2>
+                    <p className="text-sm text-slate-500">Paste it into your favorite AI chat together with a photo of your receipt. It will reply with JSON.</p>
+                    <button onClick={copyPrompt} className="w-full flex items-center justify-center gap-2 h-12 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
+                        <span className="material-symbols-outlined">{copied ? 'check' : 'content_copy'}</span>
+                        {copied ? 'Copied!' : 'Copy prompt'}
                     </button>
-                </div>
+                    <details className="text-sm">
+                        <summary className="cursor-pointer text-slate-500 font-semibold">View prompt</summary>
+                        <pre className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl whitespace-pre-wrap text-xs text-slate-700 select-all">{RECEIPT_PROMPT}</pre>
+                    </details>
+                </section>
+
+                <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h2 className="font-bold text-slate-900"><span className="text-slate-400">2.</span> Paste the JSON it returns</h2>
+                    <textarea
+                        value={json}
+                        onChange={e => { setJson(e.target.value); setError(''); }}
+                        placeholder={EXAMPLE_RECEIPT_JSON}
+                        rows={10}
+                        spellCheck={false}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-xs text-slate-900 focus:ring-2 focus:ring-slate-900 outline-none"
+                    />
+                    <div className="flex gap-3">
+                        <label className="flex-1 flex items-center justify-center gap-2 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl cursor-pointer hover:bg-slate-50 active:scale-[0.98]">
+                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                            Choose .json file
+                            <input type="file" accept=".json,application/json,text/plain" className="hidden" onChange={handleFile} />
+                        </label>
+                        <button onClick={() => setJson(EXAMPLE_RECEIPT_JSON)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 active:scale-[0.98]">
+                            Try example
+                        </button>
+                    </div>
+
+                    {parsed && 'err' in parsed && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{parsed.err}</div>
+                    )}
+                    {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
+
+                    {receipt && (
+                        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 space-y-1">
+                            <p className="font-bold">{receipt.store || 'Grocery Trip'}{receipt.date ? ` · ${receipt.date}` : ''}</p>
+                            <p>{receipt.items.length} items · subtotal ${subtotal.toFixed(2)} · tax ${receipt.tax.toFixed(2)}{receipt.tip ? ` · tip $${receipt.tip.toFixed(2)}` : ''}</p>
+                            {receipt.skipped > 0 && <p className="text-amber-700">{receipt.skipped} invalid line(s) will be skipped.</p>}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleImport}
+                        disabled={!receipt || loading}
+                        className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-sm disabled:opacity-40 active:scale-[0.98] transition-all">
+                        {loading ? 'Importing...' : 'Import & split'}
+                    </button>
+                </section>
             </main>
         </div>
     );

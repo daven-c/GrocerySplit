@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import { listSessions, listGroups, Session } from '../lib/api';
 
 interface HistoryProps {
-    token: string | null;
-    onEditSession: (sessionId: number) => void;
+    onEditSession: (sessionId: string, groupId: string) => void;
 }
 
-export default function History({ token, onEditSession }: HistoryProps) {
-    const [sessions, setSessions] = useState<any[]>([]);
+export default function History({ onEditSession }: HistoryProps) {
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [groupNames, setGroupNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'cost_high' | 'cost_low'>('date_desc');
@@ -16,8 +16,9 @@ export default function History({ token, onEditSession }: HistoryProps) {
         const fetchHistory = async () => {
             setLoading(true);
             try {
-                const res = await axios.get('/api/sessions');
-                if (res.data?.sessions) setSessions(res.data.sessions);
+                const [sess, groups] = await Promise.all([listSessions(), listGroups()]);
+                setSessions(sess);
+                setGroupNames(Object.fromEntries(groups.map(g => [g.id, g.name])));
             } catch (err) {
                 console.error("History fetch failed", err);
             } finally {
@@ -25,7 +26,7 @@ export default function History({ token, onEditSession }: HistoryProps) {
             }
         };
         fetchHistory();
-    }, [token]);
+    }, []);
 
     const sortedSessions = useMemo(() => {
         let filtered = sessions;
@@ -35,16 +36,16 @@ export default function History({ token, onEditSession }: HistoryProps) {
             const lowerCaseQuery = searchQuery.toLowerCase();
             filtered = filtered.filter(session =>
                 session.name.toLowerCase().includes(lowerCaseQuery) ||
-                (session.items && Object.values(session.items).some((item: any) => item.name.toLowerCase().includes(lowerCaseQuery)))
+                session.items.some(item => item.name.toLowerCase().includes(lowerCaseQuery))
             );
         }
 
         // Sorting
-        return filtered.sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             const dateA = new Date(a.updated_at).getTime();
             const dateB = new Date(b.updated_at).getTime();
-            const costA = Object.values(a.items || {}).reduce((sum: number, i: any) => sum + i.price, 0);
-            const costB = Object.values(b.items || {}).reduce((sum: number, i: any) => sum + i.price, 0);
+            const costA = a.items.reduce((sum, i) => sum + i.price, 0);
+            const costB = b.items.reduce((sum, i) => sum + i.price, 0);
 
             switch (sortBy) {
                 case 'date_desc':
@@ -101,22 +102,23 @@ export default function History({ token, onEditSession }: HistoryProps) {
                         <p className="text-center text-slate-400 font-semibold py-8 bg-white border border-slate-200 border-dashed rounded-3xl">No receipts found.</p>
                     ) : (
                         sortedSessions.map((s) => {
-                            const participants = s.users ? s.users.length : 0;
-                            const sessionTotal = Object.values(s.items || {}).reduce((sum: number, i: any) => sum + i.price, 0);
+                            const participants = s.participants.length;
+                            const sessionTotal = s.items.reduce((sum, i) => sum + i.price, 0) + s.tax + s.tip;
                             return (
-                                <button onClick={() => onEditSession(s.id)} key={s.id} className="w-full flex items-center justify-between p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow hover:border-slate-300 transition-all active:scale-[0.99] text-left group">
+                                <button onClick={() => onEditSession(s.id, s.group_id)} key={s.id} className="w-full flex items-center justify-between p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow hover:border-slate-300 transition-all active:scale-[0.99] text-left group">
                                     <div className="flex items-center gap-4">
                                         <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 border border-slate-100 group-hover:bg-slate-900 group-hover:text-white transition-colors">
                                             <span className="material-symbols-outlined text-[28px]">receipt_long</span>
                                         </div>
                                         <div>
                                             <h3 className="font-bold text-slate-900 text-lg group-hover:text-slate-700 transition-colors">{s.name}</h3>
+                                            <p className="text-xs font-semibold text-indigo-500">{groupNames[s.group_id] || ''}</p>
                                             <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mt-1">
-                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span>{s.updated_at ? new Date(s.updated_at).toLocaleDateString() : 'Unknown Date'}</span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span>{new Date(s.session_date + 'T00:00').toLocaleDateString()}</span>
                                                 <span>&bull;</span>
-                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">shopping_cart</span>{s.item_count || 0} items</span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">shopping_cart</span>{s.items.length} items</span>
                                                 <span>&bull;</span>
-                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">group</span>{s.participant_count || 0}</span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">group</span>{s.participants.length}</span>
                                             </div>
                                         </div>
                                     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface BottomNavProps {
-    currentView: 'dashboard' | 'history' | 'groups' | 'account';
+    currentView: 'dashboard' | 'history' | 'people' | 'account';
 }
 
 export default function BottomNav({ currentView }: BottomNavProps) {
@@ -10,7 +10,7 @@ export default function BottomNav({ currentView }: BottomNavProps) {
             <button 
                 onClick={() => window.location.hash = 'dashboard'} 
                 className={`flex items-center justify-center rounded-full w-12 h-12 transition-all active:scale-95 ${currentView === 'dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-900 bg-transparent'}`}>
-                <span className="material-symbols-outlined" style={currentView === 'dashboard' ? { fontVariationSettings: "'FILL' 1" } : {}}>home</span>
+                <span className="material-symbols-outlined" style={currentView === 'dashboard' ? { fontVariationSettings: "'FILL' 1" } : {}}>groups</span>
             </button>
             <button 
                 onClick={() => window.location.hash = 'history'} 
@@ -18,9 +18,9 @@ export default function BottomNav({ currentView }: BottomNavProps) {
                 <span className="material-symbols-outlined" style={currentView === 'history' ? { fontVariationSettings: "'FILL' 1" } : {}}>receipt_long</span>
             </button>
             <button 
-                onClick={() => window.location.hash = 'groups'} 
-                className={`flex items-center justify-center rounded-full w-12 h-12 transition-all active:scale-95 ${currentView === 'groups' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-900 bg-transparent'}`}>
-                <span className="material-symbols-outlined" style={currentView === 'groups' ? { fontVariationSettings: "'FILL' 1" } : {}}>group</span>
+                onClick={() => window.location.hash = 'people'} 
+                className={`flex items-center justify-center rounded-full w-12 h-12 transition-all active:scale-95 ${currentView === 'people' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-900 bg-transparent'}`}>
+                <span className="material-symbols-outlined" style={currentView === 'people' ? { fontVariationSettings: "'FILL' 1" } : {}}>contacts</span>
             </button>
             <button 
                 onClick={() => window.location.hash = 'account'} 

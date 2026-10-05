@@ -1,22 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import { getSession, getGroup, listPeople, updateSession, addItem, updateItem, deleteItem, Item, Group } from '../lib/api';
+import { computeSplit } from '../lib/calc';
 
 interface SplitProps {
-    token: string | null;
-    editSessionId: number | null;
+    sessionId: string;
     onBack: () => void;
-    onSave: () => void;
 }
 
-export default function Split({ token, editSessionId, onBack, onSave }: SplitProps) {
-    const [items, setItems] = useState<any[]>([]);
+export default function Split({ sessionId, onBack }: SplitProps) {
+    const [items, setItems] = useState<Item[]>([]);
     
     // session users
     const [users, setUsers] = useState<string[]>([]);
     
     // global network
     const [globalUsers, setGlobalUsers] = useState<string[]>([]);
-    const [globalGroups, setGlobalGroups] = useState<Record<string, string[]>>({});
+    const [group, setGroup] = useState<Group | null>(null);
 
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -45,83 +44,45 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
     const loadData = async () => {
         setLoading(true);
         try {
-            // Load global network data
-            const [uRes, gRes] = await Promise.all([
-                axios.get('/api/users'),
-                axios.get('/api/groups')
-            ]);
-            setGlobalUsers(uRes.data.users || []);
-            setGlobalGroups(gRes.data.groups || {});
-
-            // If editing historical, force backend working memory to load this session
-            if (editSessionId !== null) {
-                await axios.post(`/api/sessions/${editSessionId}/load`);
-            }
-            
-            // Now fetch the active working memory
-            const res = await axios.get('/api/items');
-            setItems(res.data.items || []);
-            setUsers(res.data.users || []);
-            const t = (res.data.items || []).reduce((acc: number, i: any) => acc + i.price, 0);
-            setTotal(t);
-            
-            // Get session name and date if editing historical
-            if (editSessionId !== null) {
-                const sessRes = await axios.get('/api/sessions');
-                const session = (sessRes.data.sessions || []).find((s: any) => s.id === editSessionId);
-                if (session) {
-                    let dName = "";
-                    let dDate = "";
-                    const parts = session.name.split('||');
-                    if (parts.length > 1) {
-                        dName = parts[0].trim();
-                        dDate = parts[1].trim();
-                        setSessionName(dName);
-                        setSessionDate(dDate);
-                    } else {
-                        dName = session.name;
-                        dDate = new Date(session.updated_at).toISOString().split('T')[0];
-                        setSessionName(dName);
-                        setSessionDate(dDate);
-                     }
-                     const savedTax = session.tax ? session.tax.toString() : '';
-                     const savedTip = session.tip ? session.tip.toString() : '';
-                     setTax(savedTax);
-                     setTip(savedTip);
-                     setInitialSettings({ name: dName, date: dDate, tax: savedTax, tip: savedTip });
-                }
-            } else {
-                const today = new Date().toISOString().split('T')[0];
-                setSessionName("Grocery Trip");
-                setSessionDate(today);
-                setInitialSettings({ name: "Grocery Trip", date: today, tax: '', tip: '' });
-            }
+            const [people, session] = await Promise.all([listPeople(), getSession(sessionId)]);
+            const g = await getGroup(session.group_id);
+            setGroup(g);
+            setGlobalUsers(Array.from(new Set([...g.members.map(m => m.name), ...people])));
+            setItems(session.items);
+            setUsers(session.participants);
+            setTotal(session.items.reduce((acc, i) => acc + i.price, 0));
+            const savedTax = session.tax ? session.tax.toString() : '';
+            const savedTip = session.tip ? session.tip.toString() : '';
+            setSessionName(session.name);
+            setSessionDate(session.session_date);
+            setTax(savedTax);
+            setTip(savedTip);
+            setInitialSettings({ name: session.name, date: session.session_date, tax: savedTax, tip: savedTip });
         } catch (err) {
             console.error("Failed to load session logic", err);
+            flash('Failed to load receipt.', 'error');
         } finally {
             setLoading(false);
         }
     };
 
+    const flash = (message: string, type: 'success' | 'error') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3500);
+    };
+
     useEffect(() => {
         loadData();
-    }, [editSessionId]);
+    }, [sessionId]);
 
     const toggleAssign = async (itemId: string, userName: string, currentStatus: boolean) => {
         if (!users.includes(userName)) return; // Only session users can be assigned
+        const item = items.find(i => i.id === itemId);
+        if (!item) return;
+        const next = currentStatus ? item.assigned_users.filter(u => u !== userName) : [...item.assigned_users, userName];
+        setItems(prev => prev.map(i => (i.id === itemId ? { ...i, assigned_users: next } : i)));
         try {
-            // Optimistic UI update
-            setItems(prev => prev.map(item => {
-                if (item.id === itemId) {
-                    const newAssigned = new Set(item.assigned_users);
-                    if (currentStatus) newAssigned.delete(userName);
-                    else newAssigned.add(userName);
-                    return { ...item, assigned_users: Array.from(newAssigned) };
-                }
-                return item;
-            }));
-
-            await axios.post(`/api/items/${itemId}/assign`, { user_name: userName, assign: !currentStatus });
+            await updateItem(sessionId, itemId, { assigned_users: next });
         } catch (err) {
             console.error(err);
             loadData(); // Rollback
@@ -135,19 +96,16 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
     };
 
     const handleEditSave = async (itemId: string) => {
-        // Optimistic UI updates
-        const optimisticPrice = parseFloat(editItemPrice) || 0;
+        const price = Math.max(0, Math.round((parseFloat(editItemPrice) || 0) * 100) / 100);
+        const name = editItemName.trim() || 'Item';
         const oldItems = [...items];
-        setItems(prev => prev.map(item => item.id === itemId ? { ...item, name: editItemName, price: optimisticPrice } : item));
-        
-        // Re-calculate total optimistically
-        const t = oldItems.map(item => item.id === itemId ? { ...item, price: optimisticPrice } : item).reduce((acc: number, i: any) => acc + i.price, 0);
-        setTotal(t);
+        const nextItems = items.map(item => (item.id === itemId ? { ...item, name, price } : item));
+        setItems(nextItems);
+        setTotal(nextItems.reduce((acc, i) => acc + i.price, 0));
         setEditingItemId(null);
 
         try {
-            await axios.put(`/api/items/${itemId}`, { name: editItemName, price: optimisticPrice });
-            // Do not run loadData(), state is already perfectly synced
+            await updateItem(sessionId, itemId, { name, price });
         } catch (err) {
             console.error(err);
             setItems(oldItems); // Rollback optimistic update
@@ -156,18 +114,15 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
     };
 
     const handleAddManualItem = async () => {
-        // Optimistic generic projection
-        const tempId = `temp-${Date.now()}`;
-        const newObj = { id: tempId, name: 'New Manual Item', price: 0.0, assigned_users: [] };
-        setItems(prev => [newObj, ...prev]);
-
         try {
-            const res = await axios.post('/api/items', { name: 'New Manual Item', price: 0.0 });
-            // Sync with backend UUID cleanly
-            setItems(prev => prev.map(item => item.id === tempId ? { ...item, id: res.data.item_id } : item));
+            const created = await addItem(sessionId, 'New Manual Item', 0);
+            setItems(prev => [created, ...prev]);
+            setEditingItemId(created.id);
+            setEditItemName(created.name);
+            setEditItemPrice('0');
         } catch (err) {
             console.error(err);
-            setItems(prev => prev.filter(item => item.id !== tempId)); // Purge temporary on failure
+            flash('Failed to add item.', 'error');
         }
     };
 
@@ -177,13 +132,13 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
         setItemToDelete(null);
 
         const oldItems = [...items];
-        setItems(prev => prev.filter(item => item.id !== itemId));
-        // Re-calc optimistic total
-        setTotal(oldItems.filter(item => item.id !== itemId).reduce((acc: number, i: any) => acc + i.price, 0));
+        const nextItems = items.filter(item => item.id !== itemId);
+        setItems(nextItems);
+        setTotal(nextItems.reduce((acc, i) => acc + i.price, 0));
 
         try {
-            await axios.delete(`/api/items/${itemId}`);
-        } catch (err) { 
+            await deleteItem(sessionId, itemId);
+        } catch (err) {
             console.error(err);
             setItems(oldItems);
             loadData();
@@ -191,95 +146,49 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
     };
 
     const assignAllToItem = async (itemId: string) => {
-        const itemObj = items.find(i => i.id === itemId);
-        if (!itemObj) return;
         const allUsers = [...users];
         setItems(prev => prev.map(item => item.id === itemId ? { ...item, assigned_users: allUsers } : item));
         try {
-            await axios.put(`/api/items/${itemId}`, { name: itemObj.name, price: itemObj.price, assigned_users: allUsers });
-        } catch (err) { console.error(err); }
+            await updateItem(sessionId, itemId, { assigned_users: allUsers });
+        } catch (err) { console.error(err); loadData(); }
     };
 
-    // Add people to this receipt logic:
-    // In our backend, the active session is managed automatically by checking the item assignments,
-    // but we can also store the 'users' list as active session participants.
-    // The backend `users` in memory is the global users list, but `active_session_users` isn't fully separated in API.
-    // Wait, the backend /api/items returns the global users! 
-    // To support per-receipt participants without breaking backend, we maintain `sessionUsers` purely locally,
-    // and when saving session, we push the `users` explicitly. But wait, `users` is just for UI filtering.
-    // If a user is not in `users`, we don't render them for toggle Assign.
-    const handleToggleSessionParticipant = async (u: string) => {
-        const newUsers = users.includes(u) ? users.filter(x => x !== u) : [...users, u];
+    const saveParticipants = async (newUsers: string[]) => {
         setUsers(newUsers);
-        if (editSessionId !== null) {
-            try {
-                await axios.put(`/api/sessions/${editSessionId}/update`, { users: newUsers, tax: parseFloat(tax) || 0, tip: parseFloat(tip) || 0 });
-            } catch(e) { console.error("Auto-sync participant failed"); }
+        try {
+            await updateSession(sessionId, { participants: newUsers });
+        } catch (e) {
+            console.error("Participant sync failed", e);
+            flash('Failed to update members.', 'error');
         }
     };
 
-    const handleAddGroupToSession = async (groupName: string) => {
-        const newUsers = globalGroups[groupName] || [];
-        setUsers(newUsers);
-        if (editSessionId !== null) {
-            try {
-                await axios.put(`/api/sessions/${editSessionId}/update`, { users: newUsers, tax: parseFloat(tax) || 0, tip: parseFloat(tip) || 0 });
-            } catch(e) { console.error("Auto-sync group failed"); }
-        }
-    };
+    const handleToggleSessionParticipant = (u: string) =>
+        saveParticipants(users.includes(u) ? users.filter(x => x !== u) : [...users, u]);
+
+    const handleAddAllGroupMembers = () =>
+        saveParticipants(Array.from(new Set([...users, ...(group?.members.map(m => m.name) ?? [])])));
 
     const handleSaveSession = async () => {
         try {
-            const combinedName = `${sessionName.trim()} || ${sessionDate}`;
-            const sessionTax = parseFloat(tax) || 0;
-            const sessionTip = parseFloat(tip) || 0;
-            
-            if (editSessionId !== null) {
-                await axios.put(`/api/sessions/${editSessionId}/update`, { tax: sessionTax, tip: sessionTip });
-                await axios.put(`/api/sessions/${editSessionId}`, { name: combinedName, users, tax: sessionTax, tip: sessionTip });
-            } else {
-                await axios.post('/api/sessions', { name: combinedName, users, tax: sessionTax, tip: sessionTip }); 
-            }
+            const taxAmt = Math.max(0, parseFloat(tax) || 0);
+            const tipAmt = Math.max(0, parseFloat(tip) || 0);
+            await updateSession(sessionId, {
+                name: sessionName.trim() || 'Grocery Trip',
+                session_date: sessionDate,
+                tax: taxAmt,
+                tip: tipAmt,
+                participants: users,
+            });
             setInitialSettings({ name: sessionName.trim(), date: sessionDate, tax, tip });
-            setToast({ message: 'Receipt saved successfully!', type: 'success' });
-            setTimeout(() => setToast(null), 3500);
+            flash('Receipt saved successfully!', 'success');
         } catch (err) {
             console.error("Save failed", err);
-            setToast({ message: 'Failed to save receipt.', type: 'error' });
-            setTimeout(() => setToast(null), 3500);
+            flash('Failed to save receipt.', 'error');
         }
     };
 
-    const getOweTotals = () => {
-        const userSubtotals: Record<string, number> = {};
-        users.forEach(u => userSubtotals[u] = 0);
-        
-        let validSubtotal = 0;
-        
-        items.forEach(item => {
-            if (item.assigned_users && item.assigned_users.length > 0) {
-                const splitPrice = item.price / item.assigned_users.length;
-                validSubtotal += item.price;
-                item.assigned_users.forEach((u: string) => {
-                    if (userSubtotals[u] !== undefined) userSubtotals[u] += splitPrice;
-                });
-            }
-        });
-
-        const taxAmt = parseFloat(tax) || 0;
-        const tipAmt = parseFloat(tip) || 0;
-        
-        const finalTotals = Object.entries(userSubtotals).map(([u, subtot]) => {
-            const ratio = validSubtotal > 0 ? (subtot / validSubtotal) : 0;
-            const proportionalTax = taxAmt * ratio;
-            const proportionalTip = tipAmt * ratio;
-            return [u, subtot + proportionalTax + proportionalTip];
-        }) as [string, number][];
-
-        return finalTotals.sort((a, b) => b[1] - a[1]);
-    };
-
-    const oweTotals = getOweTotals();
+    const oweTotals = computeSplit(items, users, parseFloat(tax) || 0, parseFloat(tip) || 0).totals;
     const grandTotal = total + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
     const colorConfig = ["bg-green-100 text-green-700 ring-green-500", "bg-blue-100 text-blue-700 ring-blue-500", "bg-orange-100 text-orange-700 ring-orange-500", "bg-purple-100 text-purple-700 ring-purple-500", "bg-pink-100 text-pink-700 ring-pink-500"];
 
@@ -289,7 +198,7 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
             const lowerCaseQuery = searchQuery.toLowerCase();
             filtered = filtered.filter(item => item.name.toLowerCase().includes(lowerCaseQuery));
         }
-        return filtered.sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             if (sortBy === 'price_high') return b.price - a.price;
             if (sortBy === 'price_low') return a.price - b.price;
             return a.name.localeCompare(b.name);
@@ -542,22 +451,15 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
                         {activeTab === 'members' && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <section>
-                                    <h3 className="font-headline font-bold text-lg text-slate-900 mb-3">Import Group</h3>
+                                    <h3 className="font-headline font-bold text-lg text-slate-900 mb-3">Group Members</h3>
                                     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6">
-                                        <select 
-                                            value=""
-                                            onChange={e => {
-                                                if(e.target.value === 'new') window.location.hash = 'groups';
-                                                else if(e.target.value !== '') handleAddGroupToSession(e.target.value);
-                                            }}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 shadow-sm outline-none focus:border-slate-400 mb-2 appearance-none"
-                                        >
-                                            <option value="">-- Apply a predefined Group --</option>
-                                            {Object.keys(globalGroups).map(g => (
-                                                <option key={g} value={g}>{g} ({globalGroups[g].length} Members)</option>
-                                            ))}
-                                            <option value="new">+ Create New Group</option>
-                                        </select>
+                                        <p className="text-sm text-slate-500 mb-3">{group ? `Everyone in "${group.name}" can see and edit this receipt.` : ''}</p>
+                                        <button
+                                            onClick={handleAddAllGroupMembers}
+                                            disabled={!group || group.members.every(m => users.includes(m.name))}
+                                            className="w-full py-3 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 disabled:opacity-40 active:scale-[0.98] transition-all">
+                                            Add all {group?.members.length ?? 0} group members to this receipt
+                                        </button>
                                     </div>
                                 </section>
 
@@ -577,7 +479,7 @@ export default function Split({ token, editSessionId, onBack, onSave }: SplitPro
                                             }}
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-400 appearance-none"
                                         >
-                                            <option value="">+ Add Individual Member...</option>
+                                            <option value="">+ Add someone...</option>
                                             {globalUsers.filter(u => !users.includes(u)).map(u => (
                                                 <option key={u} value={u}>{u}</option>
                                             ))}

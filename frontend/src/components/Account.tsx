@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { listGroups, listSessions } from '../lib/api';
 
 interface AccountProps {
     user: any;
@@ -6,6 +7,11 @@ interface AccountProps {
 }
 
 export default function Account({ user, onLogout }: AccountProps) {
+    const [counts, setCounts] = useState<{ receipts: number; groups: number } | null>(null);
+    useEffect(() => {
+        Promise.all([listSessions(), listGroups()]).then(([s, g]) => setCounts({ receipts: s.length, groups: g.length })).catch(() => {});
+    }, []);
+
     return (
         <div className="bg-slate-50 font-body text-slate-900 min-h-screen pb-32">
             <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
@@ -28,11 +34,11 @@ export default function Account({ user, onLogout }: AccountProps) {
 
                 <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-bottom-6 duration-500 delay-100 fill-mode-both">
                     <div className="bg-white border text-center border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                        <span className="block text-3xl font-black text-indigo-600 mb-1">12</span>
+                        <span className="block text-3xl font-black text-indigo-600 mb-1">{counts?.receipts ?? '–'}</span>
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Receipts</span>
                     </div>
                     <div className="bg-white border text-center border-slate-200 rounded-3xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                        <span className="block text-3xl font-black text-pink-600 mb-1">5</span>
+                        <span className="block text-3xl font-black text-pink-600 mb-1">{counts?.groups ?? '–'}</span>
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Groups</span>
                     </div>
                 </div>

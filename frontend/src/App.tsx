@@ -1,26 +1,44 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import type { Session as AuthSession } from "@supabase/supabase-js";
+import { supabase } from "./lib/supabase";
 import Auth from "./components/Auth";
 import Dashboard from "./components/Dashboard";
 import ReceiptUpload from "./components/ReceiptUpload";
 import Split from "./components/Split";
 import History from "./components/History";
-import Groups from "./components/Groups";
+import People from "./components/People";
+import GroupDetail from "./components/GroupDetail";
 import BottomNav from "./components/BottomNav";
 import Account from "./components/Account";
 
-type ViewState = 'auth' | 'dashboard' | 'upload' | 'split' | 'history' | 'groups' | 'account';
+type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'history' | 'people' | 'account';
 
 const App: React.FC = () => {
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token') || null);
-    const [user, setUser] = useState<any>(JSON.parse(localStorage.getItem('user') || 'null'));
-    const [view, setView] = useState<ViewState>(token ? 'dashboard' : 'auth');
-    const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+    const [auth, setAuth] = useState<AuthSession | null>(null);
+    const [ready, setReady] = useState(false);
+    const [view, setView] = useState<ViewState>('auth');
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+    const user = auth ? { id: auth.user.id, email: auth.user.email, name: auth.user.user_metadata?.name || auth.user.email?.split('@')[0] || 'User' } : null;
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data }) => {
+            setAuth(data.session);
+            setView(data.session ? 'dashboard' : 'auth');
+            setReady(true);
+        });
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+            setAuth(session);
+            if (!session) setView('auth');
+        });
+        return () => sub.subscription.unsubscribe();
+    }, []);
 
     useEffect(() => {
         const handleHashChange = () => {
             const hash = window.location.hash.replace('#', '') as ViewState;
-            if (['dashboard', 'history', 'groups', 'account'].includes(hash)) {
+            if (['dashboard', 'history', 'people', 'account'].includes(hash)) {
                 setView(hash);
             }
         };
@@ -28,53 +46,47 @@ const App: React.FC = () => {
         return () => window.removeEventListener('hashchange', handleHashChange);
     }, []);
 
-    useEffect(() => {
-        if (token) {
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-        } else {
-            delete axios.defaults.headers.common['Authorization'];
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-        }
-    }, [token, user]);
-
-    const handleLogin = (authToken: string, userData: any) => {
-        setToken(authToken);
-        setUser(userData);
-        setView('dashboard');
+    const openGroup = (groupId: string) => {
+        setActiveGroupId(groupId);
+        setView('group');
     };
 
-    const handleEditSession = (sessionId: number) => {
+    const openReceipt = (sessionId: string, groupId?: string) => {
+        if (groupId) setActiveGroupId(groupId);
         setActiveSessionId(sessionId);
         setView('split');
     };
 
-    const handleNewUpload = () => {
-        setActiveSessionId(null);
-        setView('upload');
-    };
-
-    const handleLogout = () => {
-        setUser(null);
-        setToken(null);
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
         setView('auth');
     };
+
+    if (!ready) return <div className="min-h-screen bg-slate-50" />;
+
+    const signedIn = !!auth;
 
     return (
         <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
             <div key={view} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {view === 'auth' && <Auth onLogin={handleLogin} />}
-                {view === 'dashboard' && <Dashboard user={user} token={token} onNewSplit={handleNewUpload} onEditSession={handleEditSession} />}
-                {view === 'upload' && <ReceiptUpload onUploadComplete={() => setView('split')} onBack={() => setView('dashboard')} />}
-                {view === 'split' && <Split token={token} editSessionId={activeSessionId} onBack={() => setView('dashboard')} onSave={() => setView('dashboard')} />}
-                {view === 'history' && <History token={token} onEditSession={handleEditSession} />}
-                {view === 'groups' && <Groups token={token} />}
-                {view === 'account' && <Account user={user} onLogout={handleLogout} />}
+                {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
+                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} />}
+                {signedIn && view === 'group' && activeGroupId && (
+                    <GroupDetail
+                        groupId={activeGroupId}
+                        onBack={() => setView('dashboard')}
+                        onImport={() => setView('upload')}
+                        onOpenReceipt={openReceipt}
+                    />
+                )}
+                {signedIn && view === 'upload' && activeGroupId && <ReceiptUpload groupId={activeGroupId} onImported={id => openReceipt(id)} onBack={() => setView('group')} />}
+                {signedIn && view === 'split' && activeSessionId && <Split sessionId={activeSessionId} onBack={() => setView(activeGroupId ? 'group' : 'dashboard')} />}
+                {signedIn && view === 'history' && <History onEditSession={openReceipt} />}
+                {signedIn && view === 'people' && <People />}
+                {signedIn && view === 'account' && <Account user={user} onLogout={handleLogout} />}
             </div>
-            
-            {(view === 'dashboard' || view === 'history' || view === 'groups' || view === 'account') && (
+
+            {signedIn && (view === 'dashboard' || view === 'history' || view === 'people' || view === 'account') && (
                 <BottomNav currentView={view} />
             )}
         </div>
