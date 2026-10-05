@@ -9,6 +9,7 @@ Import a grocery receipt, tap once per item to assign it to a friend, and get an
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
 - **Friends** (home screen tab) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
+- **Admin** (menu, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 - **Account** (menu button, top right) lets you change your display name, email and password, or sign out.
 
 ## How receipt import works
@@ -66,4 +67,5 @@ npm test                     # unit tests (split math + JSON import)
 - **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
 - **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` then deploys to production and every PR gets a preview deployment.
 - **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and every push to `main` or `dev`.
+- **Edge function is not deployed by CI.** Deploy `supabase/functions/admin-users` with the Supabase CLI or dashboard when it changes.
 - **Database migrations are not automated.** Apply new files in `supabase/migrations/` to the Supabase project before merging a change that needs them.

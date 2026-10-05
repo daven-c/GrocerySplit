@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, Group, Invite, Session, Settlement } from '../lib/api';
+import { listGroups, listSessions, listSettlements, createGroup, myInvites, respondToInvite, isAdmin, Group, Invite, Session, Settlement } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import FriendsTab from './FriendsTab';
 
@@ -7,10 +7,11 @@ interface DashboardProps {
     user: any;
     onOpenGroup: (groupId: string) => void;
     onOpenAccount: () => void;
+    onOpenAdmin: () => void;
     onLogout: () => void;
 }
 
-export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }: DashboardProps) {
+export default function Dashboard({ user, onOpenGroup, onOpenAccount, onOpenAdmin, onLogout }: DashboardProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [invites, setInvites] = useState<Invite[]>([]);
@@ -20,6 +21,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [menuOpen, setMenuOpen] = useState(false);
+    const [admin, setAdmin] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -47,6 +49,7 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
     }, []);
 
     useEffect(() => { load(); }, [load]);
+    useEffect(() => { isAdmin().then(setAdmin).catch(() => setAdmin(false)); }, []);
 
     const handleCreate = async () => {
         const name = newName.trim();
@@ -99,6 +102,11 @@ export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }
                                 <button onClick={() => { setMenuOpen(false); onOpenAccount(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
                                     <span className="material-symbols-outlined text-[20px] text-slate-400">manage_accounts</span>Account
                                 </button>
+                                {admin && (
+                                    <button onClick={() => { setMenuOpen(false); onOpenAdmin(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
+                                        <span className="material-symbols-outlined text-[20px] text-slate-400">admin_panel_settings</span>Admin
+                                    </button>
+                                )}
                                 <button onClick={() => { setMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 text-left">
                                     <span className="material-symbols-outlined text-[20px]">logout</span>Sign out
                                 </button>

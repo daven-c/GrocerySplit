@@ -7,8 +7,9 @@ import ReceiptUpload from "./components/ReceiptUpload";
 import Split from "./components/Split";
 import GroupDetail from "./components/GroupDetail";
 import Account from "./components/Account";
+import Admin from "./components/Admin";
 
-type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account';
+type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account' | 'admin';
 
 const App: React.FC = () => {
     const [auth, setAuth] = useState<AuthSession | null>(null);
@@ -55,7 +56,7 @@ const App: React.FC = () => {
         <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
             <div key={view} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
-                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onLogout={handleLogout} />}
+                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onOpenAdmin={() => setView('admin')} onLogout={handleLogout} />}
                 {signedIn && view === 'group' && activeGroupId && (
                     <GroupDetail
                         groupId={activeGroupId}
@@ -66,6 +67,7 @@ const App: React.FC = () => {
                 )}
                 {signedIn && view === 'upload' && activeGroupId && <ReceiptUpload groupId={activeGroupId} onImported={id => openReceipt(id)} onBack={() => setView('group')} />}
                 {signedIn && view === 'split' && activeSessionId && <Split sessionId={activeSessionId} onBack={() => setView(activeGroupId ? 'group' : 'dashboard')} />}
+                {signedIn && view === 'admin' && <Admin onBack={() => setView('dashboard')} />}
                 {signedIn && view === 'account' && <Account user={user} onBack={() => setView('dashboard')} onLogout={handleLogout} />}
             </div>
 
