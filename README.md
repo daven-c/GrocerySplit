@@ -8,6 +8,7 @@ Import a grocery receipt, tap once per item to assign it to a friend, and get an
 - **Receipts live inside a group.** Every member can see and edit the group's receipts.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
 - The owner can invite, remove members and delete the group; any member can leave.
+- **Friends** (home screen tab) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
 - **Account** (menu button, top right) lets you change your display name, email and password, or sign out.
 
 ## How receipt import works
@@ -35,6 +36,8 @@ The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"`
 ## Split math
 
 All money is handled in integer cents. Each item is split evenly among its assignees, and tax and tip are shared in proportion to what each person's items cost. Leftover pennies are distributed by largest remainder, so per-person totals always add up exactly to items + tax + tip (see `frontend/src/lib/calc.ts`).
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost-splitting app, not just groceries).
 
 ## Tech stack
 

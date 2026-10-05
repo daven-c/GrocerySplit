@@ -30,7 +30,8 @@ export default function Split({ sessionId, onBack }: SplitProps) {
     const [tax, setTax] = useState('');
     const [tip, setTip] = useState('');
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-    const [initialSettings, setInitialSettings] = useState({ name: '', date: '', tax: '', tip: '' });
+    const [paidBy, setPaidBy] = useState('');
+    const [initialSettings, setInitialSettings] = useState({ name: '', date: '', tax: '', tip: '', paidBy: '' });
     
     // Tabs & Search/Sort
     const [activeTab, setActiveTab] = useState<'items' | 'members' | 'settings'>('items');
@@ -56,9 +57,11 @@ export default function Split({ sessionId, onBack }: SplitProps) {
             const savedTip = session.tip ? session.tip.toString() : '';
             setSessionName(session.name);
             setSessionDate(session.session_date);
+            const payer = session.paid_by ?? session.user_id ?? '';
+            setPaidBy(payer);
             setTax(savedTax);
             setTip(savedTip);
-            setInitialSettings({ name: session.name, date: session.session_date, tax: savedTax, tip: savedTip });
+            setInitialSettings({ name: session.name, date: session.session_date, tax: savedTax, tip: savedTip, paidBy: payer });
         } catch (err) {
             console.error("Failed to load session logic", err);
             flash('Failed to load receipt.', 'error');
@@ -191,8 +194,9 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                 tax: taxAmt,
                 tip: tipAmt,
                 participants: users,
+                ...(paidBy ? { paid_by: paidBy } : {}),
             });
-            setInitialSettings({ name: sessionName.trim(), date: sessionDate, tax, tip });
+            setInitialSettings({ name: sessionName.trim(), date: sessionDate, tax, tip, paidBy });
             flash('Receipt saved successfully!', 'success');
         } catch (err) {
             console.error("Save failed", err);
@@ -221,7 +225,8 @@ export default function Split({ sessionId, onBack }: SplitProps) {
         sessionName.trim() !== initialSettings.name || 
         sessionDate !== initialSettings.date || 
         tax !== initialSettings.tax || 
-        tip !== initialSettings.tip;
+        tip !== initialSettings.tip ||
+        paidBy !== initialSettings.paidBy;
 
     if (loading) {
         return (
@@ -561,6 +566,18 @@ export default function Split({ sessionId, onBack }: SplitProps) {
                                             onChange={e => setSessionDate(e.target.value)}
                                             className="w-full text-slate-900 font-bold text-base tracking-wide bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-slate-400 transition-colors"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Paid By</label>
+                                        <select
+                                            value={paidBy}
+                                            onChange={e => setPaidBy(e.target.value)}
+                                            className="w-full text-slate-900 font-bold text-base bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-slate-400 transition-colors appearance-none"
+                                        >
+                                            {!group?.members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
+                                            {group?.members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                                        </select>
+                                        <p className="text-xs text-slate-400 mt-1.5">Everyone else on this receipt owes the payer their share. Shows up in Friends balances.</p>
                                     </div>
                                     <div className="pt-4 mt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
                                         <div>

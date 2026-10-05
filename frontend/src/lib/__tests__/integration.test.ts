@@ -7,16 +7,25 @@ import { describe, it, expect } from 'vitest';
 import { supabase } from '../supabase';
 import * as api from '../api';
 import { computeSplit } from '../calc';
+import { computeBalances } from '../balances';
 import { parseReceiptJson, EXAMPLE_RECEIPT_JSON } from '../receiptImport';
 
 const run = process.env.INTEGRATION ? describe : describe.skip;
 const password = process.env.TEST_PASSWORD as string;
 const email = (u: 'a' | 'b' | 'c') => `gs-test-${u}@mailinator.com`;
 
+// Sign in once per user and then just swap sessions: Supabase rate-limits password sign-ins.
+const sessions: Record<string, { access_token: string; refresh_token: string }> = {};
 async function as(u: 'a' | 'b' | 'c') {
-    await supabase.auth.signOut();
-    const { error } = await supabase.auth.signInWithPassword({ email: email(u), password });
+    const cached = sessions[u];
+    if (cached) {
+        const { error } = await supabase.auth.setSession(cached);
+        if (!error) return;
+    }
+    await supabase.auth.signOut({ scope: 'local' });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email(u), password });
     expect(error, `sign-in as ${u} failed - is the test user confirmed?`).toBeNull();
+    sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
 }
 
 run('shared groups integration', () => {
@@ -25,7 +34,7 @@ run('shared groups integration', () => {
     let inviteId = '';
 
     it('login works, bad password is rejected, profile name comes from signup metadata', async () => {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         expect((await supabase.auth.signInWithPassword({ email: email('a'), password: 'wrong-password' })).error).toBeTruthy();
         await as('a');
         const { data } = await supabase.auth.getUser();
@@ -125,6 +134,49 @@ run('shared groups integration', () => {
         expect((await supabase.from('items').select('id').eq('session_id', doomed)).data).toEqual([]);
     });
 
+    it('payer defaults to the creator, must be a member, and drives balances; settlements follow the rules', async () => {
+        const uid = async (u: 'a' | 'b' | 'c') => { await as(u); return (await supabase.auth.getUser()).data.user!.id; };
+        const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
+
+        await as('a');
+        const rec = await api.createSession({ groupId, name: 'Dinner', items: [{ name: 'Pizza', price: 20 }], participants: ['Test A', 'Test B'] });
+        let s = await api.getSession(rec);
+        expect(s.paid_by).toBe(a); // defaults to whoever added it
+        await api.updateItem(rec, s.items[0].id, { assigned_users: ['Test A', 'Test B'] });
+        await expect(api.updateSession(rec, { paid_by: c })).rejects.toThrow(); // outsider cannot be the payer
+
+        const g = await api.getGroup(groupId);
+        let bal = computeBalances(a, [g], await api.listSessions(groupId), []);
+        const owedBefore = bal.friends[b].net;
+        expect(owedBefore).toBeGreaterThanOrEqual(10); // B owes A at least B's half of the pizza
+
+        await as('b'); // B can change the payer to themselves; the balance flips from B's side
+        await api.updateSession(rec, { paid_by: b });
+        expect((await api.getSession(rec)).paid_by).toBe(b);
+        await api.updateSession(rec, { paid_by: a });
+
+        // settlements: either party can record, outsiders and bystanders cannot
+        await api.recordSettlement(groupId, b, a, 10);
+        await expect(api.recordSettlement(groupId, b, a, 0)).rejects.toThrow();
+        await as('c');
+        await expect(api.recordSettlement(groupId, c, a, 5)).rejects.toThrow();
+        expect(await api.listSettlements()).toEqual([]);
+        await as('a');
+        await expect(api.recordSettlement(groupId, b, c, 5)).rejects.toThrow(); // not a party
+        const [st] = await api.listSettlements();
+        expect(st).toMatchObject({ group_id: groupId, from_user: b, to_user: a, amount: 10 });
+        bal = computeBalances(a, [g], await api.listSessions(groupId), await api.listSettlements());
+        expect(bal.friends[b].net).toBeCloseTo(owedBefore - 10, 2);
+
+        await api.deleteSettlement(st.id); // A is not the creator: silently affects 0 rows
+        expect(await api.listSettlements()).toHaveLength(1);
+        await as('b');
+        await api.deleteSettlement(st.id);
+        expect(await api.listSettlements()).toEqual([]);
+        await as('a');
+        await api.deleteSession(rec);
+    });
+
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
         await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();
@@ -169,7 +221,7 @@ run('shared groups integration', () => {
         expect(await api.listSessions()).toEqual([]);
         const { data } = await supabase.from('items').select('id');
         expect(data).toEqual([]);
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         expect((await supabase.from('groups').select('id')).data ?? []).toEqual([]);
     });
 
@@ -195,12 +247,12 @@ run('shared groups integration', () => {
         await as('b');
         await expect(api.changePassword('not-my-password', 'brand-new-pass-1')).rejects.toThrow(/incorrect/i);
         await api.changePassword(password, 'brand-new-pass-1');
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         expect((await supabase.auth.signInWithPassword({ email: email('b'), password })).error).toBeTruthy();
         const ok = await supabase.auth.signInWithPassword({ email: email('b'), password: 'brand-new-pass-1' });
         expect(ok.error).toBeNull();
         await api.changePassword('brand-new-pass-1', password); // restore for reruns
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         expect((await supabase.auth.signInWithPassword({ email: email('b'), password })).error).toBeNull();
     });
 });
