@@ -5,13 +5,10 @@ import Auth from "./components/Auth";
 import Dashboard from "./components/Dashboard";
 import ReceiptUpload from "./components/ReceiptUpload";
 import Split from "./components/Split";
-import History from "./components/History";
-import People from "./components/People";
 import GroupDetail from "./components/GroupDetail";
-import BottomNav from "./components/BottomNav";
 import Account from "./components/Account";
 
-type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'history' | 'people' | 'account';
+type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account';
 
 const App: React.FC = () => {
     const [auth, setAuth] = useState<AuthSession | null>(null);
@@ -35,24 +32,12 @@ const App: React.FC = () => {
         return () => sub.subscription.unsubscribe();
     }, []);
 
-    useEffect(() => {
-        const handleHashChange = () => {
-            const hash = window.location.hash.replace('#', '') as ViewState;
-            if (['dashboard', 'history', 'people', 'account'].includes(hash)) {
-                setView(hash);
-            }
-        };
-        window.addEventListener('hashchange', handleHashChange);
-        return () => window.removeEventListener('hashchange', handleHashChange);
-    }, []);
-
     const openGroup = (groupId: string) => {
         setActiveGroupId(groupId);
         setView('group');
     };
 
-    const openReceipt = (sessionId: string, groupId?: string) => {
-        if (groupId) setActiveGroupId(groupId);
+    const openReceipt = (sessionId: string) => {
         setActiveSessionId(sessionId);
         setView('split');
     };
@@ -70,7 +55,7 @@ const App: React.FC = () => {
         <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
             <div key={view} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
-                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} />}
+                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onLogout={handleLogout} />}
                 {signedIn && view === 'group' && activeGroupId && (
                     <GroupDetail
                         groupId={activeGroupId}
@@ -81,14 +66,9 @@ const App: React.FC = () => {
                 )}
                 {signedIn && view === 'upload' && activeGroupId && <ReceiptUpload groupId={activeGroupId} onImported={id => openReceipt(id)} onBack={() => setView('group')} />}
                 {signedIn && view === 'split' && activeSessionId && <Split sessionId={activeSessionId} onBack={() => setView(activeGroupId ? 'group' : 'dashboard')} />}
-                {signedIn && view === 'history' && <History onEditSession={openReceipt} />}
-                {signedIn && view === 'people' && <People />}
-                {signedIn && view === 'account' && <Account user={user} onLogout={handleLogout} />}
+                {signedIn && view === 'account' && <Account user={user} onBack={() => setView('dashboard')} onLogout={handleLogout} />}
             </div>
 
-            {signedIn && (view === 'dashboard' || view === 'history' || view === 'people' || view === 'account') && (
-                <BottomNav currentView={view} />
-            )}
         </div>
     );
 };

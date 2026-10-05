@@ -1,18 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { listGroups, listSessions, createGroup, myInvites, respondToInvite, Group, Invite, Session } from '../lib/api';
 
 interface DashboardProps {
     user: any;
     onOpenGroup: (groupId: string) => void;
+    onOpenAccount: () => void;
+    onLogout: () => void;
 }
 
-export default function Dashboard({ user, onOpenGroup }: DashboardProps) {
+export default function Dashboard({ user, onOpenGroup, onOpenAccount, onLogout }: DashboardProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [sessions, setSessions] = useState<Session[]>([]);
     const [invites, setInvites] = useState<Invite[]>([]);
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        const close = (e: MouseEvent | KeyboardEvent) => {
+            if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        document.addEventListener('keydown', close);
+        return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+    }, [menuOpen]);
 
     const load = useCallback(async () => {
         try {
@@ -57,11 +71,33 @@ export default function Dashboard({ user, onOpenGroup }: DashboardProps) {
     return (
         <div className="bg-slate-50 font-body text-slate-900 min-h-screen pb-32">
             <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
-                <div className="flex items-center gap-2 px-6 py-4 max-w-2xl mx-auto">
-                    <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+                <div className="flex items-center justify-between px-6 py-4 max-w-2xl mx-auto">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center">
+                            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+                        </div>
+                        <h1 className="font-headline font-extrabold tracking-tight text-xl text-slate-900">Grocery Split</h1>
                     </div>
-                    <h1 className="font-headline font-extrabold tracking-tight text-xl text-slate-900">Grocery Split</h1>
+                    <div className="relative" ref={menuRef}>
+                        <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen}
+                            className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 active:scale-95 transition-all">
+                            <span className="material-symbols-outlined">{menuOpen ? 'close' : 'menu'}</span>
+                        </button>
+                        {menuOpen && (
+                            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-50">
+                                <div className="px-4 py-3 border-b border-slate-100">
+                                    <p className="font-bold text-slate-900 text-sm truncate">{user?.name}</p>
+                                    <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                                </div>
+                                <button onClick={() => { setMenuOpen(false); onOpenAccount(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 text-left">
+                                    <span className="material-symbols-outlined text-[20px] text-slate-400">manage_accounts</span>Account
+                                </button>
+                                <button onClick={() => { setMenuOpen(false); onLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 text-left">
+                                    <span className="material-symbols-outlined text-[20px]">logout</span>Sign out
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 
