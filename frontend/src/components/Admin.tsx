@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tapFlat } from '../lib/motion';
 import { adminListUsers, adminTotals, adminCreateUser, adminConfirmUser, AdminUser, AdminTotals } from '../lib/api';
-import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tap, tapFlat, tapRow } from '../lib/motion';
-
-interface AdminProps {
-    onBack: () => void;
-}
+import { HUES, toneFor } from '../lib/people';
+import { Avatar, Button, Card, Icon, inputCls } from './ui';
 
 const DAY = 86_400_000;
 
@@ -24,19 +22,17 @@ function generatePassword(): string {
     return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
-const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-900 outline-none';
-
-function Stat({ label, value, tone = 'slate', i = 0 }: { label: string; value: number | string; tone?: 'slate' | 'amber' | 'emerald'; i?: number }) {
-    const tones = { slate: 'bg-white border-slate-200 text-slate-900', amber: 'bg-amber-50 border-amber-100 text-amber-800', emerald: 'bg-emerald-50 border-emerald-100 text-emerald-800' };
+function Stat({ label, value, tone = 'plain', i = 0 }: { label: string; value: number | string; tone?: 'plain' | 'amber' | 'green'; i?: number }) {
+    const tones = { plain: 'bg-white border border-edge text-ink', amber: 'bg-coral-tint text-coral-on', green: 'bg-green-tint text-green-on' };
     return (
-        <motion.div {...enter(i)} className={`border rounded-2xl p-4 ${tones[tone]}`}>
-            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</p>
-            <p className="font-headline text-2xl font-extrabold">{typeof value === 'number' ? <AnimatedNumber value={value} decimals={0} /> : value}</p>
+        <motion.div {...enter(i)} className={`rounded-[14px] px-[18px] py-4 flex flex-col gap-0.5 ${tones[tone]}`}>
+            <span className="text-[13px] opacity-70">{label}</span>
+            <span className="text-2xl font-semibold">{typeof value === 'number' ? <AnimatedNumber value={value} decimals={0} /> : value}</span>
         </motion.div>
     );
 }
 
-export default function Admin({ onBack }: AdminProps) {
+export default function Admin() {
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [totals, setTotals] = useState<AdminTotals | null>(null);
     const [loading, setLoading] = useState(true);
@@ -68,7 +64,6 @@ export default function Admin({ onBack }: AdminProps) {
             setLoading(false);
         }
     }, []);
-
     useEffect(() => { load(); }, [load]);
 
     const stats = useMemo(() => {
@@ -83,10 +78,9 @@ export default function Admin({ onBack }: AdminProps) {
 
     const shown = useMemo(() => {
         const q = search.trim().toLowerCase();
-        const list = users.filter(u => !q || u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q));
-        return list.sort((a, b) => {
+        return users.filter(u => !q || u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)).sort((a, b) => {
             if (sort === 'name') return a.name.localeCompare(b.name);
-            if (sort === 'active') return (new Date(b.last_sign_in_at ?? 0).getTime()) - (new Date(a.last_sign_in_at ?? 0).getTime());
+            if (sort === 'active') return new Date(b.last_sign_in_at ?? 0).getTime() - new Date(a.last_sign_in_at ?? 0).getTime();
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
     }, [users, search, sort]);
@@ -111,142 +105,122 @@ export default function Admin({ onBack }: AdminProps) {
     const handleConfirm = async (id: string) => {
         setBusyId(id);
         setError('');
-        try {
-            await adminConfirmUser(id);
-            await load();
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setBusyId(null);
-        }
+        try { await adminConfirmUser(id); await load(); }
+        catch (err: any) { setError(err.message); }
+        finally { setBusyId(null); }
     };
 
     const copy = async (text: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch { /* clipboard unavailable */ }
+        try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard unavailable */ }
     };
 
     return (
-        <div className="bg-slate-50 font-body text-slate-900 min-h-screen pb-16">
-            <header className="sticky top-0 w-full z-50 bg-white border-b border-slate-200">
-                <div className="flex items-center justify-between px-6 py-4 max-w-4xl mx-auto">
-                    <div className="flex items-center gap-3">
-                        <motion.button {...tap} onClick={onBack} aria-label="Back" className="text-slate-500 hover:text-slate-900">
-                            <span className="material-symbols-outlined">arrow_back</span>
-                        </motion.button>
-                        <h1 className="font-headline font-extrabold text-xl text-slate-900">Admin</h1>
-                    </div>
-                    <motion.button {...tap} onClick={load} aria-label="Refresh" className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100">
-                        <span className="material-symbols-outlined">refresh</span>
-                    </motion.button>
+        <div className="max-w-[900px] mx-auto flex flex-col gap-7">
+            <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1.5">
+                    <h1 className="m-0 text-[28px] font-semibold tracking-title">Admin</h1>
+                    <p className="m-0 text-[15px] text-muted">Everyone with an account, and what they're up to.</p>
                 </div>
-            </header>
+                <motion.button {...tapFlat} onClick={load} aria-label="Refresh" className="w-10 h-10 grid place-items-center rounded-full text-muted hover:bg-surface"><Icon name="refresh" size={22} /></motion.button>
+            </div>
 
-            <main className="pt-6 px-6 max-w-4xl mx-auto space-y-6">
-                <Pop show={!!error} className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</Pop>
+            <Pop show={!!error} className="px-3 py-2.5 rounded-[10px] bg-coral-tint text-coral-on text-[13px]">{error}</Pop>
 
-                <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <Stat i={0} label="Users" value={stats.total} />
-                    <Stat i={1} label="Unconfirmed" value={stats.unconfirmed} tone={stats.unconfirmed ? 'amber' : 'slate'} />
-                    <Stat i={2} label="New (7 days)" value={stats.newWeek} tone="emerald" />
-                    <Stat i={3} label="Active (7 days)" value={stats.activeWeek} />
-                    <Stat i={4} label="Groups" value={totals?.groups ?? '–'} />
-                    <Stat i={5} label="Receipts" value={totals?.receipts ?? '–'} />
-                    <Stat i={6} label="Items" value={totals?.items ?? '–'} />
-                    <Stat i={7} label="Payments" value={totals?.settlements ?? '–'} />
-                </section>
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat i={0} label="Users" value={stats.total} />
+                <Stat i={1} label="Unconfirmed" value={stats.unconfirmed} tone={stats.unconfirmed ? 'amber' : 'plain'} />
+                <Stat i={2} label="New (7 days)" value={stats.newWeek} tone="green" />
+                <Stat i={3} label="Active (7 days)" value={stats.activeWeek} />
+                <Stat i={4} label="Groups" value={totals?.groups ?? '–'} />
+                <Stat i={5} label="Expenses" value={totals?.receipts ?? '–'} />
+                <Stat i={6} label="Items" value={totals?.items ?? '–'} />
+                <Stat i={7} label="Payments" value={totals?.settlements ?? '–'} />
+            </section>
 
-                <section className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-                    <motion.button {...tapRow} onClick={() => setShowCreate(v => !v)} aria-expanded={showCreate} className="w-full flex items-center justify-between p-5 text-left">
-                        <span className="font-headline font-bold text-lg">Create user</span>
-                        <span className="material-symbols-outlined text-slate-400">{showCreate ? 'expand_less' : 'expand_more'}</span>
-                    </motion.button>
-                    <Collapse open={showCreate}>
-                        <form onSubmit={handleCreate} className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
-                            <div className="grid md:grid-cols-2 gap-3">
-                                <input className={inputCls} placeholder="Display name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
-                                <input className={inputCls} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-                            </div>
-                            <div className="flex gap-2">
-                                <input className={inputCls + ' font-mono'} type={showPw ? 'text' : 'password'} placeholder="Temporary password (min 8)" value={password} onChange={e => setPassword(e.target.value)} minLength={8} required />
-                                <motion.button {...tap} type="button" onClick={() => setPassword(generatePassword())} className="px-3 shrink-0 text-sm font-bold bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200">Generate</motion.button>
-                                <motion.button {...tap} type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} className="px-2 shrink-0 text-slate-400 hover:text-slate-900">
-                                    <span className="material-symbols-outlined text-[20px]">{showPw ? 'visibility_off' : 'visibility'}</span>
-                                </motion.button>
-                            </div>
-                            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
-                                <label className="flex items-center gap-2"><input type="checkbox" checked={confirmEmail} onChange={e => setConfirmEmail(e.target.checked)} /> Skip email confirmation (force create)</label>
-                                <label className="flex items-center gap-2"><input type="checkbox" checked={makeAdmin} onChange={e => setMakeAdmin(e.target.checked)} /> Make admin</label>
-                            </div>
-                            <motion.button {...tapFlat} disabled={creating} className="w-full md:w-auto px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 disabled:opacity-40">
-                                {creating ? 'Creating...' : 'Create user'}
-                            </motion.button>
-                        </form>
-                    </Collapse>
-                    <Pop show={!!created} className="mx-5 mb-5 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm text-emerald-900 space-y-2">
-                        {created && (<>
-                        <p className="font-bold">User created. Share these credentials now; the password is not shown again.</p>
-                            <p className="font-mono break-all">{created.email}<br />{created.password}</p>
-                            <motion.button {...tap} onClick={() => copy(`${created.email}\n${created.password}`)} className="px-3 py-1.5 text-xs font-bold bg-emerald-700 text-white rounded-lg">{copied ? 'Copied!' : 'Copy'}</motion.button>
-                        </>)}
-                    </Pop>
-                </section>
-
-                <section className="space-y-3">
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-sm">
-                            <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">search</span>
-                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email..." className="w-full bg-transparent outline-none text-sm font-semibold text-slate-700" />
+            <Card className="overflow-hidden">
+                <motion.button {...tapFlat} onClick={() => setShowCreate(v => !v)} aria-expanded={showCreate} className="w-full flex items-center justify-between p-5 text-left">
+                    <span className="text-[17px] font-semibold">Create user</span>
+                    <Icon name={showCreate ? 'expand_less' : 'expand_more'} size={22} className="text-faint" />
+                </motion.button>
+                <Collapse open={showCreate}>
+                    <form onSubmit={handleCreate} className="px-5 pb-5 pt-4 border-t border-rule flex flex-col gap-4">
+                        <div className="grid md:grid-cols-2 gap-3">
+                            <input className={`${inputCls} text-sm`} placeholder="Display name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
+                            <input className={`${inputCls} text-sm`} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
                         </div>
-                        <select value={sort} onChange={e => setSort(e.target.value as any)} className="bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-bold text-slate-700 shadow-sm outline-none">
-                            <option value="newest">Newest first</option>
-                            <option value="active">Recently active</option>
-                            <option value="name">Name A–Z</option>
-                        </select>
-                    </div>
-
-                    {loading ? (
-                        <p className="text-center text-slate-400 font-semibold py-8 animate-pulse">Loading users...</p>
-                    ) : shown.length === 0 ? (
-                        <p className="text-center text-slate-400 font-semibold py-8 bg-white border border-dashed border-slate-200 rounded-3xl">No matching users.</p>
-                    ) : (
-                    <AnimatePresence initial={false}>
-                    {shown.map((u, i) => (
-                        <motion.div key={u.id} {...listItem(i)} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
-                            <div className="flex items-center gap-3 min-w-0 md:w-1/3">
-                                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-600 uppercase shrink-0">{u.name.charAt(0)}</div>
-                                <div className="min-w-0">
-                                    <p className="font-bold text-slate-900 truncate">
-                                        {u.name}
-                                        {u.is_admin && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full align-middle">Admin</span>}
-                                    </p>
-                                    <p className="text-xs text-slate-400 truncate">{u.email}</p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-4 gap-3 flex-1 text-xs">
-                                <div><p className="text-slate-400 uppercase tracking-wider font-bold text-[10px]">Joined</p><p className="font-semibold text-slate-700">{ago(u.created_at)}</p></div>
-                                <div><p className="text-slate-400 uppercase tracking-wider font-bold text-[10px]">Last sign-in</p><p className="font-semibold text-slate-700">{ago(u.last_sign_in_at)}</p></div>
-                                <div><p className="text-slate-400 uppercase tracking-wider font-bold text-[10px]">Groups</p><p className="font-semibold text-slate-700">{u.groups_count}</p></div>
-                                <div><p className="text-slate-400 uppercase tracking-wider font-bold text-[10px]">Receipts</p><p className="font-semibold text-slate-700">{u.receipts_count}</p></div>
-                            </div>
-                            <div className="md:w-28 md:text-right">
-                                {u.email_confirmed ? (
-                                    <span className="text-xs font-bold text-emerald-600">Confirmed</span>
-                                ) : (
-                                    <motion.button {...tap} disabled={busyId === u.id} onClick={() => handleConfirm(u.id)} className="px-3 py-1.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-40">
-                                        {busyId === u.id ? 'Confirming...' : 'Force confirm'}
-                                    </motion.button>
-                                )}
-                            </div>
-                        </motion.div>
-                    ))}
-                    </AnimatePresence>
+                        <div className="flex gap-2">
+                            <input className={`${inputCls} text-sm font-mono`} type={showPw ? 'text' : 'password'} placeholder="Temporary password (min 8)" value={password} onChange={e => setPassword(e.target.value)} minLength={8} required />
+                            <Button variant="secondary" height={42} className="shrink-0" onClick={() => setPassword(generatePassword())}>Generate</Button>
+                            <motion.button {...tapFlat} type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} className="px-2 shrink-0 text-faint hover:text-ink"><Icon name={showPw ? 'visibility_off' : 'visibility'} size={20} /></motion.button>
+                        </div>
+                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-body">
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={confirmEmail} onChange={e => setConfirmEmail(e.target.checked)} /> Skip email confirmation (force create)</label>
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={makeAdmin} onChange={e => setMakeAdmin(e.target.checked)} /> Make admin</label>
+                        </div>
+                        <Button type="submit" height={42} className="self-start" disabled={creating}>{creating ? 'Creating…' : 'Create user'}</Button>
+                    </form>
+                </Collapse>
+                <Pop show={!!created} className="mx-5 mb-5 p-4 bg-green-tint rounded-[14px] text-sm text-green-on flex flex-col gap-2">
+                    {created && (
+                        <>
+                            <p className="m-0 font-semibold">User created. Share these credentials now; the password is not shown again.</p>
+                            <p className="m-0 font-mono break-all">{created.email}<br />{created.password}</p>
+                            <Button variant="secondary" height={32} className="self-start text-[13px]" onClick={() => copy(`${created.email}\n${created.password}`)}>{copied ? 'Copied!' : 'Copy'}</Button>
+                        </>
                     )}
-                </section>
-            </main>
+                </Pop>
+            </Card>
+
+            <section className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1 flex items-center gap-2 h-[42px] px-3.5 bg-white border border-edge rounded-[10px]">
+                        <Icon name="search" size={20} className="text-faint" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email..." className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
+                    </div>
+                    <select value={sort} onChange={e => setSort(e.target.value as any)} aria-label="Sort users" className="h-[42px] bg-white border border-line rounded-[10px] px-3.5 text-sm font-semibold text-ink">
+                        <option value="newest">Newest first</option>
+                        <option value="active">Recently active</option>
+                        <option value="name">Name A–Z</option>
+                    </select>
+                </div>
+
+                {loading ? (
+                    <p className="text-center text-faint py-8 m-0 animate-pulse">Loading users…</p>
+                ) : shown.length === 0 ? (
+                    <p className="m-0 p-8 text-center text-sm text-faint border border-dashed border-line rounded-[14px]">No matching users.</p>
+                ) : (
+                    <Card className="overflow-hidden">
+                        <AnimatePresence initial={false}>
+                            {shown.map((u, i) => (
+                                <motion.div key={u.id} {...listItem(i)} className={`px-[18px] py-3.5 flex flex-col md:flex-row md:items-center gap-3 md:gap-6 ${i ? 'border-t border-rule' : ''}`}>
+                                    <div className="flex items-center gap-3 min-w-0 md:w-1/3">
+                                        <Avatar name={u.name} tone={toneFor(HUES[i % HUES.length])} size={36} />
+                                        <div className="min-w-0 flex flex-col gap-0.5">
+                                            <span className="text-[15px] font-semibold truncate">
+                                                {u.name}
+                                                {u.is_admin && <span className="ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface text-body align-middle">Admin</span>}
+                                            </span>
+                                            <span className="text-[13px] text-faint truncate">{u.email}</span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-3 flex-1 text-xs">
+                                        {[['Joined', ago(u.created_at)], ['Last sign-in', ago(u.last_sign_in_at)], ['Groups', u.groups_count], ['Expenses', u.receipts_count]].map(([k, v]) => (
+                                            <div key={k as string}><p className="m-0 text-faint">{k}</p><p className="m-0 font-semibold text-body">{v}</p></div>
+                                        ))}
+                                    </div>
+                                    <div className="md:w-28 md:text-right">
+                                        {u.email_confirmed ? (
+                                            <span className="text-xs font-semibold text-green">Confirmed</span>
+                                        ) : (
+                                            <Button variant="secondary" height={32} className="text-[13px] px-3" disabled={busyId === u.id} onClick={() => handleConfirm(u.id)}>{busyId === u.id ? 'Confirming…' : 'Force confirm'}</Button>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    </Card>
+                )}
+            </section>
         </div>
     );
 }

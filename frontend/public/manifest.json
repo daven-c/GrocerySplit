@@ -1,6 +1,7 @@
 {
-	"short_name": "Grocery Split",
-	"name": "Grocery Split App",
+	"short_name": "Splitpot",
+	"name": "Splitpot",
+	"description": "Split groceries, rent, bills and trips with the people you share them with.",
 	"icons": [
 		{
 			"src": "favicon.ico",
@@ -10,6 +11,6 @@
 	],
 	"start_url": ".",
 	"display": "standalone",
-	"theme_color": "#000000",
-	"background_color": "#ffffff"
+	"theme_color": "#FFFFFF",
+	"background_color": "#FFFFFF"
 }

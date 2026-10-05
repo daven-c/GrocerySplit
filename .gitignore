@@ -78,3 +78,6 @@ junit.xml
 test-results/
 
 !.env.example
+
+# Claude Code local state
+.claude/

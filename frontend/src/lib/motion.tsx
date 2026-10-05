@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, MotionConfig, MotionGlobalConfig, animate, useMotionValue, useTransform } from 'framer-motion';
 
 export { motion, AnimatePresence, MotionConfig };
@@ -58,19 +59,22 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
         return () => document.removeEventListener('keydown', onKey);
     }, [open, onClose]);
 
-    return (
+    // Portal to <body>: dialogs must not inherit a page's mid-animation opacity/transform (fades multiply,
+    // and `fixed` positioning is relative to any transformed ancestor).
+    if (typeof document === 'undefined') return null;
+    return createPortal(
         <AnimatePresence>
             {open && (
                 <motion.div
                     key="backdrop"
-                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+                    className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
                     {...fade}
                     onClick={onClose}
                 >
                     <motion.div
                         role="dialog"
                         aria-modal="true"
-                        className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+                        className="bg-white rounded-[14px] border border-edge p-6 w-full max-w-sm shadow-popover"
                         initial={{ opacity: FROM, scale: 0.92, y: 14 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -81,7 +85,8 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
                     </motion.div>
                 </motion.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
 
@@ -126,7 +131,7 @@ export function Pop({ show, className, children }: { show: boolean; className?: 
 /** Counts smoothly from the previous value to the next. */
 export function AnimatedNumber({ value, prefix = '', decimals = 2, className }: { value: number; prefix?: string; decimals?: number; className?: string }) {
     const mv = useMotionValue(value);
-    const text = useTransform(mv, v => `${prefix}${v.toFixed(decimals)}`);
+    const text = useTransform(mv, v => `${prefix}${v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`);
     useEffect(() => {
         const controls = animate(mv, value, { duration: 0.5, ease: 'easeOut' });
         return () => controls.stop();
@@ -134,33 +139,66 @@ export function AnimatedNumber({ value, prefix = '', decimals = 2, className }: 
     return <motion.span className={className}>{text}</motion.span>;
 }
 
-/** Segmented control whose highlight slides between options. */
+/** Segmented control (track #ECE9E2, white active pill) whose highlight slides between options. */
 export function SegmentedTabs<T extends string>({
-    id, tabs, value, onChange, size = 'md', className = '',
+    id, tabs, value, onChange, className = '',
 }: {
     id: string;
     tabs: { value: T; label: string }[];
     value: T;
     onChange: (v: T) => void;
+    /** kept for API compatibility with earlier callers */
     size?: 'md' | 'sm';
     className?: string;
 }) {
     return (
-        <div role="tablist" className={`flex bg-slate-200 p-1 shadow-inner ${size === 'sm' ? 'rounded-lg' : 'rounded-xl'} ${className}`}>
+        <div role="tablist" className={`grid p-[3px] bg-track rounded-[10px] ${className}`} style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
             {tabs.map(t => {
                 const active = value === t.value;
                 return (
                     <motion.button
                         key={t.value}
                         role="tab"
+                        type="button"
                         aria-selected={active}
                         onClick={() => onChange(t.value)}
                         {...tapFlat}
-                        className={`relative flex-1 font-bold transition-colors ${size === 'sm' ? 'py-2 text-xs rounded-md' : 'py-2.5 text-sm rounded-lg'} ${active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                        className="relative h-[34px] rounded-lg text-sm font-semibold text-ink"
                     >
-                        {active && <motion.span layoutId={`${id}-pill`} className={`absolute inset-0 bg-white shadow-sm ${size === 'sm' ? 'rounded-md' : 'rounded-lg'}`} transition={spring} />}
+                        {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 bg-white rounded-lg shadow-seg" transition={spring} />}
                         <span className="relative">{t.label}</span>
                     </motion.button>
+                );
+            })}
+        </div>
+    );
+}
+
+/** Underline tabs (group detail): the 2px ink underline slides between tabs. */
+export function UnderlineTabs<T extends string>({
+    id, tabs, value, onChange,
+}: {
+    id: string;
+    tabs: { value: T; label: string }[];
+    value: T;
+    onChange: (v: T) => void;
+}) {
+    return (
+        <div role="tablist" className="flex gap-6 border-b border-edge">
+            {tabs.map(t => {
+                const active = value === t.value;
+                return (
+                    <button
+                        key={t.value}
+                        role="tab"
+                        type="button"
+                        aria-selected={active}
+                        onClick={() => onChange(t.value)}
+                        className={`relative h-10 text-sm font-semibold transition-colors ${active ? 'text-ink' : 'text-faint hover:text-body'}`}
+                    >
+                        {t.label}
+                        {active && <motion.span layoutId={`${id}-underline`} className="absolute left-0 right-0 -bottom-px h-0.5 bg-ink" transition={spring} />}
+                    </button>
                 );
             })}
         </div>

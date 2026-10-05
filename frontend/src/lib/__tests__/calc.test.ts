@@ -58,9 +58,16 @@ describe('computeSplit', () => {
         const r = computeSplit([{ price: 10, assigned_users: ['A', 'Gone'] }], ['A'], 0, 0);
         expect(get(r.totals, 'A')).toBe(10);
     });
-    it('splits tax evenly when nothing is assigned yet', () => {
-        const r = computeSplit([], ['A', 'B'], 2, 0);
-        expect(get(r.totals, 'A')).toBe(1);
+    it('charges nobody tax or tip until items are assigned (no phantom debts)', () => {
+        const r = computeSplit([{ price: 10, assigned_users: [] }], ['A', 'B'], 2, 1);
+        expect(get(r.totals, 'A')).toBe(0);
+        expect(get(r.totals, 'B')).toBe(0);
+        expect(computeSplit([], ['A', 'B'], 2, 0).totals.map(([, v]) => v)).toEqual([0, 0]);
+    });
+    it('once one person has items, they carry all the tax and tip', () => {
+        const r = computeSplit([{ price: 10, assigned_users: ['B'] }], ['A', 'B'], 2, 1);
+        expect(get(r.totals, 'A')).toBe(0);
+        expect(get(r.totals, 'B')).toBe(13);
     });
     it('handles no participants', () => {
         expect(computeSplit([{ price: 5, assigned_users: ['A'] }], [], 1, 1).totals).toEqual([]);

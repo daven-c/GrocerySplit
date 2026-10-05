@@ -1,23 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
+import { MotionConfig, motion } from "./lib/motion";
+import { useNarrow } from "./lib/hooks";
+import { AppDataProvider } from "./lib/appData";
+import Landing from "./components/Landing";
 import Auth from "./components/Auth";
+import Shell, { NavView } from "./components/Shell";
 import Dashboard from "./components/Dashboard";
+import GroupDetail, { GroupTab } from "./components/GroupDetail";
 import ReceiptUpload from "./components/ReceiptUpload";
 import Split from "./components/Split";
-import GroupDetail from "./components/GroupDetail";
+import ExpenseEditor from "./components/ExpenseEditor";
+import Friends from "./components/Friends";
 import Account from "./components/Account";
 import Admin from "./components/Admin";
-import { MotionConfig, motion, FROM } from "./lib/motion";
 
-type ViewState = 'auth' | 'dashboard' | 'group' | 'upload' | 'split' | 'account' | 'admin';
+type View = 'landing' | 'auth' | 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
 
 const App: React.FC = () => {
     const [auth, setAuth] = useState<AuthSession | null>(null);
     const [ready, setReady] = useState(false);
-    const [view, setView] = useState<ViewState>('auth');
-    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+    const [view, setView] = useState<View>('landing');
+    const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+    const [groupId, setGroupId] = useState<string | null>(null);
+    const [groupTab, setGroupTab] = useState<GroupTab>('expenses');
+    const [recordId, setRecordId] = useState<string | null>(null);
+    const [newGroupTick, setNewGroupTick] = useState(0);
+    const narrow = useNarrow();
 
     const user = auth ? { id: auth.user.id, email: auth.user.email, name: auth.user.user_metadata?.name || auth.user.email?.split('@')[0] || 'User' } : null;
 
@@ -28,7 +38,7 @@ const App: React.FC = () => {
             if (done) return;
             done = true;
             setAuth(session);
-            setView(session ? 'dashboard' : 'auth');
+            setView(session ? 'home' : 'landing');
             setReady(true);
         };
         supabase.auth.getSession()
@@ -38,14 +48,14 @@ const App: React.FC = () => {
                 finish(null);
             });
         const timer = setTimeout(() => {
-            console.warn('Session restore timed out; showing sign-in');
+            console.warn('Session restore timed out; showing the landing page');
             finish(null);
         }, 6000);
 
         const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
             setAuth(session);
-            // A late session (after the timeout) should still land on the app, not the sign-in screen.
-            setView(v => (session ? (v === 'auth' ? 'dashboard' : v) : 'auth'));
+            // A late session (after the timeout) should still land in the app; sign-out returns to the landing page.
+            setView(v => (session ? (v === 'landing' || v === 'auth' ? 'home' : v) : 'landing'));
             if (session) setReady(true);
         });
         return () => {
@@ -54,51 +64,80 @@ const App: React.FC = () => {
         };
     }, []);
 
-    const openGroup = (groupId: string) => {
-        setActiveGroupId(groupId);
+    const openGroup = useCallback((id: string, tab: GroupTab = 'expenses') => {
+        setGroupId(id);
+        setGroupTab(tab);
         setView('group');
-    };
+    }, []);
 
-    const openReceipt = (sessionId: string) => {
-        setActiveSessionId(sessionId);
-        setView('split');
-    };
+    const openRecord = useCallback((id: string, kind: 'receipt' | 'expense') => {
+        setRecordId(id);
+        setView(kind === 'expense' ? 'expense' : 'split');
+    }, []);
 
+    const handleNav = (v: NavView) => setView(v);
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        setView('auth');
+        setAuth(null); // don't depend solely on the auth listener to leave the app shell
+        setView('landing');
     };
+
+    // Back: record -> its group, import -> group, group -> home.
+    const back = () => setView(v => (v === 'group' ? 'home' : v === 'import' ? 'split' : groupId ? 'group' : 'home'));
 
     if (!ready) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center" role="status" aria-label="Loading">
-                <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+            <div className="min-h-screen bg-white flex items-center justify-center" role="status" aria-label="Loading">
+                <div className="w-7 h-7 border-[3px] border-edge border-t-ink rounded-full animate-spin" />
             </div>
         );
     }
 
-    const signedIn = !!auth;
+    const signedIn = !!auth && !!user;
 
     return (
         <MotionConfig reducedMotion="user">
-        <div className="app-container" style={{ width: '100vw', minHeight: '100vh', background: '#f8fafc' }}>
-            <motion.div key={view} initial={{ opacity: 0.7, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-                {(!signedIn || view === 'auth') && <Auth onLogin={() => setView('dashboard')} />}
-                {signedIn && view === 'dashboard' && <Dashboard user={user} onOpenGroup={openGroup} onOpenAccount={() => setView('account')} onOpenAdmin={() => setView('admin')} onLogout={handleLogout} />}
-                {signedIn && view === 'group' && activeGroupId && (
-                    <GroupDetail
-                        groupId={activeGroupId}
-                        onBack={() => setView('dashboard')}
-                        onImport={() => setView('upload')}
-                        onOpenReceipt={openReceipt}
-                    />
-                )}
-                {signedIn && view === 'upload' && activeGroupId && <ReceiptUpload groupId={activeGroupId} onImported={id => openReceipt(id)} onBack={() => setView('group')} />}
-                {signedIn && view === 'split' && activeSessionId && <Split sessionId={activeSessionId} onBack={() => setView(activeGroupId ? 'group' : 'dashboard')} />}
-                {signedIn && view === 'admin' && <Admin onBack={() => setView('dashboard')} />}
-                {signedIn && view === 'account' && <Account user={user} onBack={() => setView('dashboard')} onLogout={handleLogout} />}
-            </motion.div>
-        </div>
+            {!signedIn && view !== 'auth' && (
+                <Landing onSignIn={() => { setAuthMode('login'); setView('auth'); }} onGetStarted={() => { setAuthMode('signup'); setView('auth'); }} />
+            )}
+            {!signedIn && view === 'auth' && (
+                <motion.div key={authMode} initial={{ opacity: 0.8 }} animate={{ opacity: 1 }}>
+                    <Auth initialMode={authMode} onLogin={() => setView('home')} onBack={() => setView('landing')} />
+                </motion.div>
+            )}
+            {signedIn && user && (
+                <AppDataProvider userId={user.id}>
+                    <Shell
+                        view={view as Exclude<View, 'landing' | 'auth'>}
+                        narrow={narrow}
+                        user={user}
+                        groupId={groupId}
+                        recordId={recordId}
+                        onNav={handleNav}
+                        onOpenGroup={id => openGroup(id)}
+                        onNewGroup={() => { setView('home'); setNewGroupTick(t => t + 1); }}
+                        onBack={back}
+                    >
+                        {view === 'home' && <Dashboard user={user} narrow={narrow} newGroupTick={newGroupTick} onOpenGroup={openGroup} onGoFriends={() => setView('friends')} />}
+                        {view === 'group' && groupId && (
+                            <GroupDetail
+                                key={groupId}
+                                groupId={groupId}
+                                initialTab={groupTab}
+                                narrow={narrow}
+                                onBack={() => setView('home')}
+                                onOpenRecord={openRecord}
+                            />
+                        )}
+                        {view === 'import' && groupId && recordId && <ReceiptUpload groupId={groupId} sessionId={recordId} narrow={narrow} onImported={() => setView('split')} onBack={() => setView('split')} />}
+                        {view === 'split' && recordId && <Split sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onImport={() => setView('import')} />}
+                        {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} />}
+                        {view === 'friends' && <Friends />}
+                        {view === 'account' && <Account user={user} onLogout={handleLogout} />}
+                        {view === 'admin' && <Admin />}
+                    </Shell>
+                </AppDataProvider>
+            )}
         </MotionConfig>
     );
 };
