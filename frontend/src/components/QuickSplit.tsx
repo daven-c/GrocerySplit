@@ -113,6 +113,8 @@ export default function QuickSplit({ token }: { token: string }) {
     // The split itself (items, prices, tax, tip, who paid, who is on it) is the owner's. Everyone else can only tap
     // items onto or off THEMSELVES; the database enforces both, this just keeps the page honest.
     const canManage = isOwner && !locked;
+    // Anyone who has joined (and holds their key) can also add items; editing or deleting them is the owner's.
+    const canAdd = !locked && (isOwner || (joined && !!memberKey));
     const canTap = (person: string) => !locked && (isOwner || (joined && person === me && !!memberKey));
 
     const result = useMemo(() => (data ? computeSplit(data.items.map(i => ({ price: i.price, assigned_users: i.assigned })), data.people, data.tax, data.tip) : null), [data]);
@@ -163,7 +165,7 @@ export default function QuickSplit({ token }: { token: string }) {
         const price = money(newPrice);
         setNewItem('');
         setNewPrice('');
-        void act(null, () => addQuickItems(token, [{ name, price }], ok));
+        void act(null, () => addQuickItems(token, [{ name, price }], ok, memberKey));
     };
 
     const importJson = () => {
@@ -302,8 +304,8 @@ export default function QuickSplit({ token }: { token: string }) {
                         </Card>
                     )}
 
-                    {!isOwner && !locked && joined && data.items.length > 0 && <span className="text-[13px] text-muted">Tap your own name under each item you had. Only the owner can change items or other people's picks.</span>}
-                    {data.items.length === 0 && <Card className="p-5 text-sm text-faint">{isOwner ? 'No items yet. Add what was ordered, or import a receipt.' : 'No items yet. The owner of this split adds them.'}</Card>}
+                    {!isOwner && !locked && joined && data.items.length > 0 && <span className="text-[13px] text-muted">Tap your own name under each item you had, or add one that's missing. Only the owner can edit or delete items and change other people's picks.</span>}
+                    {data.items.length === 0 && <Card className="p-5 text-sm text-faint">{isOwner ? 'No items yet. Add what was ordered, or import a receipt.' : joined ? 'No items yet. Add what you had below.' : 'No items yet. Join with your name to add some.'}</Card>}
                     {data.items.map(it => (
                         <Card key={it.id} className="p-3.5 flex flex-col gap-2.5">
                             <div className="flex items-center gap-2">
@@ -338,7 +340,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         </Card>
                     ))}
 
-                    {canManage && (
+                    {canAdd && (
                         <div className="flex gap-2">
                             <input aria-label="New item name" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Add an item" className="flex-1 min-w-0 h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
                             <input aria-label="New item price" inputMode="decimal" value={newPrice} onChange={e => setNewPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="0.00" className="w-[104px] shrink-0 text-right font-mono h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
@@ -391,15 +393,18 @@ export default function QuickSplit({ token }: { token: string }) {
                     <div className="border-t border-rule pt-3 flex justify-between font-semibold text-[15px]"><span>Total</span><span className="font-mono">{fmt(grand)}</span></div>
                 </Card>
 
-                <Card className="px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                    <span className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-sm font-semibold">Keep this in a group</span>
-                        <span className="text-[13px] text-muted">{signedIn ? 'Turn this split into a receipt in one of your Splitpot groups.' : 'Sign in to Splitpot to turn this split into a receipt in one of your groups.'}</span>
-                    </span>
-                    {signedIn
-                        ? <Button variant="secondary" height={38} className="px-3.5" onClick={() => setImportOpen(true)}>Import to a group</Button>
-                        : <a href="/" className="h-[38px] px-3.5 inline-flex items-center rounded-[10px] border border-line text-sm font-semibold hover:bg-wash">Sign in</a>}
-                </Card>
+                {/* Only the person who made the split can save it to a group. */}
+                {isOwner && (
+                    <Card className="px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+                        <span className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-sm font-semibold">Keep this in a group</span>
+                            <span className="text-[13px] text-muted">{signedIn ? 'Turn this split into a receipt in one of your Splitpot groups.' : 'Sign in to Splitpot to turn this split into a receipt in one of your groups.'}</span>
+                        </span>
+                        {signedIn
+                            ? <Button variant="secondary" height={38} className="px-3.5" onClick={() => setImportOpen(true)}>Import to a group</Button>
+                            : <a href="/" className="h-[38px] px-3.5 inline-flex items-center rounded-[10px] border border-line text-sm font-semibold hover:bg-wash">Sign in</a>}
+                    </Card>
+                )}
             </div>
             {importOpen && <QuickSplitImport data={data} onClose={() => setImportOpen(false)} />}
         </Shell>
