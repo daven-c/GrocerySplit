@@ -37,19 +37,8 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
         setLoading(true);
         try {
             if (isLogin) {
-                const who = email.trim();
-                if (/^[^@\s]+@[^@\s]+$/.test(who)) {
-                    const { error } = await supabase.auth.signInWithPassword({ email: who, password });
-                    if (error) throw error;
-                } else {
-                    const { data, error } = await supabase.functions.invoke('username-login', { body: { username: who, password } });
-                    if (error || !data?.session) {
-                        const body = await (error as any)?.context?.json?.().catch(() => null);
-                        throw new Error(body?.error || data?.error || 'Invalid login credentials');
-                    }
-                    const { error: setErr } = await supabase.auth.setSession(data.session);
-                    if (setErr) throw setErr;
-                }
+                const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+                if (error) throw error;
                 onLogin();
             } else {
                 const handle = username.trim().toLowerCase().replace(/^@/, '');
@@ -130,8 +119,8 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                             </label>
                         </Collapse>
                         <label className={`flex flex-col gap-[7px] ${labelCls}`}>
-                            {isLogin ? 'Email or username' : 'Email'}
-                            <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder={isLogin ? 'you@example.com or username' : 'you@example.com'} type={isLogin ? 'text' : 'email'} autoComplete={isLogin ? 'username' : 'email'} autoCapitalize="none" required />
+                            Email
+                            <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
                         </label>
                         <div className={`flex flex-col gap-[7px] ${labelCls}`}>
                             <label htmlFor="auth-password">Password</label>
