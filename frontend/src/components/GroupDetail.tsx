@@ -44,6 +44,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [addOpen, setAddOpen] = useState(false);
     const [pending, setPending] = useState<PendingInvite[]>([]);
     const [email, setEmail] = useState('');
+    const [inviteName, setInviteName] = useState('');
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
@@ -215,9 +216,11 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         if (!/^\S+@\S+\.\S+$/.test(e)) return setError('Enter a valid email address.');
         if (group.members.some(m => m.email === e)) return setError('That person is already in this group.');
         try {
-            await inviteToGroup(groupId, e);
+            await inviteToGroup(groupId, e, inviteName);
             setEmail('');
-            setNotice(`Invite sent to ${e}. They'll see it when they sign in with that email.`);
+            setInviteName('');
+            setNotice(`Invited ${inviteName.trim() || e}. You can use them in expenses now; it all moves to their account when they join.`);
+            await refresh();
             setPending(await listPendingInvites(groupId));
         } catch (err: any) { setError(err.message); }
     };
@@ -525,17 +528,18 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         {isOwner && (
                             <Card className="p-[18px] flex flex-col gap-2.5">
                                 <span className="text-[15px] font-semibold">Invite someone</span>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
+                                    <input value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Name (optional)" aria-label="Invite name" maxLength={60} className={`${inputCls} w-[150px] text-sm`} />
                                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} placeholder="friend@example.com" aria-label="Invite by email" className={`${inputCls} flex-1 min-w-0 text-sm`} />
                                     <Button height={42} onClick={handleInvite} disabled={!email.trim()}>Send invite</Button>
                                 </div>
-                                <span className="text-[13px] leading-normal text-faint">They'll see it on their home screen when they sign in with that email.</span>
+                                <span className="text-[13px] leading-normal text-faint">You can add them to expenses right away. They'll see the invite when they sign in with that email, and everything moves to their account when they accept.</span>
                                 <AnimatePresence initial={false}>
                                     {pending.map(p => (
                                         <motion.div key={p.id} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center gap-2.5 px-3 py-2.5 bg-surface rounded-[10px]">
                                             <Icon name="schedule" size={18} className="text-faint" />
                                             <span className="flex-1 text-sm truncate">{p.email}</span>
-                                            <motion.button {...tapFlat} onClick={async () => { await revokeInvite(p.id); setPending(await listPendingInvites(groupId)); }} className="text-[13px] font-semibold text-coral">Revoke</motion.button>
+                                            <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err: any) { setError(err.message || 'Could not cancel that invite'); } }} className="text-[13px] font-semibold text-coral">Revoke</motion.button>
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
@@ -551,7 +555,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                         <span className="text-[13px] text-faint truncate">{m.email}</span>
                                     </span>
                                     {m.role === 'owner' && <span className="text-xs text-muted">Owner</span>}
-                                    {isOwner && m.role !== 'owner' && (
+                                    {m.pending && <span className="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-surface">Invited</span>}
+                                    {isOwner && m.role !== 'owner' && !m.pending && (
                                         <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => setConfirm({ kind: 'remove', userId: m.user_id, name: m.name })} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral">
                                             <Icon name="close" size={18} />
                                         </motion.button>

@@ -329,6 +329,20 @@ describe('Expense editor (general cost splitting)', () => {
         expect(screen.getByText('Split in proportion, e.g. 2 shares for a bigger room.')).toBeInTheDocument();
     });
 
+    it('an invited guest can be picked as payer and share an expense before joining', async () => {
+        const u = userEvent.setup();
+        const { group } = await import('../../test/apiMock');
+        const guest = { user_id: 'g-cam', joined_at: '2026-10-05T00:00:00Z', name: 'Cam', email: 'cam@x.com', role: 'member' as const, pending: true };
+        api.listGroups.mockResolvedValue([{ ...group, members: [...group.members, guest] }]);
+        renderWithData(<ExpenseEditor {...props} />);
+        await screen.findByDisplayValue('October rent');
+        await u.click(screen.getByLabelText('Cam is in on this'));
+        await u.selectOptions(screen.getByLabelText('Paid by'), 'Cam');
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({
+            paid_by: 'g-cam', split_data: { [ME]: 1200, 'u-amy': 600, 'u-bo': 600, 'g-cam': 0 },
+        })), SLOW);
+    });
+
     it('drops someone who has left the group from the split, and saves the cleaned split', async () => {
         const { rent } = await import('../../test/apiMock');
         api.getSession.mockResolvedValue({ ...rent, split_data: { ...rent.split_data, 'u-gone': 1 } });

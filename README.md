@@ -15,7 +15,7 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
-- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
+- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline. An invited person (optionally with a name) is usable in expenses right away, marked *Invited*; when they accept, everything they were in (payer, shares, transfers, receipt items) moves to their account. An invite can't be cancelled while they're in expenses.
 - The owner can invite, remove members and delete the group; any member can leave.
 - **Transfers:** marking a balance paid records a *transfer* that shows up in the group's list (with an undo). Record one by hand from the Add menu with two dropdowns, *who paid* and *who received*. Each group has a **Balances** tab that shows how much each person is up or down, with the fewest transfers that would settle everyone below.
 - **Friends** (sidebar / tab bar) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.

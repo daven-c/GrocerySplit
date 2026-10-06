@@ -215,6 +215,8 @@ export interface Member {
     name: string;
     email: string;
     role: 'owner' | 'member';
+    /** Invited but not joined yet. Usable in expenses; everything moves to their account when they accept. */
+    pending?: boolean;
 }
 
 export interface Group {
@@ -247,10 +249,11 @@ const mapGroup = (r: any): Group => ({
     created_at: r.created_at,
     members: (r.group_members ?? [])
         .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '' }))
-        .sort((a: Member, b: Member) => (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name))),
+        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: g.email, pending: true })))
+        .sort((a: Member, b: Member) => (!!a.pending !== !!b.pending ? (a.pending ? 1 : -1) : (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name)))),
 });
 
-const GROUP_SELECT = 'id, name, owner_id, created_at, group_members(user_id, role, joined_at, profiles(name, email))';
+const GROUP_SELECT = 'id, name, owner_id, created_at, group_members(user_id, role, joined_at, profiles(name, email)), group_guests(id, name, email, created_at)';
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));
@@ -274,8 +277,9 @@ export async function removeMember(groupId: string, userId: string) {
     check(await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId));
 }
 
-export async function inviteToGroup(groupId: string, email: string) {
-    const { error } = await supabase.from('group_invites').insert({ group_id: groupId, email: email.trim().toLowerCase() });
+/** `name` is what they are called until they join (defaults to the start of their email). */
+export async function inviteToGroup(groupId: string, email: string, name?: string) {
+    const { error } = await supabase.from('group_invites').insert({ group_id: groupId, email: email.trim().toLowerCase(), ...(name?.trim() ? { guest_name: name.trim() } : {}) });
     if (error) throw new Error(error.code === '23505' ? 'That email already has a pending invite.' : error.message);
 }
 

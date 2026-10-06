@@ -211,8 +211,10 @@ describe('Group detail', () => {
         expect(await screen.findByText('That person is already in this group.')).toBeInTheDocument();
         await u.clear(email);
         await u.type(email, 'New@Example.com');
+        await u.type(screen.getByLabelText('Invite name'), 'Cam');
         await u.click(screen.getByRole('button', { name: 'Send invite' }));
-        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', 'new@example.com'));
+        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', 'new@example.com', 'Cam'));
+        expect(await screen.findByText(/Invited Cam\. You can use them in expenses now/)).toBeInTheDocument();
 
         await u.click(screen.getByLabelText('Remove Amy'));
         const dialog = await screen.findByRole('dialog');
@@ -223,6 +225,20 @@ describe('Group detail', () => {
         await u.click(screen.getByLabelText('Remove Amy'));
         await u.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
         await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('g1', 'u-amy'));
+    });
+
+    it('an invited person who has not joined is listed as Invited, cannot be removed, but is a full member for expenses', async () => {
+        const u = userEvent.setup();
+        const guest = { user_id: 'g-cam', joined_at: '2026-10-05T00:00:00Z', name: 'Cam', email: 'cam@x.com', role: 'member' as const, pending: true };
+        const { group: g1, otherGroup: g2 } = await import('../../test/apiMock');
+        api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, guest] }, g2]);
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        expect(await screen.findByText('Cam')).toBeInTheDocument();
+        expect(screen.getByText('Invited')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Remove Cam')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Remove Amy')).toBeInTheDocument();
+        await u.click(screen.getByRole('tab', { name: 'Balances' }));
+        expect(await screen.findByText('Cam', { selector: 'span.truncate' })).toBeInTheDocument(); // part of the ledger
     });
 
     it('shows and revokes pending invites; delete group asks first and Escape dismisses', async () => {
