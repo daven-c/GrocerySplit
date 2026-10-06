@@ -27,8 +27,9 @@ describe('Receipt editor (grocery split)', () => {
         renderWithData(<Split {...props} />);
         expect(await screen.findByDisplayValue('Costco')).toBeInTheDocument();
         expect(screen.getByText(/Oct 1, 2026 · 3 items · paid by Daven/)).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument(); // the Split by control, on By item
-        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Shares', 'By item']);
+        expect(screen.getByText('Itemized receipt')).toBeInTheDocument(); // not a tab: it is a different kind of split
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Split one total instead' })).toBeInTheDocument();
         expect(screen.getByText('Pick a person, then tap their items')).toBeInTheDocument();
         expect(screen.getByText('2 of 3 assigned')).toBeInTheDocument();
         expect(screen.getByText('Oat Milk')).toBeInTheDocument();
@@ -537,8 +538,8 @@ describe('One editor: switching how an expense is split', () => {
         const onSwitched = vi.fn();
         renderWithData(<ExpenseEditor sessionId="s2" narrow={false} onBack={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={onSwitched} />);
         await screen.findByDisplayValue('October rent');
-        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Shares', 'By item']);
-        await u.click(screen.getByRole('tab', { name: 'By item' }));
+        expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Shares']);
+        await u.click(screen.getByRole('button', { name: 'Split by item' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({
             kind: 'receipt', name: 'October rent', category: 'rent', paid_by: ME, participants: ['Daven', 'Amy', 'Bo'],
         })));
@@ -550,10 +551,10 @@ describe('One editor: switching how an expense is split', () => {
         const onSwitched = vi.fn();
         renderWithData(<Split sessionId="s1" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={onSwitched} />);
         await screen.findByDisplayValue('Costco');
-        await u.click(screen.getByRole('tab', { name: 'Shares' }));
+        await u.click(screen.getByRole('button', { name: 'Split one total instead' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', expect.objectContaining({
-            kind: 'expense', amount: 40.1, split_method: 'shares', name: 'Costco', category: 'groceries',
-            split_data: { [ME]: 1, 'u-amy': 1, 'u-bo': 1 },
+            kind: 'expense', amount: 40.1, split_method: 'exact', name: 'Costco', category: 'groceries',
+            split_data: { [ME]: 13.37, 'u-amy': 13.37, 'u-bo': 13.36 },
         })));
         await waitFor(() => expect(onSwitched).toHaveBeenCalledWith('expense'));
     });
@@ -565,7 +566,7 @@ describe('One editor: switching how an expense is split', () => {
         const onSwitched = vi.fn();
         renderWithData(<Split sessionId="s1" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={vi.fn()} onDiscard={vi.fn()} onSwitched={onSwitched} />);
         await screen.findByDisplayValue('Costco');
-        await u.click(screen.getByRole('tab', { name: 'Amounts' }));
+        await u.click(screen.getByRole('button', { name: 'Split one total instead' }));
         expect(await screen.findByText('Could not switch how this is split.')).toBeInTheDocument();
         expect(onSwitched).not.toHaveBeenCalled();
         spy.mockRestore();

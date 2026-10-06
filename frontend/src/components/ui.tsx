@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, tap, tapFlat, SegmentedTabs } from '../lib/motion';
-import { SPLIT_BY, SplitBy } from '../lib/expenses';
+import { METHODS, SplitMethod } from '../lib/expenses';
 import type { Tone } from '../lib/people';
 import { initialOf } from '../lib/people';
 
@@ -106,11 +106,11 @@ export function DraftBar({ what, canSave, problem, saving, onSave, onDiscard }: 
     );
 }
 
-/** The one control for how an expense is split, shared by both bodies of the editor. */
-export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitBy; onChange: (v: SplitBy) => void; disabled?: boolean }) {
+/** How one total is shared out (older expenses saved as equal/percent open as amounts). */
+export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitMethod; onChange: (v: SplitMethod) => void; disabled?: boolean }) {
     return (
         <div className={disabled ? 'opacity-60 pointer-events-none' : ''} aria-busy={disabled}>
-            <SegmentedTabs id="split-by" compact value={value} onChange={onChange} tabs={SPLIT_BY.map(m => ({ value: m.value, label: m.label }))} />
+            <SegmentedTabs id="split-by" compact value={value} onChange={onChange} tabs={METHODS.map(m => ({ value: m.value, label: m.label }))} />
         </div>
     );
 }

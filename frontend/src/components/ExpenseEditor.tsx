@@ -4,7 +4,7 @@ import { useAppData } from '../lib/appData';
 import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
-import { CATEGORIES, METHODS, SplitBy, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
+import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
 
@@ -162,7 +162,6 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             setSaving(false);
         }
     };
-    const pickSplitBy = (to: SplitBy) => (to === 'items' ? switchToItems() : changeMethod(to));
 
     const changeMethod = (to: SplitMethod) => {
         const next = convertSplit(method, to, data, total);
@@ -267,7 +266,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                             <span className="text-sm font-semibold">Split by</span>
                             <motion.button {...tapFlat} onClick={toggleEveryone} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{everyone ? 'Clear everyone' : 'Select everyone'}</motion.button>
                         </div>
-                        <SplitByTabs value={method} onChange={pickSplitBy} disabled={saving} />
+                        <SplitByTabs value={method} onChange={changeMethod} disabled={saving} />
                         <span className="text-[13px] text-muted -mt-1">{hint}</span>
 
                         <div className="flex flex-col">
@@ -341,6 +340,14 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                         {active.length === 0 && <span className="text-sm text-faint">Choose who shares this cost.</span>}
                         <div className="border-t border-rule pt-3.5 flex justify-between font-semibold text-[15px]"><span>Total</span><AnimatedNumber value={total} prefix="$" className="font-mono" /></div>
                         <p className="m-0 text-xs leading-normal text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
+                    </Card>
+
+                    <Card className="px-5 py-4 flex items-center justify-between gap-4">
+                        <span className="flex flex-col gap-0.5">
+                            <span className="text-sm font-semibold">Have a receipt with items?</span>
+                            <span className="text-[13px] text-muted">Tap who had each item instead of splitting one total. Tax and tip are shared by what each person had.</span>
+                        </span>
+                        <Button variant="secondary" height={38} className="shrink-0 px-3.5" disabled={saving} onClick={switchToItems}>Split by item</Button>
                     </Card>
 
                     <Card className="px-5 py-4 flex flex-col gap-3">

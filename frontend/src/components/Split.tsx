@@ -6,7 +6,7 @@ import { getSession, updateSession, addItem, updateItem, deleteItem, deleteSessi
 import { computeSplit } from '../lib/calc';
 import { CATEGORIES, SplitMethod, convertSplit, everyoneEqual } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
+import { Avatar, Button, Card, DraftBar, Icon } from './ui';
 
 interface SplitProps {
     sessionId: string;
@@ -272,8 +272,9 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             <div className="flex flex-wrap gap-6 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
                     <Card className="p-4 flex flex-col gap-3">
-                        <span className="text-sm font-semibold">Split by</span>
-                        <SplitByTabs value="items" onChange={m => { if (m !== 'items') void switchTo(m); }} disabled={saving} />
+                        <span className="text-sm font-semibold">Itemized receipt</span>
+                        <span className="text-[13px] text-muted -mt-1.5">Tap who had each item. Tax and tip are shared by what each person had.</span>
+                        <Button variant="secondary" height={38} className="self-start px-3.5" disabled={saving} onClick={() => void switchTo('exact')}>Split one total instead</Button>
                     </Card>
 
                     <Card className="p-4 flex flex-col gap-3">

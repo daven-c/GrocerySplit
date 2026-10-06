@@ -135,6 +135,17 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const memberNames = group.members.map(m => m.name);
 
+    const addReceipt = async () => {
+        setAddOpen(false);
+        if (creating.current) return;
+        creating.current = true;
+        try {
+            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
+            await refresh();
+            onOpenRecord(id, 'receipt', true);
+        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
+    };
+
     const addExpense = async () => {
         setAddOpen(false);
         if (creating.current) return;
@@ -315,7 +326,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[
-                                    { icon: 'payments', title: 'Add an expense', desc: 'A bill, groceries, rent, a trip. You choose how to split it', go: addExpense },
+                                    { icon: 'payments', title: 'Split a total', desc: 'One price: rent, a bill, a trip. Split by amount or shares', go: addExpense },
+                                    { icon: 'receipt_long', title: 'Split a receipt', desc: 'Itemized: tap who had what, or import it from JSON', go: addReceipt },
                                     { icon: 'swap_horiz', title: 'Record a payback', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">

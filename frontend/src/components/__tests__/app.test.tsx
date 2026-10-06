@@ -220,7 +220,7 @@ describe('Drafts in the app shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Add an expense'));
+        await u.click(await screen.findByText('Split a total'));
         await screen.findByRole('region', { name: 'Unsaved draft' });
         return { u, sidebar };
     };
@@ -255,18 +255,18 @@ describe('Drafts in the app shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Add an expense'));
+        await u.click(await screen.findByText('Split a total'));
         await screen.findByLabelText('How much was it?'); // the amount-based body
 
-        await u.click(screen.getByRole('tab', { name: 'By item' }));
+        await u.click(screen.getByRole('button', { name: 'Split by item' }));
         expect(await screen.findByRole('button', { name: /Add an item/ })).toBeInTheDocument(); // the itemized body
-        expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument();
+        expect(screen.getByText('Itemized receipt')).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument(); // still a draft
         expect(api.deleteSession).not.toHaveBeenCalled();
 
-        await u.click(screen.getByRole('tab', { name: 'Shares' }));
+        await u.click(screen.getByRole('button', { name: 'Split one total instead' }));
         expect(await screen.findByLabelText('How much was it?')).toBeInTheDocument(); // back to the amount body
-        expect(screen.getByRole('tab', { name: 'Shares', selected: true })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Amounts', selected: true })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument();
         expect(api.deleteSession).not.toHaveBeenCalled();
     });
