@@ -91,7 +91,7 @@ export async function createSession(input: {
     tax?: number;
     tip?: number;
     participants?: string[];
-    items?: { name: string; price: number }[];
+    items?: { name: string; price: number; assigned_users?: string[] }[];
 }): Promise<string> {
     const s = check(
         await supabase
@@ -114,7 +114,7 @@ export async function createSession(input: {
     if (input.items?.length) {
         const { error } = await supabase
             .from('items')
-            .insert(input.items.map(i => ({ session_id: s.id, name: i.name, price: i.price })));
+            .insert(input.items.map(i => ({ session_id: s.id, name: i.name, price: i.price, ...(i.assigned_users ? { assigned_users: i.assigned_users } : {}) })));
         if (error) {
             await supabase.from('sessions').delete().eq('id', s.id); // don't leave an empty half-import behind
             throw new Error(error.message);

@@ -13,6 +13,7 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 
 ## How it's organised
 
+- **Quick split** (no account, no group): one shareable page for splitting a single bill, e.g. at dinner. Start it from the landing page or Home, share the link (`/s/<token>`), and everyone opens it, picks a unique name and taps what they had. Anyone with the link can edit; the owner can lock it, and a split nobody touches for 30 days is deleted. A signed-in person can import it into a group, matching each name to a member. The link's long random token is the only credential, and the tables are closed: everything goes through the `qs_*` database functions.
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline. An invited person (optionally with a name) is usable in expenses right away, marked *Invited*; when they accept, everything they were in (payer, shares, transfers, receipt items) moves to their account. An invite can't be cancelled while they're in expenses.
