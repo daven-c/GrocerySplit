@@ -30,23 +30,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Quick split page (no account)', () => {
-    it('a stranger opens the link, adds their name, and names are unique', async () => {
+    const OWNER = (extra: object = {}) => localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER', ...extra }));
+    const asMember = (name: string) => localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: name, memberKey: `key-${name}` }));
+
+    it('a stranger opens the link and joins with a name that is not taken (they cannot become someone else)', async () => {
         const u = userEvent.setup();
         fakeQuick.seed({ people: ['Ann'] });
         view();
         expect(await screen.findByText('Who are you?')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: "I'm Ann" })).not.toBeInTheDocument(); // only the owner can act as someone else
         await u.type(screen.getByLabelText('Your name'), 'ann');
         await u.click(screen.getByRole('button', { name: 'Join' }));
         expect(await screen.findByText('That name is taken.')).toBeInTheDocument();
-        await u.click(screen.getByRole('button', { name: "I'm Ann" })); // the same person coming back
-        expect(await screen.findByText('Ann', { selector: 'strong' })).toBeInTheDocument();
-        expect(JSON.parse(localStorage.getItem(`splitpot:quick:${TOKEN}`)!).me).toBe('Ann'); // remembered next visit
+        await u.clear(screen.getByLabelText('Your name'));
+        await u.type(screen.getByLabelText('Your name'), 'Cy');
+        await u.click(screen.getByRole('button', { name: 'Join' }));
+        expect(await screen.findByText('Cy', { selector: 'strong' })).toBeInTheDocument();
+        const saved = JSON.parse(localStorage.getItem(`splitpot:quick:${TOKEN}`)!);
+        expect(saved).toMatchObject({ me: 'Cy', memberKey: 'key-Cy' }); // remembered, with the private key
     });
 
-    it('everyone edits: add items, tap who had what, and each share includes tax and tip', async () => {
+    it('the owner can act as anyone already on the split', async () => {
         const u = userEvent.setup();
-        fakeQuick.seed({ people: ['Ann', 'Bo'], tax: 2, tip: 3 });
-        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Ann' }));
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
+        OWNER();
+        view();
+        await u.click(await screen.findByRole('button', { name: "I'm Ann" }));
+        expect(await screen.findByText('Ann', { selector: 'strong' })).toBeInTheDocument();
+    });
+
+    it('the owner edits everything: add items, tap who had what for anybody, and each share includes tax and tip', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ people: ['Ann', 'Bo'], tax: 2, tip: 3, ownerKey: 'OWNER' });
+        OWNER({ me: 'Ann', memberKey: 'key-Ann' });
         view();
         await u.type(await screen.findByLabelText('New item name'), 'Pasta');
         await u.type(screen.getByLabelText('New item price'), '30');
@@ -55,13 +71,63 @@ describe('Quick split page (no account)', () => {
         await u.type(screen.getByLabelText('New item price'), '10');
         await u.click(screen.getByRole('button', { name: 'Add' }));
         await u.click(await screen.findByLabelText('Ann had Pasta'));
-        await u.click(screen.getByLabelText('Bo had Salad'));
+        await u.click(screen.getByLabelText('Bo had Salad')); // the owner can tap someone else
         // items 30 : 10, tax+tip 5 shared 3:1 -> Ann 33.75, Bo 11.25
         await waitFor(() => expect(screen.getByText('$33.75')).toBeInTheDocument());
         expect(screen.getByText('$11.25')).toBeInTheDocument();
         expect(screen.getByText('$45.00', { selector: 'span.text-\\[34px\\]' })).toBeInTheDocument(); // the total
         await u.click(screen.getByLabelText('Bo had Pasta')); // sharing an item splits it
         await waitFor(() => expect(screen.getAllByText('15.00 each', { exact: false }).length).toBeGreaterThan(0));
+    });
+
+    it('everyone else can only tap THEMSELVES on and off items: no editing, no removing people, no tapping others', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ people: ['Ann', 'Bo'], items: [{ name: 'Pasta', price: 30, assigned: ['Bo'] }, { name: 'Salad', price: 10 }], tax: 2, ownerKey: 'OWNER' });
+        asMember('Ann');
+        view();
+        const mine = await screen.findByLabelText('Ann had Pasta');
+        expect(mine).toBeEnabled();
+        expect(screen.getByLabelText('Bo had Pasta')).toBeDisabled(); // cannot deselect Bo
+        expect(screen.getByLabelText('Bo had Salad')).toBeDisabled();
+        // nothing about the split itself is editable
+        for (const label of ['Item name Pasta', 'Price of Pasta', 'Paid by', 'Tax', 'Tip', 'Split title']) expect(screen.getByLabelText(label)).toBeDisabled();
+        for (const label of ['New item name', 'Remove Bo', 'Remove Ann', 'Delete Pasta']) expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Everyone' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Import from JSON' })).not.toBeInTheDocument();
+        await u.click(mine);
+        await waitFor(() => expect(fakeQuick.state.items[0].assigned.sort()).toEqual(['Ann', 'Bo']));
+        await u.click(mine);
+        await waitFor(() => expect(fakeQuick.state.items[0].assigned).toEqual(['Bo']));
+        expect(fakeQuick.api.assignQuickItem).toHaveBeenCalledWith(TOKEN, 'i0', 'Ann', true, { memberKey: 'key-Ann', ownerKey: null });
+    });
+
+    it('layout: Paid by sits near the top, Who owes what is at the bottom; people have colors', async () => {
+        fakeQuick.seed({ people: ['Ann', 'Bo'], items: [{ name: 'Pasta', price: 30, assigned: ['Ann'] }], ownerKey: 'OWNER', paidBy: 'Ann', tax: 1 });
+        asMember('Ann');
+        view();
+        const paid = await screen.findByLabelText('Paid by');
+        const items = screen.getByText(/^Items ·/);
+        const tax = screen.getByLabelText('Tax');
+        const owes = screen.getByText('Who owes what');
+        const after = (x: Node, y: Node) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(after(paid, items)).toBe(true);
+        expect(after(items, owes)).toBe(true);
+        expect(after(tax, owes)).toBe(true); // the summary is last
+        // colors: a picked chip takes the person's color, and the two people differ
+        const annChip = screen.getByLabelText('Ann had Pasta');
+        const boChip = screen.getByLabelText('Bo had Pasta');
+        expect(annChip.style.background || annChip.getAttribute('style')).toBeTruthy();
+        expect(boChip.getAttribute('style')).toBeNull(); // not picked: plain dashed chip
+        expect(screen.getByText('paid the bill')).toBeInTheDocument();
+        expect(screen.getByText('owes Ann')).toBeInTheDocument();
+    });
+
+    it('a name without its key on this browser cannot tap anything (and the server would refuse anyway)', async () => {
+        fakeQuick.seed({ people: ['Ann'], items: [{ name: 'Pasta', price: 30 }], ownerKey: 'OWNER' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Ann' })); // no memberKey
+        view();
+        expect(await screen.findByLabelText('Ann had Pasta')).toBeDisabled();
+        await expect(fakeQuick.api.assignQuickItem(TOKEN, 'i0', 'Ann', true, { memberKey: 'guess' })).rejects.toThrow('only choose items for yourself');
     });
 
     it('a locked split is read-only for everyone; only the owner can unlock', async () => {
@@ -171,8 +237,8 @@ describe('Quick split page (no account)', () => {
 
     it('imports items from the receipt JSON, with tax and tip', async () => {
         const u = userEvent.setup();
-        fakeQuick.seed({ people: ['Ann'] });
-        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Ann' }));
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Ann', memberKey: 'key-Ann', ownerKey: 'OWNER' }));
         view();
         await u.click(await screen.findByRole('button', { name: 'Import from JSON' }));
         await u.click(screen.getByLabelText('Receipt JSON'));

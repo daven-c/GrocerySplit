@@ -184,7 +184,7 @@ run('what users do: expenses, paying back, and more expenses', () => {
     it('a quick split made while signed in is listed under Personal and owned by the account, on any device', async () => {
         await as('a');
         const { token, ownerKey } = await createQuickSplit('Sushi night');
-        await addQuickItems(token, [{ name: 'Roll', price: 12 }]);
+        await addQuickItems(token, [{ name: 'Roll', price: 12 }], ownerKey);
         const mine = await api.listMyQuickSplits();
         expect(mine.find(m => m.token === token)).toMatchObject({ title: 'Sushi night', people: 0, items: 1, total: 12, locked: false });
         expect((await getQuickSplit(token))!.is_owner).toBe(true);
