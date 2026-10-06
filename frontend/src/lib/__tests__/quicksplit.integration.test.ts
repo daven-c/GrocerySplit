@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { supabase } from '../supabase';
 import {
     addQuickItems, assignQuickItem, createQuickSplit, deleteQuickSplit, getQuickSplit, joinQuickSplit, lockQuickSplit,
-    removeQuickPerson, setQuickSplit, updateQuickItem,
+    removeQuickPerson, renameQuickSplit, setQuickSplit, updateQuickItem,
 } from '../quickSplit';
 
 const run = process.env.INTEGRATION ? describe : describe.skip;
@@ -55,6 +55,16 @@ run('quick split, signed out, against the real database', () => {
         expect((await getQuickSplit(token))!.locked).toBe(true); // still readable
         await lockQuickSplit(token, key, false);
         await joinQuickSplit(token, 'Cy');
+    });
+
+    it('only the owner can rename it (even when locked); the open edit function refuses a title', async () => {
+        await expect(setQuickSplit(token, { title: 'hijack' } as any)).rejects.toThrow('Only the owner');
+        await expect(renameQuickSplit(token, 'wrong', 'hijack')).rejects.toThrow('Only the owner');
+        await renameQuickSplit(token, key, 'Renamed by owner');
+        await lockQuickSplit(token, key, true);
+        await renameQuickSplit(token, key, 'Renamed while locked');
+        expect((await getQuickSplit(token))!.title).toBe('Renamed while locked');
+        await lockQuickSplit(token, key, false);
     });
 
     it('only the owner can delete it', async () => {

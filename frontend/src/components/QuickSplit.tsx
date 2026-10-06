@@ -3,7 +3,7 @@ import { motion, MotionConfig, Pop, tapFlat } from '../lib/motion';
 import { supabase } from '../lib/supabase';
 import {
     QuickSplit as QuickSplitData, addQuickItems, assignQuickItem, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit,
-    lockQuickSplit, recall, remember, removeQuickPerson, setQuickAssigned, setQuickSplit, updateQuickItem,
+    lockQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../lib/quickSplit';
 import { computeSplit } from '../lib/calc';
 import { RECEIPT_PROMPT, parseReceiptJson } from '../lib/receiptImport';
@@ -175,10 +175,10 @@ export default function QuickSplit({ token }: { token: string }) {
             <div className="flex flex-col gap-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                        {/* Anyone can rename it (no name needed first) unless the owner locked it. */}
-                        <Field label="Split title" value={data.title} disabled={locked} placeholder="Name this split" onCommit={v => act(d => ({ ...d, title: v.trim() || d.title }), () => setQuickSplit(token, { title: v }))}
+                        {/* Only the owner can rename it, even when it is locked. */}
+                        <Field label="Split title" value={data.title} disabled={!isOwner} placeholder="Name this split" onCommit={v => act(d => ({ ...d, title: v.trim() || d.title }), () => renameQuickSplit(token, ownerKey!, v))}
                             className="m-0 px-0 py-0.5 border-0 border-b border-dashed border-dash enabled:focus:border-ink bg-transparent text-[30px] font-semibold tracking-title w-full max-w-[460px] disabled:border-transparent" />
-                        {!locked && <span className="text-xs text-faint">Tap the title to rename it</span>}
+                        {isOwner && <span className="text-xs text-faint">Tap the title to rename it</span>}
                         <span className="text-sm text-muted">Anyone with this link can edit it · expires {new Date(data.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} if unused</span>
                     </div>
                     <div className="flex flex-col items-end">

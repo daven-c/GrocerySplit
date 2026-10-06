@@ -39,12 +39,14 @@ export async function getQuickSplit(token: string): Promise<QuickSplit | null> {
 
 export const joinQuickSplit = (token: string, name: string) => run('qs_join', { p_token: token, p_name: name });
 export const removeQuickPerson = (token: string, name: string) => run('qs_remove_person', { p_token: token, p_name: name });
-export const setQuickSplit = (token: string, patch: Partial<Pick<QuickSplit, 'title' | 'tax' | 'tip' | 'paid_by'>>) => run('qs_set', { p_token: token, p_patch: patch });
+export const setQuickSplit = (token: string, patch: Partial<Pick<QuickSplit, 'tax' | 'tip' | 'paid_by'>>) => run('qs_set', { p_token: token, p_patch: patch });
 export const addQuickItems = (token: string, items: { name: string; price: number }[]) => run('qs_add_items', { p_token: token, p_items: items });
 export const updateQuickItem = (token: string, id: string, patch: { name?: string; price?: number }) => run('qs_update_item', { p_token: token, p_item: id, p_patch: patch });
 export const deleteQuickItem = (token: string, id: string) => run('qs_delete_item', { p_token: token, p_item: id });
 export const assignQuickItem = (token: string, id: string, person: string, on: boolean) => run('qs_assign', { p_token: token, p_item: id, p_person: person, p_on: on });
 export const setQuickAssigned = (token: string, id: string, people: string[]) => run('qs_set_assigned', { p_token: token, p_item: id, p_people: people });
+/** Owner only (even when locked). */
+export const renameQuickSplit = (token: string, ownerKey: string, title: string) => run('qs_rename', { p_token: token, p_owner_key: ownerKey, p_title: title });
 export const lockQuickSplit = (token: string, ownerKey: string, locked: boolean) => run('qs_lock', { p_token: token, p_owner_key: ownerKey, p_locked: locked });
 export const deleteQuickSplit = (token: string, ownerKey: string) => run('qs_delete', { p_token: token, p_owner_key: ownerKey });
 
