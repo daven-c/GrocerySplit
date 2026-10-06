@@ -336,7 +336,7 @@ export interface SettlementLogEntry {
     created_at: string;
 }
 
-/** The change history of a group's paybacks, newest first. Written by the database, never by the app. */
+/** The change history of a group's transfers, newest first. Written by the database, never by the app. */
 export async function listSettlementLog(groupId: string): Promise<SettlementLogEntry[]> {
     const data = check(await supabase.from('settlement_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
     return data.map((r: any) => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));

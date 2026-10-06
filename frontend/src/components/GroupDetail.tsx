@@ -22,8 +22,8 @@ interface GroupDetailProps {
 
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
 
-/** One line in the list: an expense/receipt, or a payback between two members. */
-type Entry = { type: 'record'; date: string; at: string; rec: Session } | { type: 'payback'; date: string; at: string; p: Settlement };
+/** One line in the list: an expense/receipt, or a transfer between two members. */
+type Entry = { type: 'record'; date: string; at: string; rec: Session } | { type: 'transfer'; date: string; at: string; p: Settlement };
 const localDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -66,7 +66,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     useDismiss(addRef, addOpen, closeAdd);
 
     const isOwner = !!group && group.owner_id === me;
-    // The payback change log: reloaded whenever the paybacks change or the tab is opened.
+    // The transfer change log: reloaded whenever the transfers change or the tab is opened.
     useEffect(() => {
         if (tab !== 'activity') return;
         let cancelled = false;
@@ -112,8 +112,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                 })
                 .map(rec => ({ type: 'record' as const, date: rec.session_date, at: rec.updated_at, rec })),
             ...(category ? [] : groupPaybacks)
-                .filter(p => !q || 'payback'.includes(q) || nm(p.from_user).includes(q) || nm(p.to_user).includes(q))
-                .map(p => ({ type: 'payback' as const, date: localDate(p.created_at), at: p.created_at, p })),
+                .filter(p => !q || 'transfer'.includes(q) || nm(p.from_user).includes(q) || nm(p.to_user).includes(q))
+                .map(p => ({ type: 'transfer' as const, date: localDate(p.created_at), at: p.created_at, p })),
         ];
         // Newest first: by date, and within a day by when it was added or last saved.
         return entries.sort((a, b) => b.date.localeCompare(a.date) || Date.parse(b.at) - Date.parse(a.at));
@@ -160,8 +160,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
     };
 
-    // The form opens on the first suggested payback; changing who paid / who received refills the amount when
-    // that exact payback is one of the suggestions.
+    // The form opens on the first suggested transfer; changing who paid / who received refills the amount when
+    // that exact transfer is one of the suggestions.
     const openPayback = () => {
         setAddOpen(false);
         if (group.members.length < 2) { setError('Invite someone to this group first.'); return; }
@@ -198,7 +198,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             setPbOpen(false);
             await refresh();
         } catch (err: any) {
-            setError(err.message || (pbEditId ? 'Could not save that payback' : 'Could not record that payback'));
+            setError(err.message || (pbEditId ? 'Could not save that transfer' : 'Could not record that transfer'));
         } finally {
             setSettling(false);
         }
@@ -206,7 +206,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const removePayback = async (id: string) => {
         setError('');
         try { await deleteSettlement(id); await refresh(); }
-        catch (err: any) { setError(err.message || 'Could not delete that payback'); }
+        catch (err: any) { setError(err.message || 'Could not delete that transfer'); }
     };
 
     const handleInvite = async () => {
@@ -273,7 +273,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             </Modal>
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
-                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">{pbEditId ? 'Edit payback' : 'Record a payback'}</h3>
+                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h3>
                 <p className="m-0 mb-4 text-sm text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.{pbEditId && ' Changes are logged under Activity.'}</p>
                 <div className="flex flex-col gap-3">
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who paid
@@ -289,14 +289,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Amount
                         <span className="flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
                             <span className="font-mono text-faint">$</span>
-                            <input aria-label="Payback amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[15px]" />
+                            <input aria-label="Transfer amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[15px]" />
                         </span>
                     </label>
                     {pbFrom && pbFrom === pbTo && <span role="alert" className="text-[13px] text-coral-strong">Pick two different people.</span>}
                 </div>
                 <div className="flex gap-3 mt-5">
                     <Button variant="secondary" wide height={42} onClick={() => setPbOpen(false)}>Cancel</Button>
-                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>{pbEditId ? 'Save changes' : 'Save payback'}</Button>
+                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>{pbEditId ? 'Save changes' : 'Save transfer'}</Button>
                 </div>
             </Modal>
 
@@ -328,7 +328,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 {[
                                     { icon: 'payments', title: 'Split a total', desc: 'One price: rent, a bill, a trip. Split by amount or shares', go: addExpense },
                                     { icon: 'receipt_long', title: 'Split a receipt', desc: 'Itemized: tap who had what, or import it from JSON', go: addReceipt },
-                                    { icon: 'swap_horiz', title: 'Record a payback', desc: 'Someone paid someone back, or you did', go: openPayback },
+                                    { icon: 'swap_horiz', title: 'Record a transfer', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">
                                         <Icon name={o.icon} size={22} />
@@ -378,7 +378,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 <span className="text-[13px] font-medium text-faint">{m.label}</span>
                                 <Card className="overflow-hidden">
                                     {m.rows.map((e, i) => {
-                                        if (e.type === 'payback') {
+                                        if (e.type === 'transfer') {
                                             const p = e.p;
                                             const d = new Date(e.date + 'T00:00');
                                             return (
@@ -391,7 +391,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                         <span className="text-[15px] font-semibold truncate flex items-center gap-1.5">
                                                             <Icon name="swap_horiz" size={16} className="text-green" />{nameOf(p.from_user)} paid {nameOf(p.to_user)}
                                                         </span>
-                                                        <span className="text-[13px] text-faint">Payback</span>
+                                                        <span className="text-[13px] text-faint">Transfer</span>
                                                     </span>
                                                     <span className="shrink-0 flex flex-col items-end gap-0.5">
                                                         <span className="text-[15px] font-semibold text-green">{fmt(p.amount)}</span>
@@ -471,7 +471,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         </Card>
 
                         <div className="flex flex-col gap-2">
-                            <span className="text-[15px] font-semibold">Suggested paybacks</span>
+                            <span className="text-[15px] font-semibold">Suggested transfers</span>
                             {ledger.transfers.length === 0 ? (
                                 <p className="m-0 px-4 py-3.5 rounded-[14px] bg-green-tint text-green-on text-sm font-medium">Everyone's square.</p>
                             ) : (
@@ -483,7 +483,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                     <span className="font-semibold">{who(t.from)}</span> {t.from === me ? 'pay' : 'pays'} <span className="font-semibold">{who(t.to)}</span>
                                                 </span>
                                                 <span className="font-mono text-sm font-medium">{fmt(t.amount)}</span>
-                                                <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(t.from, t.to, t.amount)}>Record payback</Button>
+                                                <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(t.from, t.to, t.amount)}>Record transfer</Button>
                                             </motion.div>
                                         ))}
                                     </AnimatePresence>
@@ -496,9 +496,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
                 {tab === 'activity' && (
                     <div className="flex flex-col gap-2">
-                        <span className="text-[13px] text-muted">Every payback that was recorded, changed or deleted, by whom, and when.</span>
+                        <span className="text-[13px] text-muted">Every transfer that was recorded, changed or deleted, by whom, and when.</span>
                         {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (
-                            <Card className="p-5 text-sm text-muted">No payback activity yet.</Card>
+                            <Card className="p-5 text-sm text-muted">No transfer activity yet.</Card>
                         ) : (
                             <Card className="overflow-hidden">
                                 {log.map((l, i) => {
@@ -507,7 +507,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     const verb = l.action === 'created' ? 'recorded' : l.action === 'edited' ? 'edited' : 'deleted';
                                     return (
                                         <div key={l.id} className={`px-[18px] py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
-                                            <span className="text-[14px]"><span className="font-semibold">{l.actor ? who(l.actor) : 'Someone'}</span> {verb} a payback</span>
+                                            <span className="text-[14px]"><span className="font-semibold">{l.actor ? who(l.actor) : 'Someone'}</span> {verb} a transfer</span>
                                             <span className="text-[13px] text-muted">
                                                 {l.action === 'edited' && l.prev_amount != null ? `${move(l.prev_from_user!, l.prev_to_user!, l.prev_amount)} became ${move(l.from_user, l.to_user, l.amount)}` : move(l.from_user, l.to_user, l.amount)}
                                             </span>

@@ -275,7 +275,7 @@ run('shared groups integration', () => {
         await api.deleteSession(draft);
     });
 
-    it('any member can record a payback between two other members; outsiders cannot; only the recorder can undo', async () => {
+    it('any member can record a transfer between two other members; outsiders cannot; only the recorder can undo', async () => {
         const uid = async (u: 'a' | 'b' | 'c') => { await as(u); return (await supabase.auth.getUser()).data.user!.id; };
         const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
 
@@ -303,7 +303,7 @@ run('shared groups integration', () => {
         await as('a'); // put C back outside the group for the tests that follow
         await api.removeMember(groupId, c);
         await as('c');
-        await expect(api.recordSettlement(groupId, a, b, 1)).rejects.toThrow(); // outsiders cannot record paybacks
+        await expect(api.recordSettlement(groupId, a, b, 1)).rejects.toThrow(); // outsiders cannot record transfers
     });
 
     it('non-owner members cannot invite, remove others, or delete the group', async () => {

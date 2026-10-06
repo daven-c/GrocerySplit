@@ -27,7 +27,7 @@ export interface LedgerSettlement {
 
 export interface MemberStanding {
     userId: string;
-    /** Dollars: positive = up (is owed), negative = down (owes), after recorded paybacks. */
+    /** Dollars: positive = up (is owed), negative = down (owes), after recorded transfers. */
     net: number;
 }
 export interface Transfer {
@@ -38,13 +38,13 @@ export interface Transfer {
 export interface GroupLedger {
     /** Everyone's position, biggest first. Always sums to zero. */
     members: MemberStanding[];
-    /** A short list of paybacks that would settle everyone (at most one fewer than the number of people). */
+    /** A short list of transfers that would settle everyone (at most one fewer than the number of people). */
     transfers: Transfer[];
 }
 
 /**
  * The whole group's books. For every record the payer fronted the money and each other member owes their share to
- * the payer; a recorded payback moves money from the person who paid to the person who received it. Each person's
+ * the payer; a recorded transfer moves money from the person who paid to the person who received it. Each person's
  * net position is what they are owed minus what they owe. Net positions always sum to zero.
  */
 export function groupLedger(group: LedgerGroup, records: LedgerRecord[], settlements: LedgerSettlement[]): GroupLedger {
