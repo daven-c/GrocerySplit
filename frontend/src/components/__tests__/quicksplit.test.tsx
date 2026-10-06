@@ -132,6 +132,37 @@ describe('Quick split page (no account)', () => {
         expect(screen.getByRole('link', { name: /Home$/ })).toHaveAttribute('href', '/');
     });
 
+    it('signed in with the owner key: the split is attached to the account (so Personal lists it)', async () => {
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } });
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'KEY' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' }));
+        view();
+        await waitFor(() => expect(fakeQuick.api.claimQuickSplit).toHaveBeenCalledWith(TOKEN, 'KEY'));
+        expect(fakeQuick.state.claimed).toBe(true);
+    });
+
+    it('signed out, the owner key is not claimed anywhere', async () => {
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'KEY' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' }));
+        view();
+        await screen.findByLabelText('Split title');
+        expect(fakeQuick.api.claimQuickSplit).not.toHaveBeenCalled();
+    });
+
+    it('the account that owns a split is its owner on any device, without the owner key', async () => {
+        const u = userEvent.setup();
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } });
+        fakeQuick.seed({ title: 'Dinner', ownerKey: 'KEY', claimed: true }); // no key in this browser
+        view();
+        const title = await screen.findByLabelText('Split title');
+        await waitFor(() => expect(title).toBeEnabled());
+        expect(screen.getByRole('button', { name: /Lock so nobody can change it/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Copy owner link/ })).not.toBeInTheDocument(); // there is no key to copy
+        await u.clear(title);
+        await u.type(title, 'From my phone{Enter}');
+        await waitFor(() => expect(fakeQuick.state.title).toBe('From my phone'));
+    });
+
     it('a wrong or expired link says so', async () => {
         fakeQuick.state.gone = true;
         view();

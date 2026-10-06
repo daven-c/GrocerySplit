@@ -448,6 +448,29 @@ describe('Group detail', () => {
         expect(api.listSettlementLog).not.toHaveBeenCalled();
     });
 
+    it('Personal lists your unexpired quick splits (and shared groups do not)', async () => {
+        const g1 = (await import('../../test/apiMock')).group;
+        const qs = [
+            { token: 'a'.repeat(32), title: 'Sushi night', locked: false, people: 3, items: 4, total: 96.5, updated_at: '2026-10-05T10:00:00Z', expires_at: '2026-11-04T10:00:00Z' },
+            { token: 'b'.repeat(32), title: 'Locked lunch', locked: true, people: 1, items: 1, total: 12, updated_at: '2026-10-04T10:00:00Z', expires_at: '2026-11-03T10:00:00Z' },
+        ];
+        api.listMyQuickSplits.mockResolvedValue(qs);
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }, g1]);
+        const personal = renderWithData(<GroupDetail {...props} groupId="gp" />);
+        const list = await screen.findByLabelText('Your quick splits');
+        expect(within(list).getByText('Sushi night')).toBeInTheDocument();
+        expect(within(list).getByText(/3 people · 4 items · expires Nov 4/)).toBeInTheDocument();
+        expect(within(list).getByText('$96.50')).toBeInTheDocument();
+        expect(within(list).getByText('Sushi night').closest('a')).toHaveAttribute('href', `/s/${'a'.repeat(32)}`);
+        expect(within(list).getByText('Locked lunch')).toBeInTheDocument();
+        personal.unmount();
+        api.listMyQuickSplits.mockClear();
+        renderWithData(<GroupDetail {...props} />); // a shared group
+        await screen.findByRole('tab', { name: /Expenses/ });
+        expect(screen.queryByLabelText('Your quick splits')).not.toBeInTheDocument();
+        expect(api.listMyQuickSplits).not.toHaveBeenCalled();
+    });
+
     it('shows the group total cost, not counting drafts', async () => {
         renderWithData(<GroupDetail {...props} />);
         expect(await screen.findByText('$2,500.10')).toBeInTheDocument();

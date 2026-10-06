@@ -3,7 +3,7 @@ import { motion, MotionConfig, Pop, tapFlat } from '../lib/motion';
 import { supabase } from '../lib/supabase';
 import {
     QuickSplit as QuickSplitData, addQuickItems, assignQuickItem, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit,
-    lockQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
+    claimQuickSplit, lockQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../lib/quickSplit';
 import { computeSplit } from '../lib/calc';
 import { RECEIPT_PROMPT, parseReceiptJson } from '../lib/receiptImport';
@@ -80,7 +80,13 @@ export default function QuickSplit({ token }: { token: string }) {
         const tick = () => { if (document.visibilityState === 'visible') void load(); };
         const timer = setInterval(tick, POLL_MS);
         document.addEventListener('visibilitychange', tick);
-        supabase.auth.getSession().then(({ data: s }) => alive.current && setSignedIn(!!s.session)).catch(() => {});
+        supabase.auth.getSession().then(({ data: s }) => {
+            if (!alive.current) return;
+            setSignedIn(!!s.session);
+            // Signed in with the owner key: attach this split to the account so it is listed under Personal.
+            const key = recall(token).ownerKey;
+            if (s.session && key) claimQuickSplit(token, key).then(() => load()).catch(() => {});
+        }).catch(() => {});
         return () => { alive.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
     }, [token, load]);
 
@@ -100,7 +106,7 @@ export default function QuickSplit({ token }: { token: string }) {
     };
 
     const locked = !!data?.locked;
-    const isOwner = !!ownerKey;
+    const isOwner = !!ownerKey || (signedIn && !!data?.is_owner);
     const joined = !!data && !!me && data.people.includes(me);
     const canEdit = joined && !locked;
 
@@ -176,7 +182,7 @@ export default function QuickSplit({ token }: { token: string }) {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                         {/* Only the owner can rename it, even when it is locked. */}
-                        <Field label="Split title" value={data.title} disabled={!isOwner} placeholder="Name this split" onCommit={v => act(d => ({ ...d, title: v.trim() || d.title }), () => renameQuickSplit(token, ownerKey!, v))}
+                        <Field label="Split title" value={data.title} disabled={!isOwner} placeholder="Name this split" onCommit={v => act(d => ({ ...d, title: v.trim() || d.title }), () => renameQuickSplit(token, ownerKey ?? null, v))}
                             className="m-0 px-0 py-0.5 border-0 border-b border-dashed border-dash enabled:focus:border-ink bg-transparent text-[30px] font-semibold tracking-title w-full max-w-[460px] disabled:border-transparent" />
                         {isOwner && <span className="text-xs text-faint">Tap the title to rename it</span>}
                         <span className="text-sm text-muted">Anyone with this link can edit it · expires {new Date(data.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} if unused</span>
@@ -194,10 +200,10 @@ export default function QuickSplit({ token }: { token: string }) {
                     </div>
                     {isOwner && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
-                            <motion.button {...tapFlat} onClick={() => act(d => ({ ...d, locked: !d.locked }), () => lockQuickSplit(token, ownerKey!, !locked))} className="font-semibold text-ink underline underline-offset-2">
+                            <motion.button {...tapFlat} onClick={() => act(d => ({ ...d, locked: !d.locked }), () => lockQuickSplit(token, ownerKey ?? null, !locked))} className="font-semibold text-ink underline underline-offset-2">
                                 {locked ? 'Unlock so people can edit again' : 'Lock so nobody can change it'}
                             </motion.button>
-                            <motion.button {...tapFlat} onClick={() => copy(ownerLink, 'Owner link')} className="text-muted underline underline-offset-2">Copy owner link (for another device)</motion.button>
+                            {ownerKey && <motion.button {...tapFlat} onClick={() => copy(ownerLink, 'Owner link')} className="text-muted underline underline-offset-2">Copy owner link (for another device)</motion.button>}
                             <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-coral underline underline-offset-2">Delete</motion.button>
                         </div>
                     )}
@@ -205,7 +211,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         <div role="alertdialog" aria-label="Delete this split" className="flex flex-wrap items-center gap-3 p-3 rounded-[10px] bg-coral-tint text-coral-on text-sm">
                             <span className="flex-1 min-w-[200px]">Delete this split for everyone? This can't be undone.</span>
                             <Button variant="secondary" height={34} className="px-3" onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                            <Button height={34} className="px-3 !bg-coral-strong" onClick={async () => { try { await deleteQuickSplit(token, ownerKey!); window.location.assign('/'); } catch (err: any) { setError(err.message); } }}>Delete</Button>
+                            <Button height={34} className="px-3 !bg-coral-strong" onClick={async () => { try { await deleteQuickSplit(token, ownerKey ?? null); window.location.assign('/'); } catch (err: any) { setError(err.message); } }}>Delete</Button>
                         </div>
                     )}
                 </Card>
