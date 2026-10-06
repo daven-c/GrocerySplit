@@ -67,8 +67,9 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
 
     return (
         <div className="min-h-screen flex flex-wrap bg-white">
-            <div className="hidden min-[760px]:flex flex-[1_1_440px] bg-band text-white flex-col justify-between gap-10 pt-10 px-14 pb-14">
-                <Logo size={24} word={21} onBand />
+            <div className="hidden min-[760px]:flex relative flex-[1_1_440px] bg-band text-white flex-col justify-center py-24 px-14">
+                <span className="absolute top-10 left-14"><Logo size={24} word={21} onBand /></span>
+                {/* The headline and sample split sit in the middle of the panel, not pushed to the bottom. */}
                 <div className="flex flex-col gap-7">
                     <motion.p {...enter(1)} className="m-0 text-[38px] leading-[1.1] font-black tracking-[-0.03em] max-w-[460px]" style={{ textWrap: 'balance' } as React.CSSProperties}>
                         Tap an item, pick who had it. Tax and tip land where they belong.
