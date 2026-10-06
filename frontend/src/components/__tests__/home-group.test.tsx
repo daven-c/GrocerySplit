@@ -104,7 +104,7 @@ describe('Home', () => {
         renderWithData(<Dashboard {...props} onOpenGroup={onOpenGroup} />);
         await screen.findByText('Roomies');
         expect(screen.getAllByText('Personal')).toHaveLength(1); // only the pinned card, not also a row
-        expect(screen.queryByLabelText('Search groups')).not.toBeInTheDocument(); // one shared group: nothing to search
+        expect(screen.getByLabelText('Search groups')).toBeInTheDocument(); // search stays even with one shared group
         await u.click(screen.getByRole('button', { name: /^Personal/ }));
         expect(api.ensurePersonalGroup).not.toHaveBeenCalled();
         expect(onOpenGroup).toHaveBeenCalledWith('gp');
@@ -326,7 +326,7 @@ describe('Group detail', () => {
         expect(await screen.findByText('amy_s', { exact: false, selector: 'span' })).toBeInTheDocument(); // members show @username
     });
 
-    it('adds a person by name only; owners can rename, merge, invite and remove name-only people', async () => {
+    it('adds a person by name only; owners can rename, invite and remove name-only people', async () => {
         const u = userEvent.setup();
         const g1 = (await import('../../test/apiMock')).group;
         const bo = { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member' as const, pending: true };
@@ -344,12 +344,6 @@ describe('Group detail', () => {
         await u.type(nm, 'Robert');
         await u.click(within(nm.parentElement!).getByRole('button', { name: 'Rename' }));
         await waitFor(() => expect(api.renameGuest).toHaveBeenCalledWith('g-bo', 'Robert'));
-
-        await u.click(within(screen.getByLabelText('Remove Bobby').parentElement!).getByRole('button', { name: 'Merge' }));
-        const into = screen.getByLabelText('Merge Bobby into');
-        await u.selectOptions(into, 'Cy');
-        await u.click(within(into.parentElement!).getByRole('button', { name: 'Merge' }));
-        await waitFor(() => expect(api.mergeGuest).toHaveBeenCalledWith('g-bo', 'g-cy'));
 
         await u.click(within(screen.getByLabelText('Remove Cy').parentElement!).getByRole('button', { name: 'Invite' }));
         const inviteBox = screen.getByLabelText('Invite Cy by email or username');

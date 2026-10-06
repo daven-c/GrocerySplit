@@ -207,7 +207,7 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                             </motion.button>
                         </Card>
 
-                        {sharedGroups.length > 1 && (
+                        {sharedGroups.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                                 <input aria-label="Search groups" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups or people" className="flex-1 min-w-[180px] h-[38px] px-3 border border-line rounded-[10px] bg-white text-sm" />
                                 <select aria-label="Sort groups" value={sort} onChange={e => { const v = e.target.value as Sort; setSort(v); try { localStorage.setItem(SORT_KEY, v); } catch { /* not remembered */ } }} className="h-[38px] px-2.5 border border-line rounded-[10px] bg-white text-sm text-ink">

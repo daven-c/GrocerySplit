@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, mergeGuest, updateSettlement, deleteSettlement, listSettlementLog, SettlementLogEntry, PendingInvite, Session, Settlement } from '../lib/api';
+import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, SettlementLogEntry, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
@@ -46,7 +46,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [email, setEmail] = useState('');
     const [inviteName, setInviteName] = useState('');
     const [personName, setPersonName] = useState('');
-    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'merge' | 'invite'; value: string }>(null);
+    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'invite'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
@@ -241,7 +241,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         setError(''); setNotice('');
         try {
             if (guestOp.kind === 'rename') await renameGuest(guestOp.id, guestOp.value);
-            else if (guestOp.kind === 'merge') await mergeGuest(guestOp.id, guestOp.value);
             else await inviteToGroup(groupId, guestOp.value, undefined, guestOp.id);
             setGuestOp(null);
             await reloadPeople();
@@ -583,7 +582,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className={`${inputCls} flex-1 min-w-0 text-sm`} />
                                     <Button height={42} variant="secondary" onClick={addPerson} disabled={!personName.trim()}>Add</Button>
                                 </div>
-                                <span className="text-[13px] leading-normal text-faint">No account or email needed, and nobody is notified. Use them in expenses like anyone else. You can invite them later, or merge them into someone if they turn out to be the same person.</span>
+                                <span className="text-[13px] leading-normal text-faint">No account or email needed, and nobody is notified. Use them in expenses like anyone else. You can invite them later.</span>
                             </Card>
                         )}
 
@@ -600,7 +599,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     {isOwner && m.pending && (
                                         <span className="flex items-center gap-2.5 text-xs font-semibold text-body">
                                             <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
-                                            <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'merge', value: '' })} className="underline underline-offset-2">Merge</button>
                                             {!m.email && !group.personal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'invite', value: '' })} className="underline underline-offset-2">Invite</button>}
                                             <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
@@ -612,15 +610,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     )}
                                     {guestOp?.id === m.user_id && (
                                         <div className="basis-full flex flex-wrap items-center gap-2 pt-2">
-                                            {guestOp.kind === 'merge' ? (
-                                                <select aria-label={`Merge ${m.name} into`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm">
-                                                    <option value="">Merge {m.name} into…</option>
-                                                    {group.members.filter(x => x.user_id !== m.user_id).map(x => <option key={x.user_id} value={x.user_id}>{x.name}</option>)}
-                                                </select>
-                                            ) : (
-                                                <input autoFocus aria-label={guestOp.kind === 'rename' ? `New name for ${m.name}` : `Invite ${m.name} by email or username`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder={guestOp.kind === 'rename' ? 'New name' : 'Email or @username'} maxLength={60} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm flex-1 min-w-[160px]" />
-                                            )}
-                                            <Button height={36} className="px-3.5" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'rename' ? 'Rename' : guestOp.kind === 'merge' ? 'Merge' : 'Send invite'}</Button>
+                                            <input autoFocus aria-label={guestOp.kind === 'rename' ? `New name for ${m.name}` : `Invite ${m.name} by email or username`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder={guestOp.kind === 'rename' ? 'New name' : 'Email or @username'} maxLength={60} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm flex-1 min-w-[160px]" />
+                                            <Button height={36} className="px-3.5" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'rename' ? 'Rename' : 'Send invite'}</Button>
                                             <Button variant="secondary" height={36} className="px-3.5" onClick={() => setGuestOp(null)}>Cancel</Button>
                                         </div>
                                     )}

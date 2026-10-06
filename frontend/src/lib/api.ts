@@ -327,8 +327,6 @@ const rpc = async (fn: string, args: Record<string, unknown>) => {
 export const addGuest = (groupId: string, name: string): Promise<string> => rpc('add_guest', { p_group: groupId, p_name: name });
 export const renameGuest = (guestId: string, name: string) => rpc('rename_guest', { p_guest: guestId, p_name: name });
 export const removeGuest = (guestId: string) => rpc('remove_guest', { p_guest: guestId });
-/** "This is the same person as ...": everything moves to the other person. */
-export const mergeGuest = (guestId: string, intoId: string) => rpc('merge_guest', { p_guest: guestId, p_into: intoId });
 /** The user's private Personal group (created the first time). */
 export const ensurePersonalGroup = (): Promise<string> => rpc('ensure_personal_group', {});
 
