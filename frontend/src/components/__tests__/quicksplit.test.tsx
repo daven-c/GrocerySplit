@@ -90,6 +90,24 @@ describe('Quick split page (no account)', () => {
         expect(window.location.hash).toBe('');
     });
 
+    it('the title can be renamed by anyone, even before they have joined, until it is locked', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ title: 'Dinner' });
+        view();
+        const title = await screen.findByLabelText('Split title');
+        expect(title).toBeEnabled(); // no name entered yet
+        await u.clear(title);
+        await u.type(title, 'Sushi night{Enter}');
+        await waitFor(() => expect(fakeQuick.state.title).toBe('Sushi night'));
+        expect(document.title).toMatch(/Sushi night/);
+    });
+
+    it('a locked split cannot be renamed', async () => {
+        fakeQuick.seed({ title: 'Dinner', locked: true });
+        view();
+        expect(await screen.findByLabelText('Split title')).toBeDisabled();
+    });
+
     it('a wrong or expired link says so', async () => {
         fakeQuick.state.gone = true;
         view();
