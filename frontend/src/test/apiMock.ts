@@ -5,9 +5,9 @@ import { vi } from 'vitest';
 
 export const ME = 'u-me';
 export const members = [
-    { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@x.com', role: 'owner' as const },
-    { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@x.com', role: 'member' as const },
-    { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@x.com', role: 'member' as const },
+    { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@x.com', username: 'daven', role: 'owner' as const },
+    { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@x.com', username: 'amy_s', role: 'member' as const },
+    { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@x.com', username: 'bo_b', role: 'member' as const },
 ];
 export const group = { id: 'g1', name: 'Roomies', owner_id: ME, created_at: '2026-01-01', members };
 export const otherGroup = {

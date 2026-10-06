@@ -20,7 +20,7 @@ afterEach(cleanup);
 describe('Friends', () => {
     it('shows owed totals, and friends sorted by what is outstanding, with their shared groups', async () => {
         renderWithData(<Friends />);
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
         await waitFor(() => expect(screen.getByText('$1,182.82')).toBeInTheDocument(), { timeout: 3000 });
         const rows = screen.getAllByRole('button', { expanded: false });
         expect(rows[0]).toHaveTextContent('Bo');
@@ -91,10 +91,18 @@ describe('Friends', () => {
         expect(await screen.findByText('You two are square.')).toBeInTheDocument();
     });
 
+    it('never lists people from your Personal section (they are only names)', async () => {
+        const { group } = await import('../../test/apiMock');
+        api.listGroups.mockResolvedValue([group, { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0], { user_id: 'g-bo', joined_at: '', name: 'Bobby', email: '', role: 'member' as const, pending: true }] }]);
+        renderWithData(<Friends />);
+        expect(await screen.findByText('Amy')).toBeInTheDocument();
+        expect(screen.queryByText('Bobby')).not.toBeInTheDocument();
+    });
+
     it('with no groups, invites people', async () => {
         api.listGroups.mockResolvedValue([]);
         renderWithData(<Friends />);
-        expect(await screen.findByText('No friends yet.')).toBeInTheDocument();
+        expect(await screen.findByText('No one yet.')).toBeInTheDocument();
     });
 });
 

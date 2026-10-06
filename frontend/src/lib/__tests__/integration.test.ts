@@ -28,6 +28,18 @@ async function as(u: 'a' | 'b' | 'c') {
     sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
 }
 
+/** Usernames are what invites go by; look one up without changing who is signed in. */
+const handles: Record<string, string> = {};
+async function handle(u: 'a' | 'b' | 'c') {
+    if (!handles[u]) {
+        const cur = (await supabase.auth.getSession()).data.session;
+        await as(u);
+        handles[u] = await api.getMyUsername();
+        if (cur) await supabase.auth.setSession({ access_token: cur.access_token, refresh_token: cur.refresh_token });
+    }
+    return handles[u];
+}
+
 run('shared groups integration', () => {
     let groupId = '';
     let sessionId = '';
@@ -63,17 +75,17 @@ run('shared groups integration', () => {
         expect(await api.listSessions()).toEqual([]);
         await expect(api.createSession({ groupId, name: 'sneaky' })).rejects.toThrow();
         await expect(api.addItem(sessionId, 'x', 1)).rejects.toThrow();
-        await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();
+        await expect(api.inviteToGroup(groupId, await handle('c'))).rejects.toThrow();
         expect((await supabase.from('profiles').select('email')).data?.map(p => p.email)).toEqual([email('c')]); // cannot read A's profile
         expect(await api.myInvites()).toEqual([]);
     });
 
-    it('owner invites by email; duplicates are rejected; only the addressee sees the invite', async () => {
+    it('owner invites by username; duplicates are rejected; only the addressee sees the invite', async () => {
         await as('a');
-        await api.inviteToGroup(groupId, email('b').toUpperCase()); // case-insensitive
-        await expect(api.inviteToGroup(groupId, email('b'))).rejects.toThrow(/already has a pending invite/);
+        await api.inviteToGroup(groupId, (await handle('b')).toUpperCase()); // case-insensitive
+        await expect(api.inviteToGroup(groupId, await handle('b'))).rejects.toThrow(/already has a pending invite/);
         const pending = await api.listPendingInvites(groupId);
-        expect(pending.map(p => p.email)).toEqual([email('b')]);
+        expect(pending.map(p => p.name)).toEqual(['Test B']); // the display name, never the email
 
         await as('c');
         expect(await api.myInvites()).toEqual([]);
@@ -280,7 +292,7 @@ run('shared groups integration', () => {
         const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
 
         await as('a'); // bring C into the group so there are three members
-        await api.inviteToGroup(groupId, email('c'));
+        await api.inviteToGroup(groupId, await handle('c'));
         await as('c');
         await api.respondToInvite((await api.myInvites())[0].id, true);
 
@@ -308,7 +320,7 @@ run('shared groups integration', () => {
 
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
-        await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();
+        await expect(api.inviteToGroup(groupId, await handle('c'))).rejects.toThrow();
         const g = await api.getGroup(groupId);
         const ownerId = g.owner_id;
         await api.removeMember(groupId, ownerId); // silently affects 0 rows (RLS)
@@ -319,13 +331,13 @@ run('shared groups integration', () => {
 
     it('declined invites grant nothing; owner can revoke pending ones', async () => {
         await as('a');
-        await api.inviteToGroup(groupId, email('c'));
+        await api.inviteToGroup(groupId, await handle('c'));
         await as('c');
         const [inv] = await api.myInvites();
         await api.respondToInvite(inv.id, false);
         expect(await api.listGroups()).toEqual([]);
         await as('a');
-        await api.inviteToGroup(groupId, email('c')); // re-invite after decline is allowed
+        await api.inviteToGroup(groupId, await handle('c')); // re-invite after decline is allowed
         const [p] = await api.listPendingInvites(groupId);
         await api.revokeInvite(p.id);
         expect(await api.listPendingInvites(groupId)).toEqual([]);

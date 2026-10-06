@@ -18,6 +18,18 @@ async function as(u: 'a' | 'b') {
     sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
 }
 
+/** Usernames are what invites go by; look one up without changing who is signed in. */
+const handles: Record<string, string> = {};
+async function handle(u: 'a' | 'b') {
+    if (!handles[u]) {
+        const cur = (await supabase.auth.getSession()).data.session;
+        await as(u);
+        handles[u] = await api.getMyUsername();
+        if (cur) await supabase.auth.setSession({ access_token: cur.access_token, refresh_token: cur.refresh_token });
+    }
+    return handles[u];
+}
+
 /** Balances as the signed-in user sees them, using exactly what the app loads. */
 async function seen(groupId: string) {
     const me = (await supabase.auth.getUser()).data.user!.id;
@@ -33,7 +45,7 @@ run('what users do: expenses, paying back, and more expenses', () => {
         await as('a');
         a = (await supabase.auth.getUser()).data.user!.id;
         groupId = await api.createGroup('Scenario');
-        await api.inviteToGroup(groupId, 'gs-test-b@mailinator.com');
+        await api.inviteToGroup(groupId, await handle('b'));
         await as('b');
         b = (await supabase.auth.getUser()).data.user!.id;
         const [inv] = await api.myInvites();

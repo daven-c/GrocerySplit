@@ -157,7 +157,7 @@ export default function Account({ user, onLogout }: AccountProps) {
                             </span>
                             <Button variant="secondary" type="submit" height={42} disabled={unameBusy || !username.trim() || username.trim().toLowerCase() === savedUsername}>{unameBusy ? 'Saving…' : 'Save'}</Button>
                         </div>
-                        <span className="text-[13px] leading-normal text-faint">Friends can invite you to a group with @{savedUsername || 'username'} instead of your email. Letters, numbers and underscores, unique to you.</span>
+                        <span className="text-[13px] leading-normal text-faint">People invite you to a group with @{savedUsername || 'username'}, so your email stays private. Letters, numbers and underscores, unique to you.</span>
                         <Banner msg={unameMsg} />
                     </form>
 

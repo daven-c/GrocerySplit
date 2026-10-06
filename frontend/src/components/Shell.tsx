@@ -4,7 +4,7 @@ import { useAppData } from '../lib/appData';
 import { groupDot, HUES, toneFor } from '../lib/people';
 import { Avatar, Icon, Logo } from './ui';
 
-export type NavView = 'home' | 'friends' | 'account' | 'admin';
+export type NavView = 'home' | 'friends' | 'personal' | 'account' | 'admin';
 export type ShellView = 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
 
 interface ShellProps {
@@ -20,12 +20,13 @@ interface ShellProps {
     children: React.ReactNode;
 }
 
-/** Home highlights for every group-ish screen. */
-const navFor = (view: ShellView): NavView => (['home', 'group', 'import', 'split', 'expense'].includes(view) ? 'home' : (view as NavView));
+/** Home highlights for every group-ish screen (the Personal section highlights itself). */
+const navFor = (view: ShellView, personal: boolean): NavView => (['home', 'group', 'import', 'split', 'expense'].includes(view) ? (personal ? 'personal' : 'home') : (view as NavView));
 
 export default function Shell({ view, narrow, user, groupId, recordId, onNav, onOpenGroup, onNewGroup, onBack, children }: ShellProps) {
     const { groups, sessions, invites, isAdmin, refresh } = useAppData();
-    const activeNav = navFor(view);
+    const inPersonal = !!groups.find(g => g.id === groupId)?.personal;
+    const activeNav = navFor(view, inPersonal);
     const inGroup = ['group', 'import', 'split', 'expense'].includes(view);
 
     // Scroll to the top on every view change.
@@ -42,14 +43,15 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
 
     const nav: { id: NavView; label: string; icon: string; badge?: number }[] = [
         { id: 'home', label: 'Home', icon: 'home', badge: invites.length || undefined },
-        { id: 'friends', label: 'Friends', icon: 'group' },
+        { id: 'friends', label: 'People', icon: 'group' },
+        { id: 'personal', label: 'Personal', icon: 'lock' },
         { id: 'account', label: 'Account', icon: 'person' },
         ...(isAdmin ? [{ id: 'admin' as NavView, label: 'Admin', icon: 'admin_panel_settings' }] : []),
     ];
 
     const groupName = groups.find(g => g.id === groupId)?.name ?? '';
     const recordName = sessions.find(s => s.id === recordId)?.name ?? '';
-    const titles: Partial<Record<ShellView, string>> = { group: groupName, import: 'Import receipt', split: recordName || 'Receipt', expense: recordName || 'Expense', friends: 'Friends', account: 'Account', admin: 'Admin' };
+    const titles: Partial<Record<ShellView, string>> = { group: groupName, import: 'Import receipt', split: recordName || 'Receipt', expense: recordName || 'Expense', friends: 'People', account: 'Account', admin: 'Admin' };
 
     const main = (
         <main className={`flex-1 min-w-0 ${narrow ? 'px-4 pt-6 pb-8' : 'px-12 pt-10 pb-16'}`}>
@@ -131,7 +133,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
                         <motion.button {...tapFlat} onClick={onNewGroup} title="New group" aria-label="New group" className="text-muted hover:text-ink"><Icon name="add" size={18} /></motion.button>
                     </div>
                     <div className="flex flex-col gap-0.5 overflow-y-auto">
-                        {groups.map(g => {
+                        {groups.filter(g => !g.personal).map(g => {
                             const on = inGroup && groupId === g.id;
                             return (
                                 <motion.button

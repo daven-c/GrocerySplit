@@ -42,7 +42,7 @@ export const createGroup = async (name: string) => {
 };
 export const deleteGroup = async (gid: string) => { groups = groups.filter(g => g.id !== gid); sessions = sessions.filter(s => s.group_id !== gid); return wait(undefined); };
 export const removeMember = async (gid: string, uid: string) => { groups = groups.map(g => g.id === gid ? { ...g, members: g.members.filter(m => m.user_id !== uid) } : g); return wait(undefined); };
-export const inviteToGroup = async (gid: string, email: string) => { pending = [...pending, { id: id('p'), group_id: gid, email, created_at: new Date().toISOString() }]; return wait(undefined); };
+export const inviteToGroup = async (gid: string, username: string) => { pending = [...pending, { id: id('p'), group_id: gid, name: username.replace(/^@/, ''), created_at: new Date().toISOString() }]; return wait(undefined); };
 export const listPendingInvites = (gid: string) => wait(pending.filter(p => p.group_id === gid));
 export const revokeInvite = async (pid: string) => { pending = pending.filter(p => p.id !== pid); return wait(undefined); };
 export const myInvites = () => wait(structuredClone(invites));

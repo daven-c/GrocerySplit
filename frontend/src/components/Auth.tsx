@@ -88,7 +88,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                         <Collapse open={!isLogin}>
                             <label className={`flex flex-col gap-1.5 ${labelCls} px-1 pb-1 -mx-1`}>
                                 Username
-                                <input className={`${inputCls} h-11 px-3.5`} value={username} onChange={e => setUsername(e.target.value)} placeholder="Friends can invite you by this" type="text" autoComplete="username" maxLength={21} required={!isLogin} />
+                                <input className={`${inputCls} h-11 px-3.5`} value={username} onChange={e => setUsername(e.target.value)} placeholder="People invite you by this" type="text" autoComplete="username" maxLength={21} required={!isLogin} />
                             </label>
                         </Collapse>
                         <label className={`flex flex-col gap-1.5 ${labelCls}`}>
@@ -113,7 +113,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                         </Button>
                     </form>
 
-                    <p className="m-0 text-[13px] leading-normal text-faint">Invites are matched to your email, so sign up with the address your friends know.</p>
+                    <p className="m-0 text-[13px] leading-normal text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>
                 </motion.div>
             </div>
 

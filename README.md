@@ -14,7 +14,9 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 ## How it's organised
 
 - **Quick split** (no account, no group): one shareable page for splitting a single bill, e.g. at dinner. Start it from the landing page or Home, share the link (`/s/<token>`), and everyone opens it, picks a unique name and taps what they had. Anyone with the link can edit; the owner can lock it, and a split nobody touches for 30 days is deleted. A signed-in person can import it into a group, matching each name to a member. The link's long random token is the only credential, and the tables are closed: everything goes through the `qs_*` database functions.
-- **People, usernames and Personal:** every account has a display name, a unique `@username` and a private email. Owners can invite by email or `@username`, or just add someone **by name** (no account, nobody notified). Name-only people can be renamed, invited later, or removed if unused. Your **Personal** group is private to you: track what you paid for people by name.
+- **Usernames and invites:** every account has a display name, a unique `@username` and a private email. Owners invite by `@username` only. While an invite is pending the person can already be used in expenses, and when they accept everything moves to their account under their display name. Emails are never shown to the group.
+- **People** (the old Friends page) shows what you and each person owe across your shared groups.
+- **Personal** is its own private section for tracking what you paid for others by name only. Those names are not accounts and never appear under People.
 - **Home** can search groups (by group or person), sort them (recent activity, name, balance, spend), and pin groups to the top for yourself.
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.

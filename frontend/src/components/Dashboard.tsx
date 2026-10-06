@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Collapse, Pop, AnimatedNumber, listItem, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { createGroup, ensurePersonalGroup, respondToInvite, setGroupPinned } from '../lib/api';
+import { createGroup, respondToInvite, setGroupPinned } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import { firstName, fmt, greeting, memberTones } from '../lib/people';
 import { totalOf } from '../lib/expenses';
@@ -39,7 +39,6 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
     useEffect(() => { if (newGroupTick > 0) setNewGroupOpen(true); }, [newGroupTick]);
     useEffect(() => { if (newGroupOpen) input.current?.focus(); }, [newGroupOpen]);
 
-    const personal = groups.find(g => g.personal);
     const sharedGroups = useMemo(() => groups.filter(g => !g.personal), [groups]);
     const isPinned = (g: { members: { user_id: string; pinned?: boolean }[] }) => !!g.members.find(m => m.user_id === me)?.pinned;
     const togglePin = async (id: string, pinned: boolean) => {
@@ -47,22 +46,12 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
         try { await setGroupPinned(id, pinned); await refresh(); }
         catch (err: any) { setProblem(err.message || 'Could not pin that group'); }
     };
-    // The Personal group is created the first time it is opened.
-    const openPersonal = async () => {
-        setProblem('');
-        try {
-            const id = personal?.id ?? (await ensurePersonalGroup());
-            if (!personal) await refresh();
-            onOpenGroup(id);
-        } catch (err: any) { setProblem(err.message || 'Could not open Personal'); }
-    };
-
-    const balances = useMemo(() => computeBalances(me, groups, sessions, settlements), [me, groups, sessions, settlements]);
-    const stats = useMemo(() => Object.fromEntries(groups.map(g => {
+    const balances = useMemo(() => computeBalances(me, sharedGroups, sessions, settlements), [me, sharedGroups, sessions, settlements]);
+    const stats = useMemo(() => Object.fromEntries(sharedGroups.map(g => {
         const recs = sessions.filter(s => s.group_id === g.id && !s.draft);
         const last = recs.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), g.created_at);
         return [g.id, { net: balances.byGroup[g.id] ?? 0, count: recs.length, spent: recs.reduce((a, r) => a + totalOf(r), 0), last }];
-    })), [groups, sessions, balances]);
+    })), [sharedGroups, sessions, balances]);
     // Pinned groups first, then the chosen order.
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -183,30 +172,6 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                     <p className="text-center text-faint py-10 m-0 animate-pulse">Loading your groups…</p>
                 ) : (
                     <>
-                        <Card className="overflow-hidden">
-                            <motion.button
-                                {...tapFlat}
-                                onClick={openPersonal}
-                                className="w-full flex items-center gap-4 px-[18px] py-4 bg-white text-left hover:bg-wash transition-colors"
-                            >
-                                <span className="w-[38px] h-[38px] rounded-full grid place-items-center bg-surface shrink-0"><Icon name="lock" size={18} /></span>
-                                <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                    <span className="text-[15px] font-semibold">Personal</span>
-                                    <span className="text-[13px] text-faint">Only you can see this. Track what you paid for people, by name.</span>
-                                </span>
-                                {personal && (() => {
-                                    const net = balances.byGroup[personal.id] ?? 0;
-                                    const settled = Math.abs(net) < 0.005;
-                                    return (
-                                        <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                            <span className={`text-[15px] font-semibold ${settled ? 'text-faint' : net > 0 ? 'text-green' : 'text-coral'}`}>{settled ? 'Settled' : fmt(net)}</span>
-                                            <span className="text-xs text-faint">{settled ? 'all square' : net > 0 ? "you're owed" : 'you owe'}</span>
-                                        </span>
-                                    );
-                                })()}
-                            </motion.button>
-                        </Card>
-
                         {sharedGroups.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                                 <input aria-label="Search groups" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups or people" className="flex-1 min-w-[180px] h-[38px] px-3 border border-line rounded-[10px] bg-white text-sm" />

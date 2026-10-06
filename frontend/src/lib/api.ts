@@ -263,7 +263,8 @@ export interface Invite {
 export interface PendingInvite {
     id: string;
     group_id: string;
-    email: string;
+    /** The invited person's display name (their email is never shown). */
+    name: string;
     created_at: string;
 }
 
@@ -275,11 +276,11 @@ const mapGroup = (r: any): Group => ({
     personal: !!r.personal,
     members: (r.group_members ?? [])
         .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, pinned: !!m.pinned, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '', username: m.profiles?.username ?? undefined }))
-        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: g.email ?? '', pending: true })))
+        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true })))
         .sort((a: Member, b: Member) => (!!a.pending !== !!b.pending ? (a.pending ? 1 : -1) : (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name)))),
 });
 
-const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(user_id, role, joined_at, pinned, profiles(name, email, username)), group_guests(id, name, email, created_at)';
+const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(user_id, role, joined_at, pinned, profiles(name, email, username)), group_guests(id, name, created_at)';
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));
@@ -309,16 +310,13 @@ export async function removeMember(groupId: string, userId: string) {
     check(await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId));
 }
 
-/**
- * Invite by email or @username. `name` is what they are called until they join. With `guestId`, the invite goes to
- * that existing name-only person instead of creating a new one.
- */
-export async function inviteToGroup(groupId: string, handle: string, name?: string, guestId?: string) {
-    const { error } = await supabase.rpc('invite_person', { p_group: groupId, p_handle: handle.trim(), p_name: name?.trim() || null, p_guest: guestId ?? null });
+/** Invite by @username. They can be used in expenses while the invite is pending. */
+export async function inviteToGroup(groupId: string, username: string) {
+    const { error } = await supabase.rpc('invite_person', { p_group: groupId, p_username: username.trim() });
     if (error) throw new Error(error.message);
 }
 
-// ---- People who are only a name (or an invite not yet accepted): owner-only, all enforced in the database ----
+// ---- People who are only a name (your Personal section) or an invite not yet accepted: owner-only, enforced in the database ----
 const rpc = async (fn: string, args: Record<string, unknown>) => {
     const { data, error } = await supabase.rpc(fn, args);
     if (error) throw new Error(error.message);
@@ -331,13 +329,11 @@ export const removeGuest = (guestId: string) => rpc('remove_guest', { p_guest: g
 export const ensurePersonalGroup = (): Promise<string> => rpc('ensure_personal_group', {});
 
 export async function listPendingInvites(groupId: string): Promise<PendingInvite[]> {
-    return check(
-        await supabase.from('group_invites').select('id, group_id, email, created_at').eq('group_id', groupId).eq('status', 'pending').order('created_at')
-    );
+    return check(await supabase.rpc('group_pending_invites', { p_group: groupId }));
 }
 
 export async function revokeInvite(id: string) {
-    check(await supabase.from('group_invites').delete().eq('id', id));
+    check(await supabase.rpc('revoke_invite', { p_invite: id }));
 }
 
 export async function myInvites(): Promise<Invite[]> {

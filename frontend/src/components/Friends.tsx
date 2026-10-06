@@ -7,7 +7,9 @@ import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, Icon } from './ui';
 
 export default function Friends() {
-    const { me, groups, sessions, settlements, refresh, loading } = useAppData();
+    const { me, groups: allGroups, sessions, settlements, refresh, loading } = useAppData();
+    // Your Personal section only has names, not people, so it never appears here.
+    const groups = useMemo(() => allGroups.filter(g => !g.personal), [allGroups]);
     const [open, setOpen] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -54,7 +56,7 @@ export default function Friends() {
     return (
         <div className="max-w-[760px] mx-auto flex flex-col gap-7">
             <div className="flex flex-col gap-1.5">
-                <h1 className="m-0 text-[28px] font-semibold tracking-title">Friends</h1>
+                <h1 className="m-0 text-[28px] font-semibold tracking-title">People</h1>
                 <p className="m-0 text-[15px] text-muted">What you and each person owe, across every group you share.</p>
             </div>
 
@@ -75,7 +77,7 @@ export default function Friends() {
                 <p className="text-center text-faint py-10 m-0 animate-pulse">Loading…</p>
             ) : friends.length === 0 ? (
                 <div className="text-center py-10 px-6 border border-dashed border-line rounded-[14px]">
-                    <p className="m-0 text-[15px] font-semibold text-body">No friends yet.</p>
+                    <p className="m-0 text-[15px] font-semibold text-body">No one yet.</p>
                     <p className="m-0 mt-1 text-sm text-faint">Invite people to a group and they'll show up here with what you owe each other.</p>
                 </div>
             ) : (

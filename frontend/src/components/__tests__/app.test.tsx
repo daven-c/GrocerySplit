@@ -51,7 +51,7 @@ describe('Auth', () => {
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
         expect(screen.getByRole('heading', { name: 'Start a pot' })).toBeInTheDocument();
         expect(screen.getByPlaceholderText('What your friends call you')).toBeInTheDocument();
-        expect(screen.getByText('Invites are matched to your email, so sign up with the address your friends know.')).toBeInTheDocument();
+        expect(screen.getByText('Pick a username: people invite you to groups by it, and your email stays private.')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Sign in' }));
         expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByPlaceholderText('What your friends call you')).not.toBeInTheDocument());
@@ -138,7 +138,7 @@ describe('App shell', () => {
         render(<App />);
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         expect(within(sidebar).getByText('splitpot')).toBeInTheDocument();
-        for (const n of ['Home', 'Friends', 'Account']) expect(within(sidebar).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
+        for (const n of ['Home', 'People', 'Personal', 'Account']) expect(within(sidebar).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
         expect(within(sidebar).queryByRole('button', { name: /Admin/ })).not.toBeInTheDocument();
         expect(await within(sidebar).findByRole('button', { name: 'Roomies' })).toBeInTheDocument();
         expect(within(sidebar).getByText('Daven Chang')).toBeInTheDocument();
@@ -160,13 +160,29 @@ describe('App shell', () => {
         expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
         await u.click(await screen.findByText('October rent'));
         expect(await screen.findByLabelText('Expense name')).toBeInTheDocument(); // expenses open the expense editor
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
         await u.click(within(sidebar).getByRole('button', { name: 'Account' }));
         expect(await screen.findByLabelText('Display name')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: /Sign out/ }));
         await waitFor(() => expect(authMock.signOut).toHaveBeenCalled());
         expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+    });
+
+    it('Personal is its own section: it creates your private group once and opens it, highlighted in the nav', async () => {
+        const u = userEvent.setup();
+        const { group } = await import('../../test/apiMock');
+        const personal = { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0]] };
+        api.ensurePersonalGroup.mockImplementation(async () => { api.listGroups.mockResolvedValue([group, personal]); return 'gp'; });
+        signIn();
+        render(<App />);
+        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        expect(within(sidebar).queryByRole('button', { name: 'Personal', current: 'page' })).not.toBeInTheDocument();
+        await u.click(within(sidebar).getByRole('button', { name: 'Personal' }));
+        await waitFor(() => expect(api.ensurePersonalGroup).toHaveBeenCalled());
+        expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Personal', current: 'page' })).toBeInTheDocument();
+        expect(within(sidebar).queryAllByRole('button', { name: /^Personal$/ })).toHaveLength(1); // not duplicated in the group list
     });
 
     it('scrolls to the top on every view change', async () => {
@@ -175,7 +191,7 @@ describe('App shell', () => {
         render(<App />);
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         (window.scrollTo as any).mockClear();
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 0));
     });
 
@@ -207,12 +223,12 @@ describe('App shell', () => {
         render(<App />);
         const tabs = await screen.findByRole('navigation', { name: 'Primary' });
         expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
-        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'Friends', 'person' + 'Account']);
+        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'People', 'lock' + 'Personal', 'person' + 'Account']);
         expect(screen.getByRole('banner')).toHaveTextContent('splitpot');
-        await u.click(within(tabs).getByRole('button', { name: /Friends/ }));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
-        expect(screen.getByRole('banner')).toHaveTextContent('Friends');
-        expect(within(tabs).getByRole('button', { name: /Friends/ })).toHaveAttribute('aria-current', 'page');
+        await u.click(within(tabs).getByRole('button', { name: /People/ }));
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
+        expect(screen.getByRole('banner')).toHaveTextContent('People');
+        expect(within(tabs).getByRole('button', { name: /People/ })).toHaveAttribute('aria-current', 'page');
     });
 
     it('narrow: inside a group the header shows a back arrow and the group name', async () => {
@@ -252,9 +268,9 @@ describe('Drafts in the app shell', () => {
 
     it('leaving without saving (sidebar, back) discards the draft', async () => {
         const { u, sidebar } = await startDraft();
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('s9'));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
     });
 
     it('Discard deletes the draft and returns to the group', async () => {

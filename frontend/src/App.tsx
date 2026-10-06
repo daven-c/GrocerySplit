@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { deleteSession } from "./lib/api";
+import { deleteSession, ensurePersonalGroup } from "./lib/api";
 import { MotionConfig, motion } from "./lib/motion";
 import { useNarrow } from "./lib/hooks";
 import { AppDataProvider } from "./lib/appData";
@@ -100,7 +100,11 @@ const App: React.FC = () => {
         setView(groupId ? 'group' : 'home');
     };
 
-    const handleNav = (v: NavView) => setView(v);
+    const handleNav = (v: NavView) => {
+        if (v !== 'personal') return setView(v);
+        // Personal is its own section: a private group created the first time it is opened.
+        ensurePersonalGroup().then(id => openGroup(id)).catch(err => console.error('Could not open Personal', err));
+    };
     const handleLogout = async () => {
         await supabase.auth.signOut();
         setAuth(null); // don't depend solely on the auth listener to leave the app shell

@@ -63,7 +63,7 @@ describe('with animation frames frozen', () => {
         expect(effectiveOpacity(amount)).toBeGreaterThanOrEqual(MIN);
         expect(effectiveOpacity(screen.getByText('Split by'))).toBeGreaterThanOrEqual(MIN);
 
-        fireEvent.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        fireEvent.click(within(sidebar).getByRole('button', { name: 'People' }));
         const amy = await screen.findByText('Amy');
         expect(effectiveOpacity(amy)).toBeGreaterThanOrEqual(MIN);
 

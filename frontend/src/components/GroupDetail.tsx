@@ -44,9 +44,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [addOpen, setAddOpen] = useState(false);
     const [pending, setPending] = useState<PendingInvite[]>([]);
     const [email, setEmail] = useState('');
-    const [inviteName, setInviteName] = useState('');
     const [personName, setPersonName] = useState('');
-    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'invite'; value: string }>(null);
+    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
@@ -213,16 +212,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     };
 
     const handleInvite = async () => {
-        const e = email.trim().toLowerCase().replace(/^@(?=.*@)/, '');
+        const u = email.trim().toLowerCase().replace(/^@/, '');
         setError(''); setNotice('');
-        const isEmail = e.includes('@') && !e.startsWith('@');
-        if (isEmail ? !/^\S+@\S+\.\S+$/.test(e) : !/^@?[a-z0-9_]{3,20}$/.test(e)) return setError('Enter a valid email address or @username.');
-        if (group.members.some(m => !m.pending && (isEmail ? m.email === e : m.username === e.replace(/^@/, '')))) return setError('That person is already in this group.');
+        if (!/^[a-z0-9_]{3,20}$/.test(u)) return setError('Enter a username: 3 to 20 letters, numbers or underscores.');
+        if (group.members.some(m => !m.pending && m.username === u)) return setError('That person is already in this group.');
         try {
-            await inviteToGroup(groupId, e, inviteName);
+            await inviteToGroup(groupId, u);
             setEmail('');
-            setInviteName('');
-            setNotice(`Invited ${inviteName.trim() || e}. You can use them in expenses now; it all moves to their account when they join.`);
+            setNotice(`Invited @${u}. You can use them in expenses now; it all moves to their account when they accept.`);
             await refresh();
             setPending(await listPendingInvites(groupId));
         } catch (err: any) { setError(err.message); }
@@ -240,8 +237,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         if (!guestOp || !guestOp.value.trim()) return;
         setError(''); setNotice('');
         try {
-            if (guestOp.kind === 'rename') await renameGuest(guestOp.id, guestOp.value);
-            else await inviteToGroup(groupId, guestOp.value, undefined, guestOp.id);
+            await renameGuest(guestOp.id, guestOp.value);
             setGuestOp(null);
             await reloadPeople();
         } catch (err: any) { setError(err.message || 'That did not work'); }
@@ -553,36 +549,38 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                 {tab === 'members' && (
                     <div className="flex flex-col gap-5">
                         {group.personal && (
-                            <div className="px-3.5 py-3 rounded-[10px] bg-surface text-sm text-body">This is your private Personal group. Only you can see it. Add people by name to keep track of what you paid for them.</div>
+                            <div className="px-3.5 py-3 rounded-[10px] bg-surface text-sm text-body">This is your Personal section. Only you can see it, and the people in it are just names, so they never show up under People. Use it to keep track of what you paid for others.</div>
                         )}
                         {isOwner && !group.personal && (
                             <Card className="p-[18px] flex flex-col gap-2.5">
                                 <span className="text-[15px] font-semibold">Invite someone</span>
-                                <div className="flex flex-wrap gap-2">
-                                    <input value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Name (optional)" aria-label="Invite name" maxLength={60} className={`${inputCls} w-[150px] text-sm`} />
-                                    <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} placeholder="Email or @username" aria-label="Invite by email or username" className={`${inputCls} flex-1 min-w-0 text-sm`} />
+                                <div className="flex gap-2">
+                                    <span className="flex-1 min-w-0 flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
+                                        <span className="text-faint">@</span>
+                                        <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} placeholder="username" aria-label="Invite by username" autoCapitalize="none" className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
+                                    </span>
                                     <Button height={42} onClick={handleInvite} disabled={!email.trim()}>Send invite</Button>
                                 </div>
-                                <span className="text-[13px] leading-normal text-faint">You can add them to expenses right away. They'll see the invite when they sign in, and everything moves to their account when they accept.</span>
+                                <span className="text-[13px] leading-normal text-faint">While an invite is pending you can already add them to expenses. They'll see the invite when they sign in, and everything moves to their account when they accept. They can find their username under Account.</span>
                                 <AnimatePresence initial={false}>
                                     {pending.map(p => (
                                         <motion.div key={p.id} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center gap-2.5 px-3 py-2.5 bg-surface rounded-[10px]">
                                             <Icon name="schedule" size={18} className="text-faint" />
-                                            <span className="flex-1 text-sm truncate">{p.email}</span>
+                                            <span className="flex-1 text-sm truncate">{p.name}</span>
                                             <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err: any) { setError(err.message || 'Could not cancel that invite'); } }} className="text-[13px] font-semibold text-coral">Revoke</motion.button>
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
                             </Card>
                         )}
-                        {isOwner && (
+                        {isOwner && group.personal && (
                             <Card className="p-[18px] flex flex-col gap-2.5">
                                 <span className="text-[15px] font-semibold">Add someone by name</span>
                                 <div className="flex gap-2">
                                     <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className={`${inputCls} flex-1 min-w-0 text-sm`} />
                                     <Button height={42} variant="secondary" onClick={addPerson} disabled={!personName.trim()}>Add</Button>
                                 </div>
-                                <span className="text-[13px] leading-normal text-faint">No account or email needed, and nobody is notified. Use them in expenses like anyone else. You can invite them later.</span>
+                                <span className="text-[13px] leading-normal text-faint">No account needed and nobody is notified. Use them in expenses like anyone else.</span>
                             </Card>
                         )}
 
@@ -592,15 +590,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     <Avatar name={m.name} tone={tones[m.user_id]} size={36} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className="text-[15px] font-semibold truncate">{m.name}</span>
-                                        <span className="text-[13px] text-faint truncate">{m.pending ? (m.email || 'Name only · not on Splitpot') : m.username ? `@${m.username}` : m.email}</span>
+                                        <span className="text-[13px] text-faint truncate">{m.pending ? (group.personal ? 'Just a name' : 'Invite pending') : m.username ? `@${m.username}` : m.email}</span>
                                     </span>
                                     {m.role === 'owner' && <span className="text-xs text-muted">Owner</span>}
-                                    {m.pending && <span className="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-surface">{m.email ? 'Invited' : 'Name only'}</span>}
+                                    {m.pending && <span className="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-surface">{group.personal ? 'Name only' : 'Invited'}</span>}
                                     {isOwner && m.pending && (
                                         <span className="flex items-center gap-2.5 text-xs font-semibold text-body">
-                                            <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
-                                            {!m.email && !group.personal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'invite', value: '' })} className="underline underline-offset-2">Invite</button>}
-                                            <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
+                                            {group.personal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>}
+                                                                            <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
                                     )}
                                     {isOwner && m.role !== 'owner' && !m.pending && (
@@ -610,8 +607,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     )}
                                     {guestOp?.id === m.user_id && (
                                         <div className="basis-full flex flex-wrap items-center gap-2 pt-2">
-                                            <input autoFocus aria-label={guestOp.kind === 'rename' ? `New name for ${m.name}` : `Invite ${m.name} by email or username`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder={guestOp.kind === 'rename' ? 'New name' : 'Email or @username'} maxLength={60} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm flex-1 min-w-[160px]" />
-                                            <Button height={36} className="px-3.5" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'rename' ? 'Rename' : 'Send invite'}</Button>
+                                            <input autoFocus aria-label={`New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder="New name" maxLength={60} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm flex-1 min-w-[160px]" />
+                                            <Button height={36} className="px-3.5" disabled={!guestOp.value.trim()} onClick={runGuestOp}>Rename</Button>
                                             <Button variant="secondary" height={36} className="px-3.5" onClick={() => setGuestOp(null)}>Cancel</Button>
                                         </div>
                                     )}
