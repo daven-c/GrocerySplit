@@ -108,6 +108,18 @@ run('what users do: expenses, paying back, and more expenses', () => {
         await api.deleteSession(id);
     });
 
+    it('a username can be changed, but not to a taken or malformed one', async () => {
+        await as('a');
+        const before = await api.getMyUsername();
+        await api.updateUsername('scenario_a_tmp');
+        expect(await api.getMyUsername()).toBe('scenario_a_tmp');
+        await as('b');
+        await expect(api.updateUsername('scenario_a_tmp')).rejects.toThrow('taken');
+        await expect(api.updateUsername('x')).rejects.toThrow('3 to 20');
+        await as('a');
+        await api.updateUsername(before);
+    });
+
     it('cleanup', async () => {
         await as('a');
         await api.deleteGroup(groupId);
