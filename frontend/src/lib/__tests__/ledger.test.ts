@@ -31,7 +31,7 @@ describe('groupLedger: who is up or down', () => {
         expect(net(l, 'amy')).toBe(20);
         expect(net(l, 'me')).toBe(-20);
     });
-    it('paybacks bring the payer up and the receiver down, and later expenses still count', () => {
+    it('transfers bring the payer up and the receiver down, and later expenses still count', () => {
         const base = [expense({ amount: 60, split_data: { me: 1, amy: 1 } })]; // amy is down 30
         const paid = groupLedger(group, base, [pay('amy', 'me', 30)]);
         expect(paid.members.every(m => m.net === 0)).toBe(true);
@@ -39,7 +39,7 @@ describe('groupLedger: who is up or down', () => {
         expect(net(later, 'amy')).toBe(-20);
         expect(total(later)).toBe(0);
     });
-    it('a payback between two people who are not the payer works too (any member can record it)', () => {
+    it('a transfer between two people who are not the payer works too (any member can record it)', () => {
         const l = groupLedger(group, [expense()], [pay('bo', 'me', 30), pay('amy', 'me', 10)]);
         expect(net(l, 'bo')).toBe(0);
         expect(net(l, 'amy')).toBe(-20);
@@ -77,8 +77,8 @@ describe('groupLedger: who is up or down', () => {
     });
 });
 
-describe('groupLedger: suggested paybacks', () => {
-    it('one person fronted for two: two paybacks to them', () => {
+describe('groupLedger: suggested transfers', () => {
+    it('one person fronted for two: two transfers to them', () => {
         expect(groupLedger(group, [expense()], []).transfers).toEqual([{ from: 'amy', to: 'me', amount: 30 }, { from: 'bo', to: 'me', amount: 30 }]);
     });
     it('chains collapse: if Amy owes Bo and Bo owes Me, Amy just pays Me', () => {
@@ -88,7 +88,7 @@ describe('groupLedger: suggested paybacks', () => {
         ], []);
         expect(l.transfers).toEqual([{ from: 'amy', to: 'me', amount: 10 }]); // 1 payment instead of 2
     });
-    it('never needs more than (people - 1) paybacks, and applying them settles everyone exactly', () => {
+    it('never needs more than (people - 1) transfers, and applying them settles everyone exactly', () => {
         const members = ['a', 'b', 'c', 'd', 'e'].map(id => ({ user_id: id, name: id.toUpperCase() }));
         const g = { id: 'g1', members };
         const records: LedgerRecord[] = [
@@ -103,7 +103,7 @@ describe('groupLedger: suggested paybacks', () => {
         expect(after.members.every(m => m.net === 0)).toBe(true);
         expect(after.transfers).toEqual([]);
     });
-    it('shrinks as paybacks are recorded', () => {
+    it('shrinks as transfers are recorded', () => {
         const first = groupLedger(group, [expense()], []);
         const t = first.transfers[0];
         const next = groupLedger(group, [expense()], [pay(t.from, t.to, t.amount)]);

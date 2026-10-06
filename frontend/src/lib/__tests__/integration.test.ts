@@ -16,16 +16,30 @@ const email = (u: 'a' | 'b' | 'c') => `gs-test-${u}@mailinator.com`;
 
 // Sign in once per user and then just swap sessions: Supabase rate-limits password sign-ins.
 const sessions: Record<string, { access_token: string; refresh_token: string }> = {};
+let current: 'a' | 'b' | 'c' | null = null;
 async function as(u: 'a' | 'b' | 'c') {
     const cached = sessions[u];
     if (cached) {
         const { error } = await supabase.auth.setSession(cached);
-        if (!error) return;
+        if (!error) { current = u; return; }
     }
     await supabase.auth.signOut({ scope: 'local' });
     const { data, error } = await supabase.auth.signInWithPassword({ email: email(u), password });
     expect(error, `sign-in as ${u} failed - is the test user confirmed?`).toBeNull();
     sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
+    current = u;
+}
+
+/** Usernames are what invites go by; look one up and go back to being whoever was signed in. */
+const handles: Record<string, string> = {};
+async function handle(u: 'a' | 'b' | 'c') {
+    if (!handles[u]) {
+        const was = current;
+        await as(u);
+        handles[u] = await api.getMyUsername();
+        if (was && was !== u) await as(was);
+    }
+    return handles[u];
 }
 
 run('shared groups integration', () => {
@@ -63,17 +77,17 @@ run('shared groups integration', () => {
         expect(await api.listSessions()).toEqual([]);
         await expect(api.createSession({ groupId, name: 'sneaky' })).rejects.toThrow();
         await expect(api.addItem(sessionId, 'x', 1)).rejects.toThrow();
-        await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();
+        await expect(api.inviteToGroup(groupId, await handle('c'))).rejects.toThrow();
         expect((await supabase.from('profiles').select('email')).data?.map(p => p.email)).toEqual([email('c')]); // cannot read A's profile
         expect(await api.myInvites()).toEqual([]);
     });
 
-    it('owner invites by email; duplicates are rejected; only the addressee sees the invite', async () => {
+    it('owner invites by username; duplicates are rejected; only the addressee sees the invite', async () => {
         await as('a');
-        await api.inviteToGroup(groupId, email('b').toUpperCase()); // case-insensitive
-        await expect(api.inviteToGroup(groupId, email('b'))).rejects.toThrow(/already has a pending invite/);
+        await api.inviteToGroup(groupId, (await handle('b')).toUpperCase()); // case-insensitive
+        await expect(api.inviteToGroup(groupId, await handle('b'))).rejects.toThrow(/already has a pending invite/);
         const pending = await api.listPendingInvites(groupId);
-        expect(pending.map(p => p.email)).toEqual([email('b')]);
+        expect(pending.map(p => p.name)).toEqual(['Test B']); // the display name, never the email
 
         await as('c');
         expect(await api.myInvites()).toEqual([]);
@@ -168,11 +182,10 @@ run('shared groups integration', () => {
         bal = computeBalances(a, [g], await api.listSessions(groupId), await api.listSettlements());
         expect(bal.friends[b].net).toBeCloseTo(owedBefore - 10, 2);
 
-        await api.deleteSettlement(st.id); // A is not the creator: silently affects 0 rows
-        expect(await api.listSettlements()).toHaveLength(1);
-        await as('b');
-        await api.deleteSettlement(st.id);
+        await api.deleteSettlement(st.id); // any member can delete a transfer (it is logged in Activity)
         expect(await api.listSettlements()).toEqual([]);
+        const log = await api.listSettlementLog(groupId);
+        expect(log.map(l => l.action).sort()).toEqual(['created', 'deleted']);
         await as('a');
         await api.deleteSession(rec);
     });
@@ -243,7 +256,8 @@ run('shared groups integration', () => {
         const id = ok.data!.id;
 
         // kind and group cannot change; unrelated edits are never blocked by the split
-        expect((await supabase.from('sessions').update({ kind: 'receipt' }).eq('id', id)).error?.message).toMatch(/cannot change between/i);
+        expect((await supabase.from('sessions').update({ kind: 'receipt' }).eq('id', id)).error).toBeNull(); // one editor: it can switch to itemized
+        expect((await supabase.from('sessions').update({ kind: 'expense' }).eq('id', id)).error).toBeNull();
         const other = await api.createGroup('Elsewhere');
         expect((await supabase.from('sessions').update({ group_id: other }).eq('id', id)).error?.message).toMatch(/cannot move/i);
         await api.deleteGroup(other);
@@ -275,12 +289,12 @@ run('shared groups integration', () => {
         await api.deleteSession(draft);
     });
 
-    it('any member can record a payback between two other members; outsiders cannot; only the recorder can undo', async () => {
+    it('any member can record a transfer between two other members; outsiders cannot; only the recorder can undo', async () => {
         const uid = async (u: 'a' | 'b' | 'c') => { await as(u); return (await supabase.auth.getUser()).data.user!.id; };
         const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
 
         await as('a'); // bring C into the group so there are three members
-        await api.inviteToGroup(groupId, email('c'));
+        await api.inviteToGroup(groupId, await handle('c'));
         await as('c');
         await api.respondToInvite((await api.myInvites())[0].id, true);
 
@@ -289,26 +303,26 @@ run('shared groups integration', () => {
         const [pb] = (await api.listSettlements()).filter(x => x.from_user === a && x.to_user === c);
         expect(pb).toMatchObject({ group_id: groupId, amount: 12.5, created_by: b });
 
-        await as('a'); // everyone in the group can see it, but only B can undo it
+        await as('a'); // everyone in the group can see it, edit it, and delete it
         expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
-        await api.deleteSettlement(pb.id);
-        expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
-
+        await api.updateSettlement(pb.id, a, c, 20);
+        expect((await api.listSettlements()).find(x => x.id === pb.id)?.amount).toBe(20);
         await expect(api.recordSettlement(groupId, a, a, 5)).rejects.toThrow(); // can't pay yourself
 
-        await as('b');
         await api.deleteSettlement(pb.id);
         expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(false);
+        const actions = (await api.listSettlementLog(groupId)).filter(l => l.settlement_id === pb.id).map(l => l.action).sort();
+        expect(actions).toEqual(['created', 'deleted', 'edited']); // all three are in the ledger
 
         await as('a'); // put C back outside the group for the tests that follow
         await api.removeMember(groupId, c);
         await as('c');
-        await expect(api.recordSettlement(groupId, a, b, 1)).rejects.toThrow(); // outsiders cannot record paybacks
+        await expect(api.recordSettlement(groupId, a, b, 1)).rejects.toThrow(); // outsiders cannot record transfers
     });
 
     it('non-owner members cannot invite, remove others, or delete the group', async () => {
         await as('b');
-        await expect(api.inviteToGroup(groupId, email('c'))).rejects.toThrow();
+        await expect(api.inviteToGroup(groupId, await handle('c'))).rejects.toThrow();
         const g = await api.getGroup(groupId);
         const ownerId = g.owner_id;
         await api.removeMember(groupId, ownerId); // silently affects 0 rows (RLS)
@@ -319,13 +333,13 @@ run('shared groups integration', () => {
 
     it('declined invites grant nothing; owner can revoke pending ones', async () => {
         await as('a');
-        await api.inviteToGroup(groupId, email('c'));
+        await api.inviteToGroup(groupId, await handle('c'));
         await as('c');
         const [inv] = await api.myInvites();
         await api.respondToInvite(inv.id, false);
         expect(await api.listGroups()).toEqual([]);
         await as('a');
-        await api.inviteToGroup(groupId, email('c')); // re-invite after decline is allowed
+        await api.inviteToGroup(groupId, await handle('c')); // re-invite after decline is allowed
         const [p] = await api.listPendingInvites(groupId);
         await api.revokeInvite(p.id);
         expect(await api.listPendingInvites(groupId)).toEqual([]);

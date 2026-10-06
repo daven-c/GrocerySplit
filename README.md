@@ -5,7 +5,7 @@ Split any shared cost with the people you share it with: groceries, rent, bills,
 ## Two ways to add a cost
 
 - **Groceries (itemized receipt):** open a blank receipt and type the items in, or press **Import from JSON** to fill it from a photo read by any AI chat. Pick a person, then tap the items they had; tax and tip are shared in proportion to what each person bought.
-- **One expense editor:** rent, utilities, dinner, a trip, a grocery run. Choose who paid and who shares it, then pick **Split by**: **amounts** (the default, starting as an even split you can adjust), **percent**, or **by item** (the itemized receipt editor, with tax, tip and JSON import). Switching keeps the name, payer and date. The editor shows live per-person amounts and won't save a split that doesn't add up.
+- **One expense editor:** rent, utilities, dinner, a trip, a grocery run. Choose who paid and who shares it, then pick **Split by**: **amounts** (the default, starting as an even split you can adjust), **shares** (e.g. two shares for the bigger room), or **by item** (the itemized receipt editor, with tax, tip and JSON import). Switching keeps the name, payer and date. The editor shows live per-person amounts and won't save a split that doesn't add up.
 
 **Nothing is added until you press Save.** A new bill or receipt opens as a draft that nobody else in the group sees and that doesn't count toward balances; **Save** publishes it and **Discard** (or leaving the screen) throws it away. Existing expenses autosave as you edit them.
 
@@ -13,11 +13,16 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 
 ## How it's organised
 
+- **Quick split** (no account, no group): one shareable page for splitting a single bill, e.g. at dinner. Start it from the landing page or Home, share the link (`/s/<token>`), and everyone opens it, picks a unique name and taps what they had. Anyone with the link can edit; the owner can lock it, and a split nobody touches for 30 days is deleted. A signed-in person can import it into a group, matching each name to a member. The link's long random token is the only credential, and the tables are closed: everything goes through the `qs_*` database functions.
+- **Usernames and invites:** every account has a display name, a unique `@username` and a private email. Owners invite by `@username` only. While an invite is pending the person can already be used in expenses, and when they accept everything moves to their account under their display name. Emails are never shown to the group.
+- **People** (the old Friends page) shows what you and each person owe across your shared groups.
+- **Personal** is its own private section for tracking what you paid for others by name only. Those names are not accounts and never appear under People.
+- **Home** can search groups (by group or person), sort them (recent activity, name, balance, spend), and pin groups to the top for yourself.
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
-- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline.
+- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline. An invited person (optionally with a name) is usable in expenses right away, marked *Invited*; when they accept, everything they were in (payer, shares, transfers, receipt items) moves to their account. An invite can't be cancelled while they're in expenses.
 - The owner can invite, remove members and delete the group; any member can leave.
-- **Paybacks:** marking a balance paid records a *payback* that shows up in the group's list (with an undo). Record one by hand from the Add menu with two dropdowns, *who paid* and *who received*. Each group has a **Balances** tab that shows how much each person is up or down, with the fewest paybacks that would settle everyone below.
+- **Transfers:** marking a balance paid records a *transfer* that shows up in the group's list (with an undo). Record one by hand from the Add menu with two dropdowns, *who paid* and *who received*. Each group has a **Balances** tab that shows how much each person is up or down, with the fewest transfers that would settle everyone below.
 - **Friends** (sidebar / tab bar) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
 - **Admin** (nav item, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 - **Account** (sidebar / tab bar) lets you change your display name, email and password, or sign out.

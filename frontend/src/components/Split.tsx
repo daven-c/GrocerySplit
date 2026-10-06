@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Modal, AnimatedNumber, spring, tapFlat, tap } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { useAutosave } from '../lib/hooks';
-import { getSession, updateSession, addItem, updateItem, deleteItem, deleteSession, Item, Session } from '../lib/api';
+import { getSession, updateSession, saveReceipt, addItem, updateItem, deleteItem, deleteSession, Item, Session } from '../lib/api';
+import { ParsedReceipt } from '../lib/receiptImport';
+import ReceiptUpload from './ReceiptUpload';
 import { computeSplit } from '../lib/calc';
 import { CATEGORIES, SplitMethod, convertSplit, everyoneEqual } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon } from './ui';
 
 interface SplitProps {
     sessionId: string;
@@ -29,7 +30,7 @@ const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right fon
 const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
 export default function Split({ sessionId, narrow, onBack, onImport, onSaved, onDiscard, onSwitched }: SplitProps) {
-    const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
+    const { me, groups, refresh } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [items, setItems] = useState<Item[]>([]);
     const [name, setName] = useState('');
@@ -46,7 +47,9 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const [loadError, setLoadError] = useState('');
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const baseline = useRef('');
-    const autosave = useAutosave(600);
+    const [reload, setReload] = useState(0); // bumped by Cancel and after Save to take the saved version
+    const [importing, setImporting] = useState(false);
+    const tempId = useRef(0);
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const group = groups.find(g => g.id === record?.group_id);
@@ -73,10 +76,10 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             setTip(s.tip ? String(s.tip) : '');
             setPaidBy(s.paid_by ?? s.user_id ?? '');
             setCategory(s.category || 'groceries');
-            baseline.current = JSON.stringify([s.name, s.session_date, s.tax || 0, s.tip || 0, s.paid_by ?? s.user_id ?? '', s.category || 'groceries']);
+            baseline.current = JSON.stringify([s.name, s.session_date, s.tax || 0, s.tip || 0, s.paid_by ?? s.user_id ?? '', s.category || 'groceries', s.items.map(i => [i.id, i.name, i.price, i.assigned_users])]);
         }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the receipt'));
         return () => { cancelled = true; };
-    }, [sessionId]);
+    }, [sessionId, reload]);
 
     useEffect(() => {
         if (!record || !group) return;
@@ -88,31 +91,12 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
         }
     }, [record, group, sessionId]);
 
-    // Mirror every edit into the shared copy right away (assignments, items, tax, tip, payer...) so balances
-    // elsewhere update immediately. Re-runs when a server refresh replaces the shared copy with older data.
-    useEffect(() => {
-        if (!record) return;
-        patchSession(sessionId, s => ({
-            ...s, items, name: name.trim() || s.name, session_date: date || s.session_date, tax: num(tax), tip: num(tip),
-            paid_by: paidBy || s.paid_by, category,
-        }));
-    }, [record, items, name, date, tax, tip, paidBy, category, sessionId, patchSession, sharedSessions]);
-
-    // Debounced autosave of the receipt's details (existing receipts only; a new draft saves when you press Save).
-    useEffect(() => {
-        if (!record || record.draft) return;
-        const current = JSON.stringify([name, date, num(tax), num(tip), paidBy, category]);
-        if (current === baseline.current) return;
-        autosave.schedule(async () => {
-            await updateSession(sessionId, {
-                name: name.trim() || 'Receipt', session_date: date || record.session_date, tax: num(tax), tip: num(tip),
-                ...(paidBy ? { paid_by: paidBy } : {}), category,
-            });
-            baseline.current = current;
-            void refresh();
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [name, date, tax, tip, paidBy, category, record]);
+    // An existing receipt is edited in place but written only when you press Save (one entry in Activity per save);
+    // Cancel puts the saved version back. A new draft already lives hidden in the database and has its own Save / Discard,
+    // so its items are written as you go.
+    const live = !!record?.draft;
+    const current = JSON.stringify([name, date, num(tax), num(tip), paidBy, category, items.map(i => [i.id, i.name, i.price, i.assigned_users])]);
+    const dirty = !!record && !live && current !== baseline.current;
 
     const split = useMemo(() => computeSplit(items, names, num(tax), num(tip)), [items, names, tax, tip]);
     const subtotal = items.reduce((a, i) => a + i.price, 0);
@@ -120,12 +104,13 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const assignedCount = items.filter(i => i.assigned_users.some(u => names.includes(u))).length;
     const memberByName = (n: string) => members.find(m => m.name === n);
     const payer = members.find(m => m.user_id === paidBy);
-    const payerLabel = paidBy === me ? 'you' : payer?.name ?? 'someone';
-    const display = (n: string) => (memberByName(n)?.user_id === me ? 'You' : n);
+    const payerLabel = payer?.name ?? 'someone';
+    const display = (n: string) => n;
 
     const setAssigned = async (itemId: string, next: string[]) => {
         const prev = items;
         setItems(it => it.map(i => (i.id === itemId ? { ...i, assigned_users: next } : i)));
+        if (!live) return; // saved with the rest when you press Save
         try {
             await updateItem(sessionId, itemId, { assigned_users: next });
         } catch (err) {
@@ -139,6 +124,12 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const toggleAll = (item: Item) => setAssigned(item.id, names.every(n => item.assigned_users.includes(n)) ? [] : [...names]);
 
     const handleAddItem = async () => {
+        if (!live) {
+            const id = `new-${++tempId.current}`;
+            setItems(it => [...it, { id, session_id: sessionId, name: 'New item', price: 0, assigned_users: [] } as Item]);
+            setEditing({ id, name: 'New item', price: '' });
+            return;
+        }
         try {
             const created = await addItem(sessionId, 'New item', 0);
             setItems(it => [...it, created]);
@@ -154,6 +145,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
         const prev = items;
         setItems(it => it.map(i => (i.id === e.id ? { ...i, name: nextName, price } : i)));
         setEditing(null);
+        if (!live) return;
         try { await updateItem(sessionId, e.id, { name: nextName, price }); void refresh(); }
         catch (err) { console.error(err); setItems(prev); flash('Could not save that item.'); }
     };
@@ -165,6 +157,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
         setItemToDelete(null);
         setEditing(null);
         setItems(it => it.filter(i => i.id !== id));
+        if (!live) return;
         try { await deleteItem(sessionId, id); void refresh(); }
         catch (err) { console.error(err); setItems(prev); flash('Could not delete that item.'); }
     };
@@ -173,7 +166,6 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     // (dormant) so switching back to "By item" brings them back.
     const switchTo = async (to: SplitMethod) => {
         if (!record || saving) return;
-        autosave.cancel();
         setSaving(true);
         try {
             const amount = Math.round((subtotal + num(tax) + num(tip)) * 100) / 100;
@@ -188,6 +180,35 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             flash('Could not switch how this is split.');
             setSaving(false);
         }
+    };
+
+    const handleSaveChanges = async () => {
+        if (!record || !dirty) return;
+        setSaving(true);
+        try {
+            await saveReceipt(
+                sessionId,
+                { name: name.trim() || 'Receipt', session_date: date || record.session_date, tax: num(tax), tip: num(tip), category, ...(paidBy ? { paid_by: paidBy } : {}) },
+                items.map(i => ({ id: i.id.startsWith('new-') ? undefined : i.id, name: i.name, price: i.price, assigned_users: i.assigned_users }))
+            );
+            await refresh();
+            setReload(r => r + 1); // pick up the saved version (real ids for new items)
+        } catch (err) {
+            console.error(err);
+            flash('Could not save the changes.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Items parsed from pasted JSON join this receipt as unsaved changes.
+    const applyImport = (r: ParsedReceipt) => {
+        setItems(it => [...it, ...r.items.map(i => ({ id: `new-${++tempId.current}`, session_id: sessionId, name: i.name, price: i.price, assigned_users: [] } as Item))]);
+        if (r.tax) setTax(String(Math.round((num(tax) + r.tax) * 100) / 100));
+        if (r.tip) setTip(String(Math.round((num(tip) + r.tip) * 100) / 100));
+        if (r.date) setDate(r.date);
+        if (r.store && ['Receipt', 'Manual Receipt', 'Grocery Trip'].includes(name)) setName(r.store);
+        setImporting(false);
     };
 
     const handleSaveDraft = async () => {
@@ -215,10 +236,10 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
     if (loadError) return <p className="text-center text-coral py-16">{loadError}</p>;
     if (!record || !group) return <p className="text-center text-faint py-16 animate-pulse">Loading receipt…</p>;
+    if (importing) return <ReceiptUpload groupId={record.group_id} sessionId={sessionId} narrow={narrow} onImported={() => setImporting(false)} onParsed={applyImport} onBack={() => setImporting(false)} />;
 
     const maxShare = Math.max(...split.totals.map(([, v]) => v), 0.01);
     const paintTone = paint ? tones[memberByName(paint)?.user_id ?? ''] : null;
-    const saveText = record.draft ? 'Not saved yet' : autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically';
 
     return (
         <div className="max-w-[1080px] mx-auto flex flex-col gap-6">
@@ -268,17 +289,19 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             </div>
 
             {record.draft && <DraftBar what="expense" canSave saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
+            {dirty && <ChangesBar canSave saving={saving} onSave={handleSaveChanges} onCancel={() => setReload(r => r + 1)} />}
 
             <div className="flex flex-wrap gap-6 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
                     <Card className="p-4 flex flex-col gap-3">
-                        <span className="text-sm font-semibold">Split by</span>
-                        <SplitByTabs value="items" onChange={m => { if (m !== 'items') void switchTo(m); }} disabled={saving} />
+                        <span className="text-sm font-semibold">Itemized receipt</span>
+                        <span className="text-[13px] text-muted -mt-1.5">Tap who had each item. Tax and tip are shared by what each person had.</span>
+                        <Button variant="secondary" height={38} className="self-start px-3.5" disabled={saving} onClick={() => void switchTo('exact')}>Split one total instead</Button>
                     </Card>
 
                     <Card className="p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold">{paint ? `Tap the items ${display(paint) === 'You' ? 'you' : paint} had` : 'Pick a person, then tap their items'}</span>
+                            <span className="text-sm font-semibold">{paint ? `Tap the items ${paint} had` : 'Pick a person, then tap their items'}</span>
                             <span className="text-[13px] text-muted whitespace-nowrap">{assignedCount} of {items.length} assigned</span>
                         </div>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Who to assign">
@@ -355,7 +378,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                             })}
                                             <motion.button {...tap} onClick={e => { e.stopPropagation(); void toggleAll(item); }} className="h-[30px] px-2.5 rounded-full bg-transparent text-xs font-semibold text-muted hover:bg-surface">All</motion.button>
                                             <span className={`ml-auto text-xs ${n === 0 ? 'text-coral' : 'text-faint'}`}>
-                                                {n === 0 ? 'Not assigned yet' : n === 1 ? `Just ${display(only!) === 'You' ? 'you' : only}` : `${fmt(item.price / n)} each`}
+                                                {n === 0 ? 'Not assigned yet' : n === 1 ? `Just ${only}` : `${fmt(item.price / n)} each`}
                                             </span>
                                         </div>
                                     </motion.div>
@@ -369,7 +392,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                             <motion.button {...tapFlat} onClick={handleAddItem} className="flex-1 flex items-center gap-2 px-[18px] py-3.5 text-sm font-semibold text-body hover:bg-surface transition-colors">
                                 <Icon name="add" size={18} />Add an item
                             </motion.button>
-                            <motion.button {...tapFlat} onClick={onImport} className="flex items-center gap-2 px-[18px] py-3.5 border-l border-rule text-sm font-semibold text-body hover:bg-surface transition-colors">
+                            <motion.button {...tapFlat} onClick={live ? onImport : () => setImporting(true)} className="flex items-center gap-2 px-[18px] py-3.5 border-l border-rule text-sm font-semibold text-body hover:bg-surface transition-colors">
                                 <Icon name="upload_file" size={18} />Import from JSON
                             </motion.button>
                         </div>
@@ -413,7 +436,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
                             <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.user_id === me ? 'You' : m.name}</option>)}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                             </select>
                         </label>
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Date
@@ -426,7 +449,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                         </label>
                         <div className="flex items-center justify-between pt-1">
                             {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete expense</motion.button>}
-                            <span className="text-xs text-faint" aria-live="polite">{saveText}</span>
+                            <span className="text-xs text-faint" aria-live="polite">{record.draft ? 'Not saved yet' : dirty ? 'Unsaved changes' : 'Saved'}</span>
                         </div>
                     </Card>
                 </div>

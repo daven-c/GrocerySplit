@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, Pop, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { updateDisplayName, requestEmailChange, changePassword } from '../lib/api';
+import { updateDisplayName, requestEmailChange, changePassword, getMyUsername, updateUsername } from '../lib/api';
 import { HUES, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, inputCls } from './ui';
 
@@ -38,6 +38,11 @@ export default function Account({ user, onLogout }: AccountProps) {
     const [nameMsg, setNameMsg] = useState<Msg>(null);
     const [nameBusy, setNameBusy] = useState(false);
 
+    const [username, setUsername] = useState('');
+    const [savedUsername, setSavedUsername] = useState('');
+    const [unameMsg, setUnameMsg] = useState<Msg>(null);
+    const [unameBusy, setUnameBusy] = useState(false);
+
     const [email, setEmail] = useState('');
     const [emailMsg, setEmailMsg] = useState<Msg>(null);
     const [emailBusy, setEmailBusy] = useState(false);
@@ -60,6 +65,30 @@ export default function Account({ user, onLogout }: AccountProps) {
             setNameMsg({ type: 'err', text: err.message });
         } finally {
             setNameBusy(false);
+        }
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        getMyUsername().then(u => { if (!cancelled) { setUsername(u); setSavedUsername(u); } }).catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
+
+    const saveUsername = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setUnameBusy(true);
+        setUnameMsg(null);
+        try {
+            await updateUsername(username);
+            const u = username.trim().toLowerCase();
+            setUsername(u);
+            setSavedUsername(u);
+            setUnameMsg({ type: 'ok', text: 'Username updated.' });
+            void refresh();
+        } catch (err: any) {
+            setUnameMsg({ type: 'err', text: err.message });
+        } finally {
+            setUnameBusy(false);
         }
     };
 
@@ -117,6 +146,19 @@ export default function Account({ user, onLogout }: AccountProps) {
                         </div>
                         <span className="text-[13px] text-faint">This is how you appear on receipts and in your groups.</span>
                         <Banner msg={nameMsg} />
+                    </form>
+
+                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={saveUsername}>
+                        <label htmlFor="username" className="text-[15px] font-semibold">Username</label>
+                        <div className="flex gap-2">
+                            <span className="flex-1 min-w-0 flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
+                                <span className="text-faint">@</span>
+                                <input id="username" className="flex-1 min-w-0 border-0 bg-transparent text-[15px]" value={username} onChange={e => setUsername(e.target.value)} maxLength={20} autoCapitalize="none" required />
+                            </span>
+                            <Button variant="secondary" type="submit" height={42} disabled={unameBusy || !username.trim() || username.trim().toLowerCase() === savedUsername}>{unameBusy ? 'Saving…' : 'Save'}</Button>
+                        </div>
+                        <span className="text-[13px] leading-normal text-faint">People invite you to a group with @{savedUsername || 'username'}, so your email stays private. Letters, numbers and underscores, unique to you.</span>
+                        <Banner msg={unameMsg} />
                     </form>
 
                     <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={saveEmail}>

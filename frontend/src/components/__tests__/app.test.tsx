@@ -51,7 +51,7 @@ describe('Auth', () => {
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
         expect(screen.getByRole('heading', { name: 'Start a pot' })).toBeInTheDocument();
         expect(screen.getByPlaceholderText('What your friends call you')).toBeInTheDocument();
-        expect(screen.getByText('Invites are matched to your email, so sign up with the address your friends know.')).toBeInTheDocument();
+        expect(screen.getByText('Pick a username: people invite you to groups by it, and your email stays private.')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Sign in' }));
         expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByPlaceholderText('What your friends call you')).not.toBeInTheDocument());
@@ -73,14 +73,33 @@ describe('Auth', () => {
         expect(await screen.findByText('Invalid login credentials')).toBeInTheDocument();
     });
 
-    it('sign up sends the name and shows the confirm-email notice; rate limits get friendly copy', async () => {
+    it('sign up refuses a taken or malformed username before creating anything', async () => {
         const u = userEvent.setup();
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
         await u.type(screen.getByLabelText('Your name'), 'Sam');
         await u.type(screen.getByLabelText('Email'), 'sam@x.com');
         await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.type(screen.getByLabelText('Username'), 'no spaces!');
         await u.click(screen.getByRole('button', { name: 'Create account' }));
-        await waitFor(() => expect(authMock.signUp).toHaveBeenCalledWith({ email: 'sam@x.com', password: 'secret12', options: { data: { name: 'Sam' } } }));
+        expect(await screen.findByText('Usernames are 3 to 20 letters, numbers or underscores.')).toBeInTheDocument();
+        await u.clear(screen.getByLabelText('Username'));
+        await u.type(screen.getByLabelText('Username'), 'taken_name');
+        api.usernameAvailable.mockResolvedValueOnce(false);
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        expect(await screen.findByText('That username is taken. Try another.')).toBeInTheDocument();
+        expect(authMock.signUp).not.toHaveBeenCalled();
+    });
+
+    it('sign up sends the name and shows the confirm-email notice; rate limits get friendly copy', async () => {
+        const u = userEvent.setup();
+        render(<Auth initialMode="signup" onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Your name'), 'Sam');
+        await u.type(screen.getByLabelText('Username'), 'Sam_99');
+        await u.type(screen.getByLabelText('Email'), 'sam@x.com');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        await waitFor(() => expect(authMock.signUp).toHaveBeenCalledWith({ email: 'sam@x.com', password: 'secret12', options: { data: { name: 'Sam', username: 'sam_99' } } }));
+        expect(api.usernameAvailable).toHaveBeenCalledWith('sam_99');
         expect(await screen.findByText('Account created! Check your email for a confirmation link, then sign in.')).toBeInTheDocument();
 
         authMock.signUp.mockResolvedValueOnce({ data: { session: null }, error: { message: 'email rate limit exceeded' } } as any);
@@ -119,7 +138,7 @@ describe('App shell', () => {
         render(<App />);
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         expect(within(sidebar).getByText('splitpot')).toBeInTheDocument();
-        for (const n of ['Home', 'Friends', 'Account']) expect(within(sidebar).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
+        for (const n of ['Home', 'People', 'Personal', 'Account']) expect(within(sidebar).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
         expect(within(sidebar).queryByRole('button', { name: /Admin/ })).not.toBeInTheDocument();
         expect(await within(sidebar).findByRole('button', { name: 'Roomies' })).toBeInTheDocument();
         expect(within(sidebar).getByText('Daven Chang')).toBeInTheDocument();
@@ -141,13 +160,35 @@ describe('App shell', () => {
         expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
         await u.click(await screen.findByText('October rent'));
         expect(await screen.findByLabelText('Expense name')).toBeInTheDocument(); // expenses open the expense editor
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
         await u.click(within(sidebar).getByRole('button', { name: 'Account' }));
         expect(await screen.findByLabelText('Display name')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: /Sign out/ }));
         await waitFor(() => expect(authMock.signOut).toHaveBeenCalled());
         expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+    });
+
+    it('Personal is its own section: it creates your private group once and opens it, highlighted in the nav', async () => {
+        const u = userEvent.setup();
+        const { group } = await import('../../test/apiMock');
+        const personal = { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0]] };
+        api.ensurePersonalGroup.mockImplementation(async () => { api.listGroups.mockResolvedValue([group, personal]); return 'gp'; });
+        signIn();
+        render(<App />);
+        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        expect(within(sidebar).queryByRole('button', { name: 'Personal', current: 'page' })).not.toBeInTheDocument();
+        await u.click(within(sidebar).getByRole('button', { name: 'Personal' }));
+        await waitFor(() => expect(api.ensurePersonalGroup).toHaveBeenCalled());
+        expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Personal', current: 'page' })).toBeInTheDocument();
+        expect(within(sidebar).queryAllByRole('button', { name: /^Personal$/ })).toHaveLength(1); // not duplicated in the group list
+
+        // Home is Home again, even though the last group opened was Personal
+        await u.click(within(sidebar).getByRole('button', { name: 'Home' }));
+        expect(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/)).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Home', current: 'page' })).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Personal' })).not.toHaveAttribute('aria-current');
     });
 
     it('scrolls to the top on every view change', async () => {
@@ -156,7 +197,7 @@ describe('App shell', () => {
         render(<App />);
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         (window.scrollTo as any).mockClear();
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 0));
     });
 
@@ -188,12 +229,12 @@ describe('App shell', () => {
         render(<App />);
         const tabs = await screen.findByRole('navigation', { name: 'Primary' });
         expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
-        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'Friends', 'person' + 'Account']);
+        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'People', 'lock' + 'Personal', 'person' + 'Account']);
         expect(screen.getByRole('banner')).toHaveTextContent('splitpot');
-        await u.click(within(tabs).getByRole('button', { name: /Friends/ }));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
-        expect(screen.getByRole('banner')).toHaveTextContent('Friends');
-        expect(within(tabs).getByRole('button', { name: /Friends/ })).toHaveAttribute('aria-current', 'page');
+        await u.click(within(tabs).getByRole('button', { name: /People/ }));
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
+        expect(screen.getByRole('banner')).toHaveTextContent('People');
+        expect(within(tabs).getByRole('button', { name: /People/ })).toHaveAttribute('aria-current', 'page');
     });
 
     it('narrow: inside a group the header shows a back arrow and the group name', async () => {
@@ -201,7 +242,7 @@ describe('App shell', () => {
         narrowScreen();
         signIn();
         render(<App />);
-        await u.click(await screen.findByRole('button', { name: /Roomies/ }));
+        await u.click(await screen.findByRole('button', { name: /^Roomies/ }));
         const header = await screen.findByRole('banner');
         await waitFor(() => expect(header).toHaveTextContent('Roomies'));
         await u.click(within(header).getByRole('button', { name: 'Back' }));
@@ -220,7 +261,7 @@ describe('Drafts in the app shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Add an expense'));
+        await u.click(await screen.findByText('Split a total'));
         await screen.findByRole('region', { name: 'Unsaved draft' });
         return { u, sidebar };
     };
@@ -233,9 +274,9 @@ describe('Drafts in the app shell', () => {
 
     it('leaving without saving (sidebar, back) discards the draft', async () => {
         const { u, sidebar } = await startDraft();
-        await u.click(within(sidebar).getByRole('button', { name: 'Friends' }));
+        await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('s9'));
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
     });
 
     it('Discard deletes the draft and returns to the group', async () => {
@@ -255,18 +296,18 @@ describe('Drafts in the app shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Add an expense'));
+        await u.click(await screen.findByText('Split a total'));
         await screen.findByLabelText('How much was it?'); // the amount-based body
 
-        await u.click(screen.getByRole('tab', { name: 'By item' }));
+        await u.click(screen.getByRole('button', { name: 'Split by item' }));
         expect(await screen.findByRole('button', { name: /Add an item/ })).toBeInTheDocument(); // the itemized body
-        expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument();
+        expect(screen.getByText('Itemized receipt')).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument(); // still a draft
         expect(api.deleteSession).not.toHaveBeenCalled();
 
-        await u.click(screen.getByRole('tab', { name: 'Percent' }));
+        await u.click(screen.getByRole('button', { name: 'Split one total instead' }));
         expect(await screen.findByLabelText('How much was it?')).toBeInTheDocument(); // back to the amount body
-        expect(screen.getByRole('tab', { name: 'Percent', selected: true })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Amounts', selected: true })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument();
         expect(api.deleteSession).not.toHaveBeenCalled();
     });

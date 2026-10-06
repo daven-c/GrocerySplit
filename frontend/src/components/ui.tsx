@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, tap, tapFlat, SegmentedTabs } from '../lib/motion';
-import { SPLIT_BY, SplitBy } from '../lib/expenses';
+import { METHODS, SplitMethod } from '../lib/expenses';
 import type { Tone } from '../lib/people';
 import { initialOf } from '../lib/people';
 
@@ -106,11 +106,28 @@ export function DraftBar({ what, canSave, problem, saving, onSave, onDiscard }: 
     );
 }
 
-/** The one control for how an expense is split, shared by both bodies of the editor. */
-export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitBy; onChange: (v: SplitBy) => void; disabled?: boolean }) {
+/** Shown while an existing record has edits that are not saved yet. Nothing is written until Save; Cancel puts it back. */
+export function ChangesBar({ canSave, problem, saving, onSave, onCancel }: { canSave: boolean; problem?: string | null; saving: boolean; onSave: () => void; onCancel: () => void }) {
+    return (
+        <div role="region" aria-label="Unsaved changes" className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-[14px] bg-surface border border-edge">
+            <Icon name="edit_note" size={20} className="text-body" />
+            <div className="flex-[1_1_200px] flex flex-col gap-0.5">
+                <span className="text-sm font-semibold">Unsaved changes</span>
+                <span className={`text-[13px] ${problem ? 'text-coral' : 'text-muted'}`}>{problem || 'Nobody else sees them until you save.'}</span>
+            </div>
+            <div className="flex gap-2">
+                <Button variant="secondary" height={38} onClick={onCancel} disabled={saving}>Cancel</Button>
+                <Button height={38} onClick={onSave} disabled={!canSave || saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+            </div>
+        </div>
+    );
+}
+
+/** How one total is shared out (older expenses saved as equal/percent open as amounts). */
+export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitMethod; onChange: (v: SplitMethod) => void; disabled?: boolean }) {
     return (
         <div className={disabled ? 'opacity-60 pointer-events-none' : ''} aria-busy={disabled}>
-            <SegmentedTabs id="split-by" compact value={value} onChange={onChange} tabs={SPLIT_BY.map(m => ({ value: m.value, label: m.label }))} />
+            <SegmentedTabs id="split-by" compact value={value} onChange={onChange} tabs={METHODS.map(m => ({ value: m.value, label: m.label }))} />
         </div>
     );
 }

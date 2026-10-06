@@ -91,7 +91,7 @@ export async function createSession(input: {
     tax?: number;
     tip?: number;
     participants?: string[];
-    items?: { name: string; price: number }[];
+    items?: { name: string; price: number; assigned_users?: string[] }[];
 }): Promise<string> {
     const s = check(
         await supabase
@@ -114,7 +114,7 @@ export async function createSession(input: {
     if (input.items?.length) {
         const { error } = await supabase
             .from('items')
-            .insert(input.items.map(i => ({ session_id: s.id, name: i.name, price: i.price })));
+            .insert(input.items.map(i => ({ session_id: s.id, name: i.name, price: i.price, ...(i.assigned_users ? { assigned_users: i.assigned_users } : {}) })));
         if (error) {
             await supabase.from('sessions').delete().eq('id', s.id); // don't leave an empty half-import behind
             throw new Error(error.message);
@@ -191,6 +191,25 @@ export async function updateDisplayName(name: string) {
     check(await supabase.from('profiles').update({ name: trimmed }).eq('id', data.user.id));
 }
 
+export async function usernameAvailable(username: string): Promise<boolean> {
+    return !!(await rpc('username_available', { p_username: username }));
+}
+
+export async function getMyUsername(): Promise<string> {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return '';
+    const row = check(await supabase.from('profiles').select('username').eq('id', data.user.id).single());
+    return row.username ?? '';
+}
+
+export async function updateUsername(username: string) {
+    const u = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) throw new Error('Usernames are 3 to 20 letters, numbers or underscores.');
+    const { data } = await supabase.auth.getUser();
+    const { error } = await supabase.from('profiles').update({ username: u }).eq('id', data.user!.id);
+    if (error) throw new Error(error.code === '23505' ? 'That username is taken.' : error.message);
+}
+
 /** Supabase sends a confirmation link to the new address; the email only changes once it is clicked. */
 export async function requestEmailChange(email: string) {
     const { error } = await supabase.auth.updateUser({ email: email.trim().toLowerCase() });
@@ -215,9 +234,17 @@ export interface Member {
     name: string;
     email: string;
     role: 'owner' | 'member';
+    /** Invited but not joined yet. Usable in expenses; everything moves to their account when they accept. */
+    pending?: boolean;
+    /** Lowercase handle people can invite by. Not set for people who haven't joined. */
+    username?: string;
+    /** This member has pinned the group (only meaningful on their own row). */
+    pinned?: boolean;
 }
 
 export interface Group {
+    /** The user's private group for tracking what they paid for people by name. Never shared. */
+    personal?: boolean;
     id: string;
     name: string;
     owner_id: string;
@@ -236,7 +263,8 @@ export interface Invite {
 export interface PendingInvite {
     id: string;
     group_id: string;
-    email: string;
+    /** The invited person's display name (their email is never shown). */
+    name: string;
     created_at: string;
 }
 
@@ -245,12 +273,14 @@ const mapGroup = (r: any): Group => ({
     name: r.name,
     owner_id: r.owner_id,
     created_at: r.created_at,
+    personal: !!r.personal,
     members: (r.group_members ?? [])
-        .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '' }))
-        .sort((a: Member, b: Member) => (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name))),
+        .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, pinned: !!m.pinned, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '', username: m.profiles?.username ?? undefined }))
+        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true })))
+        .sort((a: Member, b: Member) => (!!a.pending !== !!b.pending ? (a.pending ? 1 : -1) : (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name)))),
 });
 
-const GROUP_SELECT = 'id, name, owner_id, created_at, group_members(user_id, role, joined_at, profiles(name, email))';
+const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(user_id, role, joined_at, pinned, profiles(name, email, username)), group_guests(id, name, created_at)';
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));
@@ -259,6 +289,12 @@ export async function listGroups(): Promise<Group[]> {
 
 export async function getGroup(id: string): Promise<Group> {
     return mapGroup(check(await supabase.from('groups').select(GROUP_SELECT).eq('id', id).single()));
+}
+
+/** Pin or unpin a group for the signed-in user only. */
+export async function setGroupPinned(groupId: string, pinned: boolean) {
+    const { data } = await supabase.auth.getUser();
+    check(await supabase.from('group_members').update({ pinned }).eq('group_id', groupId).eq('user_id', data.user!.id));
 }
 
 export async function createGroup(name: string): Promise<string> {
@@ -274,19 +310,30 @@ export async function removeMember(groupId: string, userId: string) {
     check(await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId));
 }
 
-export async function inviteToGroup(groupId: string, email: string) {
-    const { error } = await supabase.from('group_invites').insert({ group_id: groupId, email: email.trim().toLowerCase() });
-    if (error) throw new Error(error.code === '23505' ? 'That email already has a pending invite.' : error.message);
+/** Invite by @username. They can be used in expenses while the invite is pending. */
+export async function inviteToGroup(groupId: string, username: string) {
+    const { error } = await supabase.rpc('invite_person', { p_group: groupId, p_username: username.trim() });
+    if (error) throw new Error(error.message);
 }
 
+// ---- People who are only a name (your Personal section) or an invite not yet accepted: owner-only, enforced in the database ----
+const rpc = async (fn: string, args: Record<string, unknown>) => {
+    const { data, error } = await supabase.rpc(fn, args);
+    if (error) throw new Error(error.message);
+    return data;
+};
+export const addGuest = (groupId: string, name: string): Promise<string> => rpc('add_guest', { p_group: groupId, p_name: name });
+export const renameGuest = (guestId: string, name: string) => rpc('rename_guest', { p_guest: guestId, p_name: name });
+export const removeGuest = (guestId: string) => rpc('remove_guest', { p_guest: guestId });
+/** The user's private Personal group (created the first time). */
+export const ensurePersonalGroup = (): Promise<string> => rpc('ensure_personal_group', {});
+
 export async function listPendingInvites(groupId: string): Promise<PendingInvite[]> {
-    return check(
-        await supabase.from('group_invites').select('id, group_id, email, created_at').eq('group_id', groupId).eq('status', 'pending').order('created_at')
-    );
+    return check(await supabase.rpc('group_pending_invites', { p_group: groupId }));
 }
 
 export async function revokeInvite(id: string) {
-    check(await supabase.from('group_invites').delete().eq('id', id));
+    check(await supabase.rpc('revoke_invite', { p_invite: id }));
 }
 
 export async function myInvites(): Promise<Invite[]> {
@@ -315,6 +362,61 @@ export async function listSettlements(): Promise<Settlement[]> {
 
 export async function recordSettlement(groupId: string, fromUser: string, toUser: string, amount: number) {
     check(await supabase.from('settlements').insert({ group_id: groupId, from_user: fromUser, to_user: toUser, amount }));
+}
+
+export async function updateSettlement(id: string, fromUser: string, toUser: string, amount: number) {
+    check(await supabase.from('settlements').update({ from_user: fromUser, to_user: toUser, amount }).eq('id', id));
+}
+
+export interface SettlementLogEntry {
+    id: string;
+    group_id: string;
+    settlement_id: string;
+    action: 'created' | 'edited' | 'deleted';
+    actor: string | null;
+    from_user: string;
+    to_user: string;
+    amount: number;
+    prev_from_user: string | null;
+    prev_to_user: string | null;
+    prev_amount: number | null;
+    created_at: string;
+}
+
+/** The change history of a group's transfers, newest first. Written by the database, never by the app. */
+export interface ExpenseLogEntry {
+    id: string;
+    group_id: string;
+    session_id: string;
+    action: 'created' | 'edited' | 'deleted';
+    actor: string | null;
+    kind: 'receipt' | 'expense';
+    name: string;
+    total: number;
+    /** What changed on an edit, as raw values: [{ field: 'amount', from: 20, to: 25 }, ...]. */
+    changes: { field: string; from?: any; to?: any; added?: string[]; removed?: string[]; changed?: string[] }[];
+    created_at: string;
+}
+
+/** Every expense and receipt created, edited or deleted in a group, newest first. Written by the database. */
+export async function listExpenseLog(groupId: string): Promise<ExpenseLogEntry[]> {
+    const data = check(await supabase.from('expense_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
+    return data.map((r: any) => ({ ...r, total: Number(r.total), changes: r.changes ?? [] }));
+}
+
+/** Save a receipt's details and its items together, atomically, as one edit. Items without an id are new. */
+export async function saveReceipt(
+    sessionId: string,
+    patch: { name?: string; session_date?: string; tax?: number; tip?: number; category?: string; paid_by?: string | null },
+    items: { id?: string; name: string; price: number; assigned_users: string[] }[]
+) {
+    const { error } = await supabase.rpc('save_receipt', { p_session: sessionId, p_patch: patch, p_items: items.map(i => ({ ...i, id: i.id ?? null })) });
+    if (error) throw new Error(error.message);
+}
+
+export async function listSettlementLog(groupId: string): Promise<SettlementLogEntry[]> {
+    const data = check(await supabase.from('settlement_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
+    return data.map((r: any) => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));
 }
 
 export async function deleteSettlement(id: string) {

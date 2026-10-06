@@ -38,6 +38,8 @@ export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** "$1,234.56" (sign dropped; callers choose the wording). */
 export const fmt = (n: number) => `$${money.format(Math.abs(n))}`;
+/** Like fmt, but a negative amount keeps its minus sign (for balances where someone is down). */
+export const fmtSigned = (n: number) => `${n < -0.004 ? '-' : ''}$${money.format(Math.abs(n))}`;
 
 export function greeting(date = new Date()): string {
     const h = date.getHours();

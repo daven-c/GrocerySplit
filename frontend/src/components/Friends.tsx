@@ -7,12 +7,15 @@ import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, Icon } from './ui';
 
 export default function Friends() {
-    const { me, groups, sessions, settlements, refresh, loading } = useAppData();
+    const { me, groups: allGroups, sessions, settlements, refresh, loading } = useAppData();
+    // Your Personal section only has names, not people, so it never appears here.
+    const groups = useMemo(() => allGroups.filter(g => !g.personal), [allGroups]);
     const [open, setOpen] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
     const balances = useMemo(() => computeBalances(me, groups, sessions, settlements), [me, groups, sessions, settlements]);
+    const myName = groups.flatMap(g => g.members).find(m => m.user_id === me)?.name ?? 'You';
     const groupName = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
 
     const friends = useMemo(() => {
@@ -53,7 +56,7 @@ export default function Friends() {
     return (
         <div className="max-w-[760px] mx-auto flex flex-col gap-7">
             <div className="flex flex-col gap-1.5">
-                <h1 className="m-0 text-[28px] font-semibold tracking-title">Friends</h1>
+                <h1 className="m-0 text-[28px] font-semibold tracking-title">People</h1>
                 <p className="m-0 text-[15px] text-muted">What you and each person owe, across every group you share.</p>
             </div>
 
@@ -74,7 +77,7 @@ export default function Friends() {
                 <p className="text-center text-faint py-10 m-0 animate-pulse">Loading…</p>
             ) : friends.length === 0 ? (
                 <div className="text-center py-10 px-6 border border-dashed border-line rounded-[14px]">
-                    <p className="m-0 text-[15px] font-semibold text-body">No friends yet.</p>
+                    <p className="m-0 text-[15px] font-semibold text-body">No one yet.</p>
                     <p className="m-0 mt-1 text-sm text-faint">Invite people to a group and they'll show up here with what you owe each other.</p>
                 </div>
             ) : (
@@ -93,7 +96,7 @@ export default function Friends() {
                                         <span className="text-[13px] text-faint truncate">{f.groupIds.map(id => groupName[id]).join(', ')}</span>
                                     </span>
                                     <span className="flex flex-col items-end gap-0.5">
-                                        {settled ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix="$" className={`text-[15px] font-semibold ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                        {settled ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix={f.net < 0 ? '-$' : '$'} className={`text-[15px] font-semibold ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
                                         <span className="text-xs text-faint">{settled ? 'all square' : f.net > 0 ? 'owes you' : 'you owe'}</span>
                                     </span>
                                     <Icon name={expanded ? 'expand_less' : 'expand_more'} size={20} className="text-chev" />
@@ -106,7 +109,7 @@ export default function Friends() {
                                                 <motion.div key={gid} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex flex-wrap items-center gap-3 px-3 py-2.5 border border-rule rounded-[10px]">
                                                     <div className="flex-[1_1_160px] flex flex-col gap-0.5">
                                                         <span className="text-sm font-semibold">{groupName[gid] ?? 'Group'}</span>
-                                                        <span className={`text-[13px] ${net > 0 ? 'text-green' : 'text-coral'}`}>{net > 0 ? `${f.name} owes you ${fmt(net)}` : `You owe ${f.name} ${fmt(net)}`}</span>
+                                                        <span className={`text-[13px] ${net > 0 ? 'text-green' : 'text-coral'}`}>{net > 0 ? `${f.name} owes ${myName} ${fmt(net)}` : `${myName} owes ${f.name} ${fmt(net)}`}</span>
                                                     </div>
                                                     <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={busy} onClick={() => settle(f.id, gid, net)}>{net > 0 ? 'Mark received' : 'Mark paid'}</Button>
                                                 </motion.div>
@@ -119,7 +122,7 @@ export default function Friends() {
                                         {history.map(h => (
                                             <div key={h.id} className="flex items-center gap-2.5 text-[13px] text-muted">
                                                 <Icon name="check_circle" size={16} className="text-green" fill />
-                                                <span className="flex-1">{h.from_user === me ? `You paid ${f.name}` : `${f.name} paid you`} {fmt(h.amount)} · {groupName[h.group_id] ?? 'Group'} · {new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                                <span className="flex-1">{h.from_user === me ? `${myName} paid ${f.name}` : `${f.name} paid ${myName}`} {fmt(h.amount)} · {groupName[h.group_id] ?? 'Group'} · {new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                                 {h.created_by === me && (
                                                     <button type="button" disabled={busy} onClick={() => run(() => deleteSettlement(h.id))} className="text-[13px] font-semibold text-ink underline underline-offset-2">Undo</button>
                                                 )}

@@ -20,7 +20,7 @@ afterEach(cleanup);
 describe('Friends', () => {
     it('shows owed totals, and friends sorted by what is outstanding, with their shared groups', async () => {
         renderWithData(<Friends />);
-        expect(await screen.findByRole('heading', { name: 'Friends' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
         await waitFor(() => expect(screen.getByText('$1,182.82')).toBeInTheDocument(), { timeout: 3000 });
         const rows = screen.getAllByRole('button', { expanded: false });
         expect(rows[0]).toHaveTextContent('Bo');
@@ -35,7 +35,7 @@ describe('Friends', () => {
         const u = userEvent.setup();
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText('Amy owes you $578.85')).toBeInTheDocument();
+        expect(await screen.findByText('Amy owes Daven $578.85')).toBeInTheDocument();
         expect(screen.getByText("Marking something paid doesn't move money. It just clears the balance for both of you.")).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Mark received' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-amy', ME, expect.closeTo(578.85, 2)));
@@ -47,8 +47,9 @@ describe('Friends', () => {
         api.listSessions.mockResolvedValue([sessions[2]]); // Pizza night: Amy paid, you owe her 30
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText('You owe Amy $30.00')).toBeInTheDocument();
+        expect(await screen.findByText('Daven owes Amy $30.00')).toBeInTheDocument();
         expect(screen.getByText('you owe')).toBeInTheDocument();
+        expect(screen.getByText('-$30.00')).toBeInTheDocument(); // down: shown negative
         await u.click(screen.getByRole('button', { name: 'Mark paid' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', ME, 'u-amy', 30));
     });
@@ -73,8 +74,8 @@ describe('Friends', () => {
         ]);
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText(/Amy paid you \$2\.00/)).toBeInTheDocument();
-        expect(screen.getByText(/Amy paid you \$3\.00/)).toBeInTheDocument();
+        expect(await screen.findByText(/Amy paid Daven \$2\.00/)).toBeInTheDocument();
+        expect(screen.getByText(/Amy paid Daven \$3\.00/)).toBeInTheDocument();
         expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1); // only the one you created
         await u.click(screen.getByRole('button', { name: 'Undo' }));
         await waitFor(() => expect(api.deleteSettlement).toHaveBeenCalledWith('p1'));
@@ -91,10 +92,18 @@ describe('Friends', () => {
         expect(await screen.findByText('You two are square.')).toBeInTheDocument();
     });
 
+    it('never lists people from your Personal section (they are only names)', async () => {
+        const { group } = await import('../../test/apiMock');
+        api.listGroups.mockResolvedValue([group, { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0], { user_id: 'g-bo', joined_at: '', name: 'Bobby', email: '', role: 'member' as const, pending: true }] }]);
+        renderWithData(<Friends />);
+        expect(await screen.findByText('Amy')).toBeInTheDocument();
+        expect(screen.queryByText('Bobby')).not.toBeInTheDocument();
+    });
+
     it('with no groups, invites people', async () => {
         api.listGroups.mockResolvedValue([]);
         renderWithData(<Friends />);
-        expect(await screen.findByText('No friends yet.')).toBeInTheDocument();
+        expect(await screen.findByText('No one yet.')).toBeInTheDocument();
     });
 });
 
@@ -109,13 +118,30 @@ describe('Account', () => {
         expect(screen.getByText("Currently me@x.com. Invites sent to your old address won't follow you after a change.")).toBeInTheDocument();
     });
 
+    it('shows and saves the username (lowercased), and says when it is taken', async () => {
+        const u = userEvent.setup();
+        renderWithData(<Account {...props} />);
+        const box = await screen.findByLabelText('Username');
+        await waitFor(() => expect(box).toHaveValue('daven'));
+        await u.clear(box);
+        await u.type(box, 'Dave_C');
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[1]);
+        await waitFor(() => expect(api.updateUsername).toHaveBeenCalledWith('Dave_C'));
+        expect(await screen.findByText('Username updated.')).toBeInTheDocument();
+        api.updateUsername.mockRejectedValueOnce(new Error('That username is taken.'));
+        await u.clear(box);
+        await u.type(box, 'taken_one');
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[1]);
+        expect(await screen.findByText('That username is taken.')).toBeInTheDocument();
+    });
+
     it('saves a new display name', async () => {
         const u = userEvent.setup();
         renderWithData(<Account {...props} />);
         const input = await screen.findByLabelText('Display name');
         await u.clear(input);
         await u.type(input, 'Dave');
-        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[0]);
         await waitFor(() => expect(api.updateDisplayName).toHaveBeenCalledWith('Dave'));
         expect(await screen.findByText('Name updated.')).toBeInTheDocument();
     });

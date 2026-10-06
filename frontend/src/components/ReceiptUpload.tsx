@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { motion, Pop, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { importReceiptIntoSession } from '../lib/api';
-import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, parseReceiptJson } from '../lib/receiptImport';
+import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, ParsedReceipt, parseReceiptJson } from '../lib/receiptImport';
 import { fmt } from '../lib/people';
 import { Button, Card, Icon } from './ui';
 
@@ -12,12 +12,14 @@ interface ReceiptUploadProps {
     sessionId: string;
     narrow: boolean;
     onImported: () => void;
+    /** When set, the parsed receipt is handed back instead of being written (the editor keeps it as unsaved changes). */
+    onParsed?: (receipt: ParsedReceipt) => void;
     onBack: () => void;
 }
 
 const dateLabel = (iso?: string) => (iso ? new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 
-export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, onBack }: ReceiptUploadProps) {
+export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, onParsed, onBack }: ReceiptUploadProps) {
     const { groups, refresh } = useAppData();
     const group = groups.find(g => g.id === groupId);
     const [json, setJson] = useState('');
@@ -55,6 +57,7 @@ export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, 
 
     const handleImport = async () => {
         if (!receipt || !group) return;
+        if (onParsed) return onParsed(receipt);
         setLoading(true);
         setError('');
         try {

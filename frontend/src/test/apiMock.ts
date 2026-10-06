@@ -5,9 +5,9 @@ import { vi } from 'vitest';
 
 export const ME = 'u-me';
 export const members = [
-    { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@x.com', role: 'owner' as const },
-    { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@x.com', role: 'member' as const },
-    { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@x.com', role: 'member' as const },
+    { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@x.com', username: 'daven', role: 'owner' as const },
+    { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@x.com', username: 'amy_s', role: 'member' as const },
+    { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@x.com', username: 'bo_b', role: 'member' as const },
 ];
 export const group = { id: 'g1', name: 'Roomies', owner_id: ME, created_at: '2026-01-01', members };
 export const otherGroup = {
@@ -26,7 +26,7 @@ export const receipt = {
 };
 export const rent = {
     ...base, id: 's2', kind: 'expense' as const, category: 'rent', paid_by: ME, name: 'October rent', session_date: '2026-10-01', items: [],
-    amount: 2400, split_method: 'shares' as const, split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 },
+    amount: 2400, split_method: 'percent' as const, split_data: { [ME]: 50, 'u-amy': 25, 'u-bo': 25 },
 };
 export const dinner = {
     ...base, id: 's3', kind: 'expense' as const, category: 'dining', paid_by: 'u-amy', name: 'Pizza night', session_date: '2026-09-20', items: [],
@@ -39,7 +39,7 @@ export const apiMock = {
     listGroups: vi.fn(), listSessions: vi.fn(), listSettlements: vi.fn(), myInvites: vi.fn(), respondToInvite: vi.fn(),
     createGroup: vi.fn(), isAdmin: vi.fn(), getGroup: vi.fn(), getSession: vi.fn(), createSession: vi.fn(),
     deleteGroup: vi.fn(), removeMember: vi.fn(), inviteToGroup: vi.fn(), listPendingInvites: vi.fn(), revokeInvite: vi.fn(),
-    recordSettlement: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
+    recordSettlement: vi.fn(), addGuest: vi.fn(), setGroupPinned: vi.fn(), listExpenseLog: vi.fn(), saveReceipt: vi.fn(), renameGuest: vi.fn(), removeGuest: vi.fn(), ensurePersonalGroup: vi.fn(), usernameAvailable: vi.fn(), getMyUsername: vi.fn(), updateUsername: vi.fn(), updateSettlement: vi.fn(), listSettlementLog: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
     deleteItem: vi.fn(), deleteSession: vi.fn(), importReceiptIntoSession: vi.fn(), deleteStaleDrafts: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
     adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
 };
@@ -73,6 +73,11 @@ export function resetMocks() {
     apiMock.listGroups.mockImplementation(async () => clone([group, otherGroup]));
     apiMock.listSessions.mockImplementation(async () => clone(sessions));
     apiMock.listSettlements.mockResolvedValue([]);
+    apiMock.listSettlementLog.mockResolvedValue([]);
+    apiMock.listExpenseLog.mockResolvedValue([]);
+    apiMock.usernameAvailable.mockResolvedValue(true);
+    apiMock.getMyUsername.mockResolvedValue('daven');
+    apiMock.ensurePersonalGroup.mockResolvedValue('gp');
     apiMock.myInvites.mockResolvedValue([]);
     apiMock.isAdmin.mockResolvedValue(false);
     apiMock.getGroup.mockImplementation(async (id: string) => clone(id === 'g2' ? otherGroup : group));
@@ -83,7 +88,7 @@ export function resetMocks() {
         { id: 'a', email: 'ddchang@x.com', name: 'Daven', created_at: '2026-10-01T00:00:00Z', last_sign_in_at: new Date().toISOString(), email_confirmed: true, is_admin: true, groups_count: 2, receipts_count: 4 },
         { id: 'b', email: 'pending@x.com', name: 'Pending', created_at: '2026-10-04T00:00:00Z', last_sign_in_at: null, email_confirmed: false, is_admin: false, groups_count: 0, receipts_count: 0 },
     ]);
-    for (const k of ['respondToInvite', 'deleteGroup', 'removeMember', 'inviteToGroup', 'revokeInvite', 'recordSettlement', 'deleteSettlement', 'updateSession', 'updateItem', 'deleteItem', 'deleteSession', 'importReceiptIntoSession', 'deleteStaleDrafts', 'updateDisplayName', 'requestEmailChange', 'changePassword', 'adminConfirmUser'] as const) apiMock[k].mockResolvedValue(undefined);
+    for (const k of ['respondToInvite', 'deleteGroup', 'removeMember', 'inviteToGroup', 'revokeInvite', 'recordSettlement', 'setGroupPinned', 'saveReceipt', 'addGuest', 'renameGuest', 'removeGuest', 'updateUsername', 'updateSettlement', 'deleteSettlement', 'updateSession', 'updateItem', 'deleteItem', 'deleteSession', 'importReceiptIntoSession', 'deleteStaleDrafts', 'updateDisplayName', 'requestEmailChange', 'changePassword', 'adminConfirmUser'] as const) apiMock[k].mockResolvedValue(undefined);
     apiMock.createGroup.mockResolvedValue('g9');
     apiMock.createSession.mockResolvedValue('s9');
     apiMock.addItem.mockResolvedValue({ id: 'i9', name: 'New item', price: 0, assigned_users: [] });

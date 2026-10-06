@@ -19,14 +19,7 @@ export const categoryOf = (id: string) => CATEGORIES.find(c => c.id === id) ?? C
 
 export const METHODS: { value: SplitMethod; label: string; hint: string }[] = [
     { value: 'exact', label: 'Amounts', hint: 'Starts split evenly. Change any amount to adjust it.' },
-    { value: 'percent', label: 'Percent', hint: 'Percentages must add up to 100.' },
-];
-
-export type SplitBy = SplitMethod | 'items';
-/** Every way to split one expense in the editor (older expenses saved as equal/shares open as amounts). "By item" is the itemized (receipt) split; the rest are standalone splits. */
-export const SPLIT_BY: { value: SplitBy; label: string; hint: string }[] = [
-    ...METHODS,
-    { value: 'items', label: 'By item', hint: 'Tap who had each item. Tax and tip are shared by what each person had.' },
+    { value: 'shares', label: 'Shares', hint: 'Split in proportion, e.g. 2 shares for a bigger room.' },
 ];
 
 const cents = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100);
@@ -83,6 +76,10 @@ export const everyoneEqual = (memberIds: string[]): SplitData => Object.fromEntr
 /** Sensible starting values when switching method, keeping who is included. */
 export function convertSplit(from: SplitMethod, to: SplitMethod, data: SplitData, amount: number): SplitData {
     const ids = Object.keys(data);
+    if (to === 'exact' && from === 'shares' && ids.length > 0) {
+        const parts = allocate(cents(amount), ids.map(id => data[id]));
+        return Object.fromEntries(ids.map((id, i) => [id, parts[i] / 100]));
+    }
     if (ids.length === 0 || to === 'equal' || to === 'shares') return Object.fromEntries(ids.map(id => [id, 1]));
     if (to === 'percent') {
         const parts = allocate(10000, ids.map(() => 1));

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { usernameAvailable } from '../lib/api';
 import { motion, Pop, Collapse, SegmentedTabs, enter, tapFlat } from '../lib/motion';
 import { Icon, Logo, Button, inputCls, labelCls } from './ui';
 import { fmt, toneFor, HUES } from '../lib/people';
@@ -23,6 +24,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -39,10 +41,13 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                 if (error) throw error;
                 onLogin();
             } else {
+                const handle = username.trim().toLowerCase().replace(/^@/, '');
+                if (!/^[a-z0-9_]{3,20}$/.test(handle)) throw new Error('Usernames are 3 to 20 letters, numbers or underscores.');
+                if (!(await usernameAvailable(handle))) throw new Error('That username is taken. Try another.');
                 const { data, error } = await supabase.auth.signUp({
                     email: email.trim(),
                     password,
-                    options: { data: { name: name.trim() } },
+                    options: { data: { name: name.trim(), username: handle } },
                 });
                 if (error) throw error;
                 if (data.session) onLogin();
@@ -80,6 +85,12 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                                 <input className={`${inputCls} h-11 px-3.5`} value={name} onChange={e => setName(e.target.value)} placeholder="What your friends call you" type="text" autoComplete="name" required={!isLogin} />
                             </label>
                         </Collapse>
+                        <Collapse open={!isLogin}>
+                            <label className={`flex flex-col gap-1.5 ${labelCls} px-1 pb-1 -mx-1`}>
+                                Username
+                                <input className={`${inputCls} h-11 px-3.5`} value={username} onChange={e => setUsername(e.target.value)} placeholder="People invite you by this" type="text" autoComplete="username" maxLength={21} required={!isLogin} />
+                            </label>
+                        </Collapse>
                         <label className={`flex flex-col gap-1.5 ${labelCls}`}>
                             Email
                             <input className={`${inputCls} h-11 px-3.5`} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
@@ -102,7 +113,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                         </Button>
                     </form>
 
-                    <p className="m-0 text-[13px] leading-normal text-faint">Invites are matched to your email, so sign up with the address your friends know.</p>
+                    <p className="m-0 text-[13px] leading-normal text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>
                 </motion.div>
             </div>
 
