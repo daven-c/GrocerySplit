@@ -120,8 +120,8 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const assignedCount = items.filter(i => i.assigned_users.some(u => names.includes(u))).length;
     const memberByName = (n: string) => members.find(m => m.name === n);
     const payer = members.find(m => m.user_id === paidBy);
-    const payerLabel = paidBy === me ? 'you' : payer?.name ?? 'someone';
-    const display = (n: string) => (memberByName(n)?.user_id === me ? 'You' : n);
+    const payerLabel = payer?.name ?? 'someone';
+    const display = (n: string) => n;
 
     const setAssigned = async (itemId: string, next: string[]) => {
         const prev = items;
@@ -278,7 +278,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
                     <Card className="p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold">{paint ? `Tap the items ${display(paint) === 'You' ? 'you' : paint} had` : 'Pick a person, then tap their items'}</span>
+                            <span className="text-sm font-semibold">{paint ? `Tap the items ${paint} had` : 'Pick a person, then tap their items'}</span>
                             <span className="text-[13px] text-muted whitespace-nowrap">{assignedCount} of {items.length} assigned</span>
                         </div>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Who to assign">
@@ -355,7 +355,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                             })}
                                             <motion.button {...tap} onClick={e => { e.stopPropagation(); void toggleAll(item); }} className="h-[30px] px-2.5 rounded-full bg-transparent text-xs font-semibold text-muted hover:bg-surface">All</motion.button>
                                             <span className={`ml-auto text-xs ${n === 0 ? 'text-coral' : 'text-faint'}`}>
-                                                {n === 0 ? 'Not assigned yet' : n === 1 ? `Just ${display(only!) === 'You' ? 'you' : only}` : `${fmt(item.price / n)} each`}
+                                                {n === 0 ? 'Not assigned yet' : n === 1 ? `Just ${only}` : `${fmt(item.price / n)} each`}
                                             </span>
                                         </div>
                                     </motion.div>
@@ -413,7 +413,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
                             <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.user_id === me ? 'You' : m.name}</option>)}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                             </select>
                         </label>
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Date

@@ -13,6 +13,7 @@ export default function Friends() {
     const [error, setError] = useState('');
 
     const balances = useMemo(() => computeBalances(me, groups, sessions, settlements), [me, groups, sessions, settlements]);
+    const myName = groups.flatMap(g => g.members).find(m => m.user_id === me)?.name ?? 'You';
     const groupName = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
 
     const friends = useMemo(() => {
@@ -106,7 +107,7 @@ export default function Friends() {
                                                 <motion.div key={gid} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, transition: { duration: 0.15 } }} className="flex flex-wrap items-center gap-3 px-3 py-2.5 border border-rule rounded-[10px]">
                                                     <div className="flex-[1_1_160px] flex flex-col gap-0.5">
                                                         <span className="text-sm font-semibold">{groupName[gid] ?? 'Group'}</span>
-                                                        <span className={`text-[13px] ${net > 0 ? 'text-green' : 'text-coral'}`}>{net > 0 ? `${f.name} owes you ${fmt(net)}` : `You owe ${f.name} ${fmt(net)}`}</span>
+                                                        <span className={`text-[13px] ${net > 0 ? 'text-green' : 'text-coral'}`}>{net > 0 ? `${f.name} owes ${myName} ${fmt(net)}` : `${myName} owes ${f.name} ${fmt(net)}`}</span>
                                                     </div>
                                                     <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={busy} onClick={() => settle(f.id, gid, net)}>{net > 0 ? 'Mark received' : 'Mark paid'}</Button>
                                                 </motion.div>
@@ -119,7 +120,7 @@ export default function Friends() {
                                         {history.map(h => (
                                             <div key={h.id} className="flex items-center gap-2.5 text-[13px] text-muted">
                                                 <Icon name="check_circle" size={16} className="text-green" fill />
-                                                <span className="flex-1">{h.from_user === me ? `You paid ${f.name}` : `${f.name} paid you`} {fmt(h.amount)} · {groupName[h.group_id] ?? 'Group'} · {new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                                <span className="flex-1">{h.from_user === me ? `${myName} paid ${f.name}` : `${f.name} paid ${myName}`} {fmt(h.amount)} · {groupName[h.group_id] ?? 'Group'} · {new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                                 {h.created_by === me && (
                                                     <button type="button" disabled={busy} onClick={() => run(() => deleteSettlement(h.id))} className="text-[13px] font-semibold text-ink underline underline-offset-2">Undo</button>
                                                 )}

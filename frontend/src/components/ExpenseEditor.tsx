@@ -213,8 +213,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     if (!record || !group) return <p className="text-center text-faint py-16 animate-pulse">Loading expense…</p>;
 
     const payer = members.find(m => m.user_id === paidBy);
-    const payerLabel = paidBy === me ? 'you' : payer?.name ?? 'someone';
-    const display = (id: string, n: string) => (id === me ? 'You' : n);
+    const payerLabel = payer?.name ?? 'someone';
+    const display = (_id: string, n: string) => n;
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
     const status = record.draft
         ? { text: split.valid ? 'Not saved yet' : `Not saved yet: ${split.problem}`, bad: !split.valid }
@@ -347,7 +347,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
                             <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.user_id === me ? 'You' : m.name}</option>)}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                             </select>
                         </label>
                         <label className="flex items-center justify-between gap-3 text-sm text-body">Date

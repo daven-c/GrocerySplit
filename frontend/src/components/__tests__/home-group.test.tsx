@@ -104,12 +104,12 @@ describe('Group detail', () => {
         expect(screen.getByText('September')).toBeInTheDocument();
         // receipt row: items count, payer and your share
         const costco = screen.getByText('Costco').closest('button')!;
-        expect(within(costco).getByText('3 items · paid by you')).toBeInTheDocument();
+        expect(within(costco).getByText('3 items · paid by Daven')).toBeInTheDocument();
         expect(within(costco).getByText('$40.10')).toBeInTheDocument();
         expect(within(costco).getByText('your share $4.88')).toBeInTheDocument();
         // expense rows: category in place of item count, share from the split
         const rent = screen.getByText('October rent').closest('button')!;
-        expect(within(rent).getByText('Rent & home · paid by you')).toBeInTheDocument();
+        expect(within(rent).getByText('Rent & home · paid by Daven')).toBeInTheDocument();
         expect(within(rent).getByText('$2,400.00')).toBeInTheDocument();
         expect(within(rent).getByText('your share $1,200.00')).toBeInTheDocument();
         const pizza = screen.getByText('Pizza night').closest('button')!;
@@ -187,7 +187,7 @@ describe('Group detail', () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} initialTab="members" />);
         expect(await screen.findByText('Invite someone')).toBeInTheDocument();
-        expect(screen.getByText('Daven (you)')).toBeInTheDocument();
+        expect(screen.getByText('Daven')).toBeInTheDocument();
         expect(screen.getByText('Owner')).toBeInTheDocument();
 
         const email = screen.getByLabelText('Invite by email');
@@ -247,8 +247,8 @@ describe('Group detail', () => {
         const u = userEvent.setup();
         api.listSettlements.mockResolvedValue([payback, { ...payback, id: 'p2', from_user: ME, to_user: 'u-bo', amount: 12.5, created_by: 'u-bo', created_at: '2026-10-02T12:00:00' }]);
         renderWithData(<GroupDetail {...props} />);
-        expect(await screen.findByText('Amy paid you')).toBeInTheDocument();
-        expect(screen.getByText('You paid Bo')).toBeInTheDocument();
+        expect(await screen.findByText('Amy paid Daven')).toBeInTheDocument();
+        expect(screen.getByText('Daven paid Bo')).toBeInTheDocument();
         expect(screen.getAllByText('Payback')).toHaveLength(2);
         expect(screen.getByText('$50.00')).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Expenses · 3' })).toBeInTheDocument(); // paybacks are not expenses
@@ -284,7 +284,7 @@ describe('Group detail', () => {
         await u.click(await screen.findByRole('tab', { name: 'Activity' }));
         expect(await screen.findByText(/Bo/, { selector: 'span.font-semibold' })).toBeInTheDocument();
         expect(screen.getByText('deleted a payback', { exact: false })).toBeInTheDocument();
-        expect(screen.getByText('Amy → You $50.00 became Amy → You $65.50')).toBeInTheDocument();
+        expect(screen.getByText('Amy → Daven $50.00 became Amy → Daven $65.50')).toBeInTheDocument();
         expect(api.listSettlementLog).toHaveBeenCalledWith('g1');
     });
 
@@ -302,7 +302,7 @@ describe('Group detail', () => {
             { ...payback, id: 'early', from_user: ME, to_user: 'u-bo', created_at: '2026-10-04T08:00:00' },
         ]);
         renderWithData(<GroupDetail {...props} />);
-        const [late, expense, early] = [await screen.findByText('Amy paid you'), screen.getByText('October rent'), screen.getByText('You paid Bo')];
+        const [late, expense, early] = [await screen.findByText('Amy paid Daven'), screen.getByText('October rent'), screen.getByText('Daven paid Bo')];
         const after = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
         expect(after(late, expense)).toBe(true);
         expect(after(expense, early)).toBe(true);
@@ -312,13 +312,13 @@ describe('Group detail', () => {
         const u = userEvent.setup();
         api.listSettlements.mockResolvedValue([payback]);
         renderWithData(<GroupDetail {...props} />);
-        await screen.findByText('Amy paid you');
+        await screen.findByText('Amy paid Daven');
         await u.type(screen.getByLabelText('Search expenses'), 'payback');
-        expect(screen.getByText('Amy paid you')).toBeInTheDocument();
+        expect(screen.getByText('Amy paid Daven')).toBeInTheDocument();
         expect(screen.queryByText('Costco')).not.toBeInTheDocument();
         await u.clear(screen.getByLabelText('Search expenses'));
         await u.click(within(screen.getByRole('group', { name: 'Filter by category' })).getByRole('button', { name: /Rent & home/ }));
-        expect(screen.queryByText('Amy paid you')).not.toBeInTheDocument();
+        expect(screen.queryByText('Amy paid Daven')).not.toBeInTheDocument();
     });
 
     const openPaybackForm = async (u: ReturnType<typeof userEvent.setup>) => {
@@ -334,9 +334,9 @@ describe('Group detail', () => {
         expect(within(dialog).queryByRole('tab')).not.toBeInTheDocument(); // no direction toggle any more
         // Bo owes the most, so the first suggestion is Bo paying you
         expect(within(dialog).getByLabelText('Who paid')).toHaveDisplayValue('Bo');
-        expect(within(dialog).getByLabelText('Who received')).toHaveDisplayValue('You');
+        expect(within(dialog).getByLabelText('Who received')).toHaveDisplayValue('Daven');
         expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('603.97');
-        expect(within(within(dialog).getByLabelText('Who paid')).getAllByRole('option').map(o => o.textContent)).toEqual(['You', 'Amy', 'Bo']);
+        expect(within(within(dialog).getByLabelText('Who paid')).getAllByRole('option').map(o => o.textContent)).toEqual(['Daven', 'Amy', 'Bo']);
         await u.click(within(dialog).getByRole('button', { name: 'Save payback' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-bo', ME, 603.97));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -377,7 +377,7 @@ describe('Group detail', () => {
         // positions only: no "fronted/owes" detail and no pair-by-pair "who owes whom"
         expect(screen.queryByText(/fronted/)).not.toBeInTheDocument();
         expect(screen.queryByText('Who owes whom')).not.toBeInTheDocument();
-        const you = screen.getByText('You', { selector: 'span.truncate' }).closest('div')!;
+        const you = screen.getByText('Daven', { selector: 'span.truncate' }).closest('div')!;
         await waitFor(() => expect(within(you).getByText('up')).toBeInTheDocument());
         expect(screen.getAllByText('down')).toHaveLength(2);
         expect(await screen.findByText('$1,182.82')).toBeInTheDocument(); // you are up by what both owe you

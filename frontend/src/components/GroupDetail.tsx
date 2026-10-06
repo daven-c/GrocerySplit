@@ -85,7 +85,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     }, [groupId, isOwner]);
 
     const tones = useMemo(() => memberTones(group?.members ?? [], me), [group, me]);
-    const nameOf = (id: string | null) => (id === me ? 'you' : group?.members.find(m => m.user_id === id)?.name ?? 'someone');
+    const nameOf = (id: string | null) => (group?.members.find(m => m.user_id === id)?.name ?? 'someone');
     const totalCost = useMemo(() => records.filter(r => !r.draft).reduce((a, r) => a + totalOf(r), 0), [records]);
     const net = useMemo(() => computeBalances(me, groups, sessions, settlements).byGroup[groupId] ?? 0, [me, groups, sessions, settlements, groupId]);
     const meMember = group?.members.find(m => m.user_id === me);
@@ -102,7 +102,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const shown = useMemo(() => {
         const q = search.trim().toLowerCase();
-        const nm = (id: string) => (id === me ? 'you' : group?.members.find(m => m.user_id === id)?.name.toLowerCase() ?? '');
+        const nm = (id: string) => (group?.members.find(m => m.user_id === id)?.name.toLowerCase() ?? '');
         const entries: Entry[] = [
             ...records
                 .filter(r => {
@@ -236,7 +236,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             setSettling(false);
         }
     };
-    const who = (id: string) => (id === me ? 'You' : group.members.find(m => m.user_id === id)?.name ?? 'Someone');
+    const who = (id: string) => (group.members.find(m => m.user_id === id)?.name ?? 'Someone');
 
     const confirmText = {
         delete: { title: 'Delete group?', body: `This permanently deletes "${group.name}" and all ${records.length} of its expenses for every member.`, action: 'Delete' },
@@ -377,7 +377,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                     </span>
                                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                                         <span className="text-[15px] font-semibold truncate flex items-center gap-1.5">
-                                                            <Icon name="swap_horiz" size={16} className="text-green" />{p.from_user === me ? 'You paid' : `${nameOf(p.from_user)} paid`} {p.to_user === me ? 'you' : nameOf(p.to_user)}
+                                                            <Icon name="swap_horiz" size={16} className="text-green" />{nameOf(p.from_user)} paid {nameOf(p.to_user)}
                                                         </span>
                                                         <span className="text-[13px] text-faint">Payback</span>
                                                     </span>
@@ -535,7 +535,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 <motion.div key={m.user_id} {...listItem(i)} className={`flex items-center gap-3.5 px-[18px] py-3.5 ${i ? 'border-t border-rule' : ''}`}>
                                     <Avatar name={m.name} tone={tones[m.user_id]} size={36} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                        <span className="text-[15px] font-semibold truncate">{m.name}{m.user_id === me ? ' (you)' : ''}</span>
+                                        <span className="text-[15px] font-semibold truncate">{m.name}</span>
                                         <span className="text-[13px] text-faint truncate">{m.email}</span>
                                     </span>
                                     {m.role === 'owner' && <span className="text-xs text-muted">Owner</span>}

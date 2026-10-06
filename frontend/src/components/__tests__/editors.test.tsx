@@ -26,7 +26,7 @@ describe('Receipt editor (grocery split)', () => {
     it('is one screen: Split by (on By item), name, meta, total, people, items and who pays what', async () => {
         renderWithData(<Split {...props} />);
         expect(await screen.findByDisplayValue('Costco')).toBeInTheDocument();
-        expect(screen.getByText(/Oct 1, 2026 · 3 items · paid by you/)).toBeInTheDocument();
+        expect(screen.getByText(/Oct 1, 2026 · 3 items · paid by Daven/)).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'By item', selected: true })).toBeInTheDocument(); // the Split by control, on By item
         expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Percent', 'By item']);
         expect(screen.getByText('Pick a person, then tap their items')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('Receipt editor (grocery split)', () => {
         expect(screen.getByText('$8.85')).toBeInTheDocument();
         expect(screen.getByText('$3.97')).toBeInTheDocument();
         expect(screen.getByText('paid the bill')).toBeInTheDocument();
-        expect(screen.getAllByText('owes you')).toHaveLength(2);
+        expect(screen.getAllByText('owes Daven')).toHaveLength(2);
         expect(screen.getByText('Tax and tip are shared in proportion to what each person had. Pennies always add up.')).toBeInTheDocument();
     });
 
@@ -198,7 +198,7 @@ describe('Expense editor (general cost splitting)', () => {
         renderWithData(<ExpenseEditor {...props} />);
         expect(await screen.findByDisplayValue('October rent')).toBeInTheDocument();
         expect(screen.getByLabelText('How much was it?')).toHaveValue('2400');
-        expect(screen.getByText(/Oct 1, 2026 · Rent & home · paid by you/)).toBeInTheDocument();
+        expect(screen.getByText(/Oct 1, 2026 · Rent & home · paid by Daven/)).toBeInTheDocument();
         // an older 2:1:1 "shares" split opens as the same amounts
         expect(screen.getByRole('tab', { name: 'Amounts' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByLabelText('Amy amount')).toHaveValue('600');

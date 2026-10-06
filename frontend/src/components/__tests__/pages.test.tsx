@@ -35,7 +35,7 @@ describe('Friends', () => {
         const u = userEvent.setup();
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText('Amy owes you $578.85')).toBeInTheDocument();
+        expect(await screen.findByText('Amy owes Daven $578.85')).toBeInTheDocument();
         expect(screen.getByText("Marking something paid doesn't move money. It just clears the balance for both of you.")).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Mark received' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-amy', ME, expect.closeTo(578.85, 2)));
@@ -47,7 +47,7 @@ describe('Friends', () => {
         api.listSessions.mockResolvedValue([sessions[2]]); // Pizza night: Amy paid, you owe her 30
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText('You owe Amy $30.00')).toBeInTheDocument();
+        expect(await screen.findByText('Daven owes Amy $30.00')).toBeInTheDocument();
         expect(screen.getByText('you owe')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Mark paid' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', ME, 'u-amy', 30));
@@ -73,8 +73,8 @@ describe('Friends', () => {
         ]);
         renderWithData(<Friends />);
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
-        expect(await screen.findByText(/Amy paid you \$2\.00/)).toBeInTheDocument();
-        expect(screen.getByText(/Amy paid you \$3\.00/)).toBeInTheDocument();
+        expect(await screen.findByText(/Amy paid Daven \$2\.00/)).toBeInTheDocument();
+        expect(screen.getByText(/Amy paid Daven \$3\.00/)).toBeInTheDocument();
         expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1); // only the one you created
         await u.click(screen.getByRole('button', { name: 'Undo' }));
         await waitFor(() => expect(api.deleteSettlement).toHaveBeenCalledWith('p1'));
