@@ -189,7 +189,7 @@ export default function Dashboard({ narrow, newGroupTick, onOpenGroup, onGoFrien
                         return (
                             <motion.div key={g.id} {...listItem(i)} className={`flex items-center rounded-[18px] hover:bg-wash transition-colors ${pinned ? 'bg-wash' : ''}`}>
                                 <motion.button {...tapFlat} onClick={() => onOpenGroup(g.id)} className="flex-1 min-w-0 flex items-center gap-3.5 py-3 pl-3.5 pr-1.5 text-left text-ink">
-                                    <span className="w-[46px] h-[46px] rounded-full grid place-items-center text-[19px] font-black shrink-0" style={{ background: tile.bg, color: tile.fg }}>{(g.name.trim()[0] ?? '?').toUpperCase()}</span>
+                                    <span aria-hidden="true" className="w-[46px] h-[46px] rounded-full grid place-items-center text-[19px] font-black shrink-0" style={{ background: tile.bg, color: tile.fg }}>{(g.name.trim()[0] ?? '?').toUpperCase()}</span>
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className="text-base font-extrabold truncate">{g.name}</span>
                                         <span className="text-[13.5px] font-semibold text-faint">{g.members.length} {g.members.length === 1 ? 'person' : 'people'} · {st.count} {st.count === 1 ? 'expense' : 'expenses'} · {fmt(st.spent)} total</span>

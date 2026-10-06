@@ -26,7 +26,7 @@ describe('Receipt editor (grocery split)', () => {
     it('is one screen: Split by (on By item), name, meta, total, people, items and who pays what', async () => {
         renderWithData(<Split {...props} />);
         expect(await screen.findByDisplayValue('Costco')).toBeInTheDocument();
-        expect(screen.getByText(/Oct 1, 2026 · 3 items · paid by Daven/)).toBeInTheDocument();
+        expect(screen.getByText(/Oct 1, 2026 · Groceries · 3 items · paid by Daven/)).toBeInTheDocument();
         expect(screen.getByText('Itemized receipt')).toBeInTheDocument(); // not a tab: it is a different kind of split
         expect(screen.queryByRole('tab')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Split one total instead' })).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe('Receipt editor (grocery split)', () => {
         expect(screen.getByText('2 of 3 assigned')).toBeInTheDocument();
         expect(screen.getByText('Oat Milk')).toBeInTheDocument();
         expect(screen.getByText('$4.00 each')).toBeInTheDocument();
-        expect(screen.getByText('Not assigned yet', { selector: 'span.text-coral' })).toBeInTheDocument();
+        expect(screen.getByText('Nobody yet', { selector: 'span.text-coral' })).toBeInTheDocument();
         // Who pays what, with tax shared in proportion
         await waitFor(() => expect(screen.getByText('$4.88')).toBeInTheDocument(), SLOW);
         expect(screen.getByText('$8.85')).toBeInTheDocument();
@@ -70,9 +70,9 @@ describe('Receipt editor (grocery split)', () => {
         await screen.findByText('Eggs');
         await u.click(screen.getByRole('button', { name: 'Daven on Eggs' }));
         expect(screen.getByRole('button', { name: 'Daven on Eggs' })).toHaveAttribute('aria-pressed', 'true');
-        await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'All' }));
+        await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'Everyone' }));
         expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'true');
-        await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'All' }));
+        await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'Everyone' }));
         expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'false');
         expect(api.updateItem).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -207,7 +207,7 @@ describe('Receipt editor (grocery split)', () => {
         renderWithData(<Split {...props} />);
         await screen.findByDisplayValue('Costco');
         fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
-        expect(await screen.findByText(/No date · 3 items/)).toBeInTheDocument();
+        expect(await screen.findByText(/No date · Groceries · 3 items/)).toBeInTheDocument();
     });
 
     it('has an Import from JSON button, and an empty receipt invites you to add or import items', async () => {
@@ -216,9 +216,9 @@ describe('Receipt editor (grocery split)', () => {
         api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, items: [] });
         renderWithData(<Split {...props} onImport={onImport} />);
         expect(await screen.findByText('No items yet. Add one by hand, or import them from a receipt.')).toBeInTheDocument();
-        await u.click(screen.getByRole('button', { name: /Import from JSON/ }));
+        await u.click(screen.getByRole('button', { name: 'Import items from a photo' }));
         // an existing receipt imports in place, as unsaved changes
-        expect(await screen.findByRole('heading', { name: 'Import from JSON' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Scan a receipt' })).toBeInTheDocument();
         expect(onImport).not.toHaveBeenCalled();
     });
 
@@ -356,7 +356,7 @@ describe('Expense editor (general cost splitting)', () => {
         await u.clear(name);
         await u.type(name, 'November rent');
         await u.selectOptions(screen.getByLabelText('Paid by'), 'Bo');
-        await u.selectOptions(screen.getByLabelText('Category'), 'utilities');
+        await u.click(within(screen.getByRole('group', { name: 'Category' })).getByRole('button', { name: 'Utilities & bills' }));
         expect(await screen.findByText(/paid by Bo/)).toBeInTheDocument();
         expect(api.updateSession).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -420,11 +420,18 @@ describe('Expense editor (general cost splitting)', () => {
         expect(api.updateSession).not.toHaveBeenCalled();
     });
 
-    it('the paid by, date and category card comes before the cost card', async () => {
-        renderWithData(<ExpenseEditor {...props} />);
-        const paid = await screen.findByLabelText('Paid by');
-        const cost = screen.getByLabelText('How much was it?');
-        expect(!!(paid.compareDocumentPosition(cost) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    it('category is a row of pills inside the cost card; paid by and date sit beside the totals on wide screens and above the cost on a phone', async () => {
+        const wide = renderWithData(<ExpenseEditor {...props} />);
+        const cost = await screen.findByLabelText('How much was it?');
+        const after = (x: Node, y: Node) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(after(cost, screen.getByLabelText('Paid by'))).toBe(true);
+        const cats = within(screen.getByRole('group', { name: 'Category' }));
+        expect(cats.getByRole('button', { name: 'Rent & home' })).toHaveAttribute('aria-pressed', 'true');
+        expect(cats.getByRole('button', { name: 'Groceries' })).toHaveAttribute('aria-pressed', 'false');
+        wide.unmount();
+        renderWithData(<ExpenseEditor {...props} narrow />);
+        const phoneCost = await screen.findByLabelText('How much was it?');
+        expect(after(screen.getByLabelText('Paid by'), phoneCost)).toBe(true); // details first, as asked for phones
     });
 
     it('a new expense starts with nobody selected', async () => {
@@ -482,11 +489,11 @@ describe('Import from JSON (fills an existing receipt)', () => {
 
     it('explains the two steps and shows an empty preview', async () => {
         renderWithData(<ReceiptUpload {...props} />);
-        expect(await screen.findByRole('heading', { name: 'Import from JSON' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Scan a receipt' })).toBeInTheDocument();
         expect(screen.getByText('Copy the prompt')).toBeInTheDocument();
         expect(screen.getByText('Paste what it sends back')).toBeInTheDocument();
         expect(screen.getByText('Your receipt shows up here as soon as you paste it.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Import and split' })).toBeDisabled();
         expect(screen.getByRole('button', { name: /Back to receipt/ })).toBeInTheDocument();
     });
 
@@ -506,14 +513,14 @@ describe('Import from JSON (fills an existing receipt)', () => {
         const box = await screen.findByLabelText('Receipt JSON');
         fireEvent.change(box, { target: { value: 'not json' } });
         expect(await screen.findByText("That doesn't look like receipt JSON yet. Make sure you copied the whole reply.")).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Import and split' })).toBeDisabled();
 
         await u.click(screen.getByRole('button', { name: 'Try an example' }));
         expect(await screen.findByText('Corner Market')).toBeInTheDocument();
         expect(screen.getByText('Oat Milk')).toBeInTheDocument();
         expect(screen.getByText('$12.40')).toBeInTheDocument();
         expect(screen.getByText('$27.14')).toBeInTheDocument(); // 12.40 + 7.50 + 5.99 + 1.25 tax
-        await u.click(screen.getByRole('button', { name: 'Add to receipt' }));
+        await u.click(screen.getByRole('button', { name: 'Import and split' }));
         await waitFor(() => expect(api.importReceiptIntoSession).toHaveBeenCalledWith('s1', {
             store: 'Corner Market', date: '2026-10-05', tax: 1.25, tip: 0,
             items: [{ name: 'Organic Honeycrisp Apples', price: 12.4 }, { name: 'Oat Milk', price: 7.5 }, { name: 'Free Range Eggs', price: 5.99 }],
@@ -527,7 +534,7 @@ describe('Import from JSON (fills an existing receipt)', () => {
         fireEvent.change(await screen.findByLabelText('Receipt JSON'), { target: { value: 'Sure!\n```json\n{"store":"Deli","items":[{"name":"Soup","price":"$4.50"}]}\n```' } });
         expect(await screen.findByText('Deli')).toBeInTheDocument();
         expect(screen.getByText('Soup')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Add to receipt' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Import and split' })).toBeEnabled();
     });
 });
 
@@ -543,7 +550,6 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         renderWithData(<Split sessionId="s9" narrow={false} onBack={vi.fn()} onImport={vi.fn()} onSaved={onSaved} onDiscard={vi.fn()} onSwitched={vi.fn()} />);
         const bar = await screen.findByRole('region', { name: 'Unsaved draft' });
         expect(within(bar).getByText('New expense, not saved yet')).toBeInTheDocument();
-        expect(screen.getByText('Not saved yet')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Delete expense' })).not.toBeInTheDocument();
 
         const name = screen.getByLabelText('Receipt name');
@@ -600,7 +606,7 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         await u.clear(name);
         await u.type(name, 'Dinner');
         await u.type(screen.getByLabelText('How much was it?'), '90');
-        await u.selectOptions(screen.getByLabelText('Category'), 'dining');
+        await u.click(within(screen.getByRole('group', { name: 'Category' })).getByRole('button', { name: 'Dining & drinks' }));
         await idle();
         expect(api.updateSession).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save expense' }));

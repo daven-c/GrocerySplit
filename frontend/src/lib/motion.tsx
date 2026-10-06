@@ -165,7 +165,7 @@ export function SegmentedTabs<T extends string>({
                         aria-selected={active}
                         onClick={() => onChange(t.value)}
                         {...tapFlat}
-                        className={`relative rounded-full font-extrabold text-ink ${compact ? 'h-[34px] text-[13.5px]' : 'h-10 text-[14.5px]'}`}
+                        className={`relative rounded-full font-extrabold text-ink ${compact ? 'h-[34px] px-4 text-[13.5px]' : 'h-10 text-[14.5px]'}`}
                     >
                         {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 bg-white rounded-full shadow-seg" transition={spring} />}
                         <span className="relative">{t.label}</span>

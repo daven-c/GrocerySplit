@@ -32,7 +32,7 @@ describe('with animation frames frozen', () => {
     it('the landing page is visible when signed out', async () => {
         authMock.getSession.mockResolvedValue({ data: { session: null } });
         render(<App />);
-        const h1 = await screen.findByRole('heading', { level: 1, name: /Split any cost/ });
+        const h1 = await screen.findByRole('heading', { level: 1, name: /Split the groceries/ });
         expect(effectiveOpacity(h1)).toBeGreaterThanOrEqual(MIN);
         expect(effectiveOpacity(screen.getByText('Exact, every time'))).toBeGreaterThanOrEqual(MIN);
     });
@@ -41,14 +41,14 @@ describe('with animation frames frozen', () => {
         render(<App />);
         const row = await screen.findByText('3 people · 3 expenses · $2,500.10 total');
         expect(effectiveOpacity(row)).toBeGreaterThanOrEqual(MIN);
-        expect(effectiveOpacity(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/))).toBeGreaterThanOrEqual(MIN);
+        expect(effectiveOpacity(await screen.findByRole('heading', { level: 1, name: /^(Morning|Afternoon|Evening), Daven\. Overall/ }))).toBeGreaterThanOrEqual(MIN);
     });
 
     it('every screen still mounts and stays visible: group, receipt, expense, friends, account', async () => {
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
 
-        fireEvent.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        fireEvent.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         const costco = await screen.findByText('Costco'); // group detail mounted despite no frames
         expect(effectiveOpacity(costco)).toBeGreaterThanOrEqual(MIN);
 
@@ -61,20 +61,20 @@ describe('with animation frames frozen', () => {
         fireEvent.click(await screen.findByText('October rent'));
         const amount = await screen.findByLabelText('How much was it?'); // expense editor
         expect(effectiveOpacity(amount)).toBeGreaterThanOrEqual(MIN);
-        expect(effectiveOpacity(screen.getByText('Split by'))).toBeGreaterThanOrEqual(MIN);
+        expect(effectiveOpacity(screen.getByText('Split it'))).toBeGreaterThanOrEqual(MIN);
 
         fireEvent.click(within(sidebar).getByRole('button', { name: 'People' }));
         const amy = await screen.findByText('Amy');
         expect(effectiveOpacity(amy)).toBeGreaterThanOrEqual(MIN);
 
-        fireEvent.click(within(sidebar).getByRole('button', { name: 'Account' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Account' }));
         expect(effectiveOpacity(await screen.findByLabelText('Display name'))).toBeGreaterThanOrEqual(MIN);
     });
 
     it('tabs, menus and dialogs are visible and dismissable without frames', async () => {
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
-        fireEvent.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        fireEvent.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         fireEvent.click(await screen.findByRole('button', { name: /Add expense/ }));
         const menu = await screen.findByRole('menu');
         expect(effectiveOpacity(menu)).toBeGreaterThanOrEqual(MIN);

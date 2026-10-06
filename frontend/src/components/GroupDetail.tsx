@@ -364,7 +364,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         </div>
                     ) : (
                         <div className="flex items-center gap-4 min-w-0">
-                            <span className="w-16 h-16 rounded-full grid place-items-center text-[26px] font-black shrink-0" style={{ background: tile.bg, color: tile.fg }}>{(group.name.trim()[0] ?? '?').toUpperCase()}</span>
+                            <span aria-hidden="true" className="w-16 h-16 rounded-full grid place-items-center text-[26px] font-black shrink-0" style={{ background: tile.bg, color: tile.fg }}>{(group.name.trim()[0] ?? '?').toUpperCase()}</span>
                             <div className="flex flex-col gap-1.5 min-w-0">
                                 <h1 className="m-0 text-[32px] font-black tracking-title leading-[1.05] truncate">{group.name}</h1>
                                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -481,7 +481,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                         onClick={() => onOpenRecord(r.id, r.kind)}
                                                         className="w-full flex items-center gap-3.5 p-3 rounded-[18px] text-left text-ink hover:bg-wash transition-colors"
                                                     >
-                                                        <span className="w-11 h-11 rounded-full grid place-items-center shrink-0" style={{ background: ct.bg, color: ct.fg }}><Icon name={categoryOf(r.category).icon} size={21} /></span>
+                                                        <span aria-hidden="true" className="w-11 h-11 rounded-full grid place-items-center shrink-0" style={{ background: ct.bg, color: ct.fg }}><Icon name={categoryOf(r.category).icon} size={21} /></span>
                                                         <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                                             <span className="text-base font-extrabold truncate">{r.name}</span>
                                                             <span className="text-[13.5px] font-semibold text-faint">{meta}</span>
@@ -502,7 +502,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
                             {months.length === 0 && (
                                 <p className="m-0 p-9 text-center text-[15px] font-bold text-faint rounded-[24px] bg-wash">
-                                    {records.length ? 'Nothing matches that search.' : 'No expenses yet. Add one and everyone in the group can see it.'}
+                                    {records.length ? 'Nothing matches that search.' : isPersonal ? 'No expenses yet. Add one to keep track of what you paid for others.' : 'No expenses yet. Add one and everyone in the group can see it.'}
                                 </p>
                             )}
                         </div>
@@ -555,7 +555,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         </Card>
 
                         <div className="flex-[1_1_320px] min-w-0 flex flex-col gap-2.5">
-                            <span className="text-[17px] font-black px-1.5">Suggested transfers</span>
+                            <span className="text-[17px] font-black px-1.5">Settle up</span>
                             <AnimatePresence initial={false}>
                                 {ledger.transfers.map((t, i) => {
                                     const mine = t.from === me || t.to === me;

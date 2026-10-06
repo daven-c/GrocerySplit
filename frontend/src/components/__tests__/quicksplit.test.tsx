@@ -91,7 +91,7 @@ describe('Quick split page (no account)', () => {
         // items 30 : 10, tax+tip 5 shared 3:1 -> Ann 33.75, Bo 11.25
         await waitFor(() => expect(screen.getByText('$33.75')).toBeInTheDocument());
         expect(screen.getByText('$11.25')).toBeInTheDocument();
-        expect(screen.getByText('$45.00', { selector: 'span.text-\\[34px\\]' })).toBeInTheDocument(); // the total
+        expect(screen.getByText('$45.00', { selector: 'span.text-4xl' })).toBeInTheDocument(); // the total
         await u.click(screen.getByLabelText('Bo had Pasta')); // sharing an item splits it
         await waitFor(() => expect(screen.getAllByText('15.00 each', { exact: false }).length).toBeGreaterThan(0));
     });
@@ -129,7 +129,7 @@ describe('Quick split page (no account)', () => {
         const after = (x: Node, y: Node) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
         expect(after(paid, items)).toBe(true);
         expect(after(items, owes)).toBe(true);
-        expect(after(tax, owes)).toBe(true); // the summary is last
+        expect(after(owes, tax)).toBe(true); // tax and tip live in the summary card, which is last
         // colors: a picked chip takes the person's color, and the two people differ
         const annChip = screen.getByLabelText('Ann had Pasta');
         const boChip = screen.getByLabelText('Bo had Pasta');
