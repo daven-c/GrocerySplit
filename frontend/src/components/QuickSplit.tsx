@@ -3,12 +3,12 @@ import { motion, MotionConfig, Pop, tapFlat } from '../lib/motion';
 import { supabase } from '../lib/supabase';
 import {
     QuickSplit as QuickSplitData, addQuickItems, assignQuickItem, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit,
-    claimQuickSplit, lockQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
+    claimQuickSplit, lockQuickSplit, reclaimQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../lib/quickSplit';
 import { computeSplit } from '../lib/calc';
 import { RECEIPT_PROMPT, parseReceiptJson } from '../lib/receiptImport';
-import { fmt } from '../lib/people';
-import { Button, Card, Icon, Logo, inputCls } from './ui';
+import { HUES, fmt, toneFor } from '../lib/people';
+import { Avatar, Button, Card, Icon, Logo, inputCls } from './ui';
 import QuickSplitImport from './QuickSplitImport';
 
 const POLL_MS = 4000;
@@ -45,6 +45,7 @@ export default function QuickSplit({ token }: { token: string }) {
     const [notice, setNotice] = useState('');
     const [me, setMe] = useState<string | undefined>(() => recall(token).me);
     const [ownerKey, setOwnerKey] = useState<string | undefined>(() => recall(token).ownerKey);
+    const [memberKey, setMemberKey] = useState<string | undefined>(() => recall(token).memberKey);
     const [nameInput, setNameInput] = useState('');
     const [newItem, setNewItem] = useState('');
     const [newPrice, setNewPrice] = useState('');
@@ -108,11 +109,18 @@ export default function QuickSplit({ token }: { token: string }) {
     const locked = !!data?.locked;
     const isOwner = !!ownerKey || (signedIn && !!data?.is_owner);
     const joined = !!data && !!me && data.people.includes(me);
-    const canEdit = joined && !locked;
+    const ok = ownerKey ?? null; // what the owner's calls carry (null when signed in as the owning account)
+    // The split itself (items, prices, tax, tip, who paid, who is on it) is the owner's. Everyone else can only tap
+    // items onto or off THEMSELVES; the database enforces both, this just keeps the page honest.
+    const canManage = isOwner && !locked;
+    const canTap = (person: string) => !locked && (isOwner || (joined && person === me && !!memberKey));
 
     const result = useMemo(() => (data ? computeSplit(data.items.map(i => ({ price: i.price, assigned_users: i.assigned })), data.people, data.tax, data.tip) : null), [data]);
     const totals = useMemo(() => new Map(result?.totals ?? []), [result]);
+    // Each person keeps one color everywhere on the page, same palette as the rest of the app (by join order).
+    const tones = useMemo(() => Object.fromEntries((data?.people ?? []).map((p, i) => [p, toneFor(HUES[i % HUES.length])])), [data?.people]);
     const subtotal = data ? data.items.reduce((a, i) => a + i.price, 0) : 0;
+    const maxShare = Math.max(...(result?.totals ?? []).map(([, v]) => v), 0.01);
     const grand = data ? Math.round((subtotal + data.tax + data.tip) * 100) / 100 : 0;
 
     const join = async (name: string, existing: boolean) => {
@@ -120,8 +128,18 @@ export default function QuickSplit({ token }: { token: string }) {
         if (!n) return;
         setError('');
         try {
-            if (!existing) await joinQuickSplit(token, n);
-            remember(token, { me: n });
+            if (!existing) {
+                const key = await joinQuickSplit(token, n);
+                remember(token, { me: n, memberKey: key });
+                setMemberKey(key);
+            } else if (isOwner) {
+                remember(token, { me: n }); // the owner can act as anyone, no key needed
+            } else {
+                // Lost the session (or a new device)? Picking your own name again gives this device a fresh key.
+                const key = await reclaimQuickSplit(token, n);
+                remember(token, { me: n, memberKey: key });
+                setMemberKey(key);
+            }
             setMe(n);
             setNameInput('');
             await load();
@@ -145,7 +163,7 @@ export default function QuickSplit({ token }: { token: string }) {
         const price = money(newPrice);
         setNewItem('');
         setNewPrice('');
-        void act(null, () => addQuickItems(token, [{ name, price }]));
+        void act(null, () => addQuickItems(token, [{ name, price }], ok));
     };
 
     const importJson = () => {
@@ -154,8 +172,8 @@ export default function QuickSplit({ token }: { token: string }) {
             setJson('');
             setShowJson(false);
             void act(null, async () => {
-                await addQuickItems(token, r.items);
-                if (r.tax > 0 || r.tip > 0) await setQuickSplit(token, { ...(r.tax > 0 ? { tax: r.tax } : {}), ...(r.tip > 0 ? { tip: r.tip } : {}) });
+                await addQuickItems(token, r.items, ok);
+                if (r.tax > 0 || r.tip > 0) await setQuickSplit(token, { ...(r.tax > 0 ? { tax: r.tax } : {}), ...(r.tip > 0 ? { tip: r.tip } : {}) }, ok);
             });
         } catch (err: any) { setError(err.message); }
     };
@@ -229,7 +247,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         <span className="text-[17px] font-semibold">Who are you?</span>
                         {data.people.length > 0 && (
                             <div className="flex flex-col gap-2">
-                                <span className="text-[13px] text-muted">Already on the split? Tap your name.</span>
+                                <span className="text-[13px] text-muted">{isOwner ? 'You own this split, so you can act as anyone on it.' : 'Already on the split? Tap your name to get back in.'}</span>
                                 <div className="flex flex-wrap gap-2">
                                     {data.people.map(p => (
                                         <motion.button key={p} {...tapFlat} onClick={() => join(p, true)} className="h-9 px-3.5 rounded-full border border-line bg-white text-sm font-semibold hover:bg-wash">I'm {p}</motion.button>
@@ -254,40 +272,28 @@ export default function QuickSplit({ token }: { token: string }) {
                     </div>
                 )}
 
-                <Card className="p-5 flex flex-col gap-3">
-                    <span className="text-[15px] font-semibold">Who owes what</span>
-                    {data.people.length === 0 ? <span className="text-sm text-faint">Nobody has joined yet.</span> : (
-                        <div className="flex flex-col">
-                            {data.people.map((p, i) => (
-                                <div key={p} className={`flex items-center gap-3 py-2.5 ${i ? 'border-t border-rule' : ''}`}>
-                                    <span className={`flex-1 min-w-0 truncate text-[15px] ${p === me ? 'font-semibold' : 'font-medium'}`}>{p}{p === me ? ' (you)' : ''}{data.paid_by === p ? ' · paid' : ''}</span>
-                                    <span className="font-mono text-sm font-medium">{fmt(totals.get(p) ?? 0)}</span>
-                                    {canEdit && (
-                                        <motion.button {...tapFlat} aria-label={`Remove ${p}`} onClick={() => act(d => ({ ...d, people: d.people.filter(x => x !== p), items: d.items.map(it => ({ ...it, assigned: it.assigned.filter(x => x !== p) })) }), () => removeQuickPerson(token, p))}
-                                            className="w-7 h-7 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={16} /></motion.button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {result.unassignedSubtotal > 0 && <span className="text-[13px] text-muted">{fmt(result.unassignedSubtotal)} of items still need someone. Tax and tip are shared by what each person had.</span>}
-                    {data.people.length > 0 && (
-                        <label className="flex items-center justify-between gap-3 text-sm text-body border-t border-rule pt-3">Paid by
-                            <select aria-label="Paid by" disabled={!canEdit} value={data.paid_by ?? ''} onChange={e => act(d => ({ ...d, paid_by: e.target.value || null }), () => setQuickSplit(token, { paid_by: e.target.value }))} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink">
+                {data.people.length > 0 && (
+                    <Card className="px-5 py-4">
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">
+                            <span className="flex items-center gap-2.5">
+                                {data.paid_by && tones[data.paid_by] && <Avatar name={data.paid_by} tone={tones[data.paid_by]} size={28} />}
+                                Paid by
+                            </span>
+                            <select aria-label="Paid by" disabled={!canManage} value={data.paid_by ?? ''} onChange={e => act(d => ({ ...d, paid_by: e.target.value || null }), () => setQuickSplit(token, { paid_by: e.target.value }, ok))} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink">
                                 <option value="">Nobody picked</option>
                                 {data.people.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </label>
-                    )}
-                </Card>
+                    </Card>
+                )}
 
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <span className="text-[17px] font-semibold">Items · {fmt(subtotal)}</span>
-                        {canEdit && <motion.button {...tapFlat} onClick={() => setShowJson(s => !s)} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{showJson ? 'Hide import' : 'Import from JSON'}</motion.button>}
+                        {canManage && <motion.button {...tapFlat} onClick={() => setShowJson(s => !s)} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{showJson ? 'Hide import' : 'Import from JSON'}</motion.button>}
                     </div>
 
-                    {showJson && canEdit && (
+                    {showJson && canManage && (
                         <Card className="p-4 flex flex-col gap-2.5">
                             <span className="text-[13px] text-muted">Give any AI chat a photo of the receipt along with this prompt, then paste what it answers.</span>
                             <div><Button variant="secondary" height={34} className="px-3" onClick={() => copy(RECEIPT_PROMPT, 'Prompt')}>Copy prompt</Button></div>
@@ -296,17 +302,18 @@ export default function QuickSplit({ token }: { token: string }) {
                         </Card>
                     )}
 
-                    {data.items.length === 0 && <Card className="p-5 text-sm text-faint">No items yet. Add what was ordered, or import a receipt.</Card>}
+                    {!isOwner && !locked && joined && data.items.length > 0 && <span className="text-[13px] text-muted">Tap your own name under each item you had. Only the owner can change items or other people's picks.</span>}
+                    {data.items.length === 0 && <Card className="p-5 text-sm text-faint">{isOwner ? 'No items yet. Add what was ordered, or import a receipt.' : 'No items yet. The owner of this split adds them.'}</Card>}
                     {data.items.map(it => (
                         <Card key={it.id} className="p-3.5 flex flex-col gap-2.5">
                             <div className="flex items-center gap-2">
-                                <Field label={`Item name ${it.name}`} value={it.name} disabled={!canEdit} onCommit={v => v.trim() && act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, name: v.trim() } : x) }), () => updateQuickItem(token, it.id, { name: v }))}
+                                <Field label={`Item name ${it.name}`} value={it.name} disabled={!canManage} onCommit={v => v.trim() && act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, name: v.trim() } : x) }), () => updateQuickItem(token, it.id, { name: v }, ok))}
                                     className="flex-1 min-w-0 h-9 px-2 border border-transparent hover:border-line focus:border-ink rounded-lg bg-transparent text-[15px] font-medium" />
                                 <span className="font-mono text-faint">$</span>
-                                <Field label={`Price of ${it.name}`} money value={it.price.toFixed(2)} disabled={!canEdit} onCommit={v => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, price: money(v) } : x) }), () => updateQuickItem(token, it.id, { price: money(v) }))}
+                                <Field label={`Price of ${it.name}`} money value={it.price.toFixed(2)} disabled={!canManage} onCommit={v => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, price: money(v) } : x) }), () => updateQuickItem(token, it.id, { price: money(v) }, ok))}
                                     className="w-[88px] h-9 px-2 border border-line rounded-lg text-right font-mono text-sm bg-white" />
-                                {canEdit && (
-                                    <motion.button {...tapFlat} aria-label={`Delete ${it.name}`} onClick={() => act(d => ({ ...d, items: d.items.filter(x => x.id !== it.id) }), () => deleteQuickItem(token, it.id))}
+                                {canManage && (
+                                    <motion.button {...tapFlat} aria-label={`Delete ${it.name}`} onClick={() => act(d => ({ ...d, items: d.items.filter(x => x.id !== it.id) }), () => deleteQuickItem(token, it.id, ok))}
                                         className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                 )}
                             </div>
@@ -315,14 +322,15 @@ export default function QuickSplit({ token }: { token: string }) {
                                     const on = it.assigned.includes(p);
                                     return (
                                         <motion.button
-                                            key={p} {...tapFlat} disabled={!canEdit} aria-pressed={on} aria-label={`${p} had ${it.name}`}
-                                            onClick={() => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, assigned: on ? x.assigned.filter(a => a !== p) : [...x.assigned, p] } : x) }), () => assignQuickItem(token, it.id, p, !on))}
-                                            className={`h-8 px-3 rounded-full text-[13px] font-semibold border ${on ? 'bg-ink text-white border-ink' : 'bg-white text-body border-dash border-dashed'} disabled:opacity-60`}
+                                            key={p} {...tapFlat} disabled={!canTap(p)} aria-pressed={on} aria-label={`${p} had ${it.name}`}
+                                            onClick={() => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, assigned: on ? x.assigned.filter(a => a !== p) : [...x.assigned, p] } : x) }), () => assignQuickItem(token, it.id, p, !on, { memberKey, ownerKey: ok }))}
+                                            className={`h-8 px-3 rounded-full text-[13px] font-semibold border ${on ? 'border-solid' : 'bg-white text-body border-dash border-dashed'} disabled:opacity-60`}
+                                            style={on ? { background: tones[p]?.bg, color: tones[p]?.fg, borderColor: tones[p]?.bg } : undefined}
                                         >{p}</motion.button>
                                     );
                                 })}
-                                {canEdit && data.people.length > 1 && (
-                                    <motion.button {...tapFlat} onClick={() => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, assigned: it.assigned.length === d.people.length ? [] : [...d.people] } : x) }), () => setQuickAssigned(token, it.id, it.assigned.length === data.people.length ? [] : data.people))}
+                                {canManage && data.people.length > 1 && (
+                                    <motion.button {...tapFlat} onClick={() => act(d => ({ ...d, items: d.items.map(x => x.id === it.id ? { ...x, assigned: it.assigned.length === d.people.length ? [] : [...d.people] } : x) }), () => setQuickAssigned(token, it.id, it.assigned.length === data.people.length ? [] : data.people, ok))}
                                         className="h-8 px-2 text-[13px] text-muted underline underline-offset-2">{it.assigned.length === data.people.length ? 'Nobody' : 'Everyone'}</motion.button>
                                 )}
                                 {it.assigned.length > 0 && <span className="ml-auto text-xs text-faint">{fmt(it.price / it.assigned.length)} each</span>}
@@ -330,7 +338,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         </Card>
                     ))}
 
-                    {canEdit && (
+                    {canManage && (
                         <div className="flex gap-2">
                             <input aria-label="New item name" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Add an item" className="flex-1 min-w-0 h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
                             <input aria-label="New item price" inputMode="decimal" value={newPrice} onChange={e => setNewPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="0.00" className="w-[104px] shrink-0 text-right font-mono h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
@@ -343,11 +351,44 @@ export default function QuickSplit({ token }: { token: string }) {
                     {([['tax', 'Tax'], ['tip', 'Tip']] as const).map(([k, label]) => (
                         <label key={k} className="flex items-center justify-between gap-3 text-sm text-body">{label}
                             <span className="flex items-center gap-1 font-mono">$
-                                <Field label={label} money disabled={!canEdit} value={data[k].toFixed(2)} onCommit={v => act(d => ({ ...d, [k]: money(v) }), () => setQuickSplit(token, { [k]: money(v) }))}
+                                <Field label={label} money disabled={!canManage} value={data[k].toFixed(2)} onCommit={v => act(d => ({ ...d, [k]: money(v) }), () => setQuickSplit(token, { [k]: money(v) }, ok))}
                                     className="w-[96px] h-9 px-2 border border-line rounded-lg text-right text-sm bg-white" />
                             </span>
                         </label>
                     ))}
+                </Card>
+
+                <Card className="p-5 flex flex-col gap-3.5">
+                    <span className="text-[15px] font-semibold">Who owes what</span>
+                    {data.people.length === 0 ? <span className="text-sm text-faint">Nobody has joined yet.</span> : (
+                        <div className="flex flex-col gap-3.5">
+                            {data.people.map(p => {
+                                const amt = totals.get(p) ?? 0;
+                                const t = tones[p];
+                                return (
+                                    <div key={p} className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2.5">
+                                            <Avatar name={p} tone={t} size={28} />
+                                            <span className="flex-1 min-w-0 flex flex-col">
+                                                <span className={`truncate text-sm ${p === me ? 'font-semibold' : 'font-medium'}`}>{p}{p === me ? ' (you)' : ''}</span>
+                                                <span className="text-xs text-faint">{data.paid_by === p ? 'paid the bill' : data.paid_by ? `owes ${data.paid_by}` : ''}</span>
+                                            </span>
+                                            <span className="font-mono text-sm font-medium">{fmt(amt)}</span>
+                                            {canManage && (
+                                                <motion.button {...tapFlat} aria-label={`Remove ${p}`} onClick={() => act(d => ({ ...d, people: d.people.filter(x => x !== p), items: d.items.map(it => ({ ...it, assigned: it.assigned.filter(x => x !== p) })) }), () => removeQuickPerson(token, p, ok))}
+                                                    className="w-7 h-7 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={16} /></motion.button>
+                                            )}
+                                        </div>
+                                        <div className="h-[3px] ml-[38px] rounded-sm bg-surface">
+                                            <motion.div className="h-full rounded-sm opacity-55" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {result.unassignedSubtotal > 0 && <span className="text-[13px] text-muted">{fmt(result.unassignedSubtotal)} of items still need someone. Tax and tip are shared by what each person had.</span>}
+                    <div className="border-t border-rule pt-3 flex justify-between font-semibold text-[15px]"><span>Total</span><span className="font-mono">{fmt(grand)}</span></div>
                 </Card>
 
                 <Card className="px-5 py-4 flex flex-wrap items-center justify-between gap-3">
