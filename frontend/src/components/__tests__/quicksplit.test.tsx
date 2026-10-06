@@ -120,6 +120,18 @@ describe('Quick split page (no account)', () => {
         await waitFor(() => expect(fakeQuick.state.title).toBe('Renamed'));
     });
 
+    it('has a clear way back to the app on every state of the page', async () => {
+        fakeQuick.seed({ people: ['Ann'] });
+        const first = view();
+        const home = await screen.findByRole('link', { name: /Home$/ });
+        expect(home).toHaveAttribute('href', '/');
+        first.unmount();
+        fakeQuick.state.gone = true;
+        view();
+        await screen.findByText("This split isn't here");
+        expect(screen.getByRole('link', { name: /Home$/ })).toHaveAttribute('href', '/');
+    });
+
     it('a wrong or expired link says so', async () => {
         fakeQuick.state.gone = true;
         view();

@@ -363,9 +363,12 @@ function Shell({ children }: { children: React.ReactNode }) {
     return (
         <MotionConfig reducedMotion="user">
             <div className="min-h-screen bg-white text-ink font-sans">
-                <header className="max-w-[760px] mx-auto px-5 py-5 flex items-center justify-between">
-                    <a href="/" aria-label="Splitpot home"><Logo size={20} word={18} /></a>
-                    <span className="text-[13px] text-faint">Quick split · no account needed</span>
+                <header className="max-w-[760px] mx-auto px-5 py-5 flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-3 min-w-0">
+                        <a href="/" className="h-9 pl-2 pr-3.5 inline-flex items-center gap-1 rounded-full border border-line text-sm font-semibold text-ink hover:bg-wash shrink-0"><Icon name="arrow_back" size={18} />Home</a>
+                        <a href="/" aria-label="Splitpot home" className="min-w-0"><Logo size={20} word={18} /></a>
+                    </span>
+                    <span className="text-[13px] text-faint text-right">Quick split · no account needed</span>
                 </header>
                 <main className="max-w-[760px] mx-auto px-5 pb-20">{children}</main>
             </div>
