@@ -3,7 +3,7 @@ import { motion, AnimatePresence, Collapse, Pop, AnimatedNumber, listItem, tapFl
 import { useAppData } from '../lib/appData';
 import { createGroup, respondToInvite, setGroupPinned } from '../lib/api';
 import { computeBalances } from '../lib/balances';
-import { firstName, fmt, greeting, memberTones } from '../lib/people';
+import { firstName, fmt, fmtSigned, greeting, memberTones } from '../lib/people';
 import { totalOf } from '../lib/expenses';
 import { startQuickSplit } from '../lib/quickSplit';
 import { Avatar, Button, Card, Icon } from './ui';
@@ -206,7 +206,7 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                                                     <span className="text-[13px] text-faint">{g.members.length} {g.members.length === 1 ? 'person' : 'people'} · {st.count} {st.count === 1 ? 'expense' : 'expenses'} · {fmt(st.spent)} total</span>
                                                 </span>
                                                 <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                                    <span className={`text-[15px] font-semibold ${settled ? 'text-faint' : st.net > 0 ? 'text-green' : 'text-coral'}`}>{settled ? 'Settled' : fmt(st.net)}</span>
+                                                    <span className={`text-[15px] font-semibold ${settled ? 'text-faint' : st.net > 0 ? 'text-green' : 'text-coral'}`}>{settled ? 'Settled' : fmtSigned(st.net)}</span>
                                                     <span className="text-xs text-faint">{settled ? 'all square' : st.net > 0 ? "you're owed" : 'you owe'}</span>
                                                 </span>
                                             </motion.button>

@@ -96,7 +96,7 @@ export default function Friends() {
                                         <span className="text-[13px] text-faint truncate">{f.groupIds.map(id => groupName[id]).join(', ')}</span>
                                     </span>
                                     <span className="flex flex-col items-end gap-0.5">
-                                        {settled ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix="$" className={`text-[15px] font-semibold ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                        {settled ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix={f.net < 0 ? '-$' : '$'} className={`text-[15px] font-semibold ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
                                         <span className="text-xs text-faint">{settled ? 'all square' : f.net > 0 ? 'owes you' : 'you owe'}</span>
                                     </span>
                                     <Icon name={expanded ? 'expand_less' : 'expand_more'} size={20} className="text-chev" />

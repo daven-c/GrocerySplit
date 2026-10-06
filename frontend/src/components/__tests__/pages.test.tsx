@@ -49,6 +49,7 @@ describe('Friends', () => {
         await u.click(await screen.findByRole('button', { name: /Amy/ }));
         expect(await screen.findByText('Daven owes Amy $30.00')).toBeInTheDocument();
         expect(screen.getByText('you owe')).toBeInTheDocument();
+        expect(screen.getByText('-$30.00')).toBeInTheDocument(); // down: shown negative
         await u.click(screen.getByRole('button', { name: 'Mark paid' }));
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', ME, 'u-amy', 30));
     });

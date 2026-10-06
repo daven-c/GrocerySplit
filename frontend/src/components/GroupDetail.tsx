@@ -484,7 +484,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                             <Avatar name={member.name} tone={tones[m.userId]} size={36} />
                                             <span className="flex-1 min-w-0 text-[15px] font-semibold truncate">{who(m.userId)}</span>
                                             <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                                {square ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix="$" className={`text-[15px] font-semibold ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                                {square ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix={m.net < 0 ? '-$' : '$'} className={`text-[15px] font-semibold ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
                                                 <span className="text-xs text-faint">{square ? 'all square' : m.net > 0 ? 'up' : 'down'}</span>
                                             </span>
                                         </div>

@@ -506,6 +506,9 @@ describe('Group detail', () => {
         const you = screen.getByText('Daven', { selector: 'span.truncate' }).closest('div')!;
         await waitFor(() => expect(within(you).getByText('up')).toBeInTheDocument());
         expect(screen.getAllByText('down')).toHaveLength(2);
+        const down = screen.getAllByText('down').map(d => d.previousElementSibling!.textContent);
+        expect(down.every(t => t!.startsWith('-$'))).toBe(true); // a negative balance keeps its minus sign
+        expect(within(you).getByText('$1,182.82')).toBeInTheDocument(); // positive ones don't get one
         expect(await screen.findByText('$1,182.82')).toBeInTheDocument(); // you are up by what both owe you
         // suggested transfers below
         expect(screen.getByText('Suggested transfers')).toBeInTheDocument();
