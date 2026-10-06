@@ -326,9 +326,9 @@ export default function QuickSplit({ token }: { token: string }) {
 
                     {canEdit && (
                         <div className="flex gap-2">
-                            <input aria-label="New item name" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Add an item" className={`${inputCls} flex-1 min-w-0`} />
-                            <input aria-label="New item price" inputMode="decimal" value={newPrice} onChange={e => setNewPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="0.00" className={`${inputCls} w-[100px] text-right font-mono`} />
-                            <Button height={42} className="px-[18px]" disabled={!newItem.trim()} onClick={addItem}>Add</Button>
+                            <input aria-label="New item name" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="Add an item" className="flex-1 min-w-0 h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
+                            <input aria-label="New item price" inputMode="decimal" value={newPrice} onChange={e => setNewPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} placeholder="0.00" className="w-[104px] shrink-0 text-right font-mono h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink" />
+                            <Button height={42} className="px-[18px] shrink-0" disabled={!newItem.trim()} onClick={addItem}>Add</Button>
                         </div>
                     )}
                 </div>
