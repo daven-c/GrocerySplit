@@ -48,7 +48,9 @@ export const reclaimQuickSplit = async (token: string, name: string): Promise<st
 // Everything about the split itself is the owner's: pass the owner key, or null when signed in as the owning account.
 export const removeQuickPerson = (token: string, name: string, ownerKey: string | null) => run('qs_remove_person', { p_token: token, p_name: name, p_owner_key: ownerKey });
 export const setQuickSplit = (token: string, patch: Partial<Pick<QuickSplit, 'tax' | 'tip' | 'paid_by'>>, ownerKey: string | null) => run('qs_set', { p_token: token, p_patch: patch, p_owner_key: ownerKey });
-export const addQuickItems = (token: string, items: { name: string; price: number }[], ownerKey: string | null) => run('qs_add_items', { p_token: token, p_items: items, p_owner_key: ownerKey });
+/** The owner, or anyone who has joined (their member key), may add items. */
+export const addQuickItems = (token: string, items: { name: string; price: number }[], ownerKey: string | null, memberKey?: string | null) =>
+    run('qs_add_items', { p_token: token, p_items: items, p_owner_key: ownerKey, p_member_key: memberKey ?? null });
 export const updateQuickItem = (token: string, id: string, patch: { name?: string; price?: number }, ownerKey: string | null) => run('qs_update_item', { p_token: token, p_item: id, p_patch: patch, p_owner_key: ownerKey });
 export const deleteQuickItem = (token: string, id: string, ownerKey: string | null) => run('qs_delete_item', { p_token: token, p_item: id, p_owner_key: ownerKey });
 /** Anyone may tap THEMSELVES on or off an item (with their member key); the owner may tap anyone. */

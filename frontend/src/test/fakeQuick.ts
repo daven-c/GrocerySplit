@@ -63,8 +63,9 @@ export const fakeQuick = {
             if ('title' in patch) throw new Error('Only the owner can rename this split.');
             Object.assign(s.state, patch);
         }),
-        addQuickItems: vi.fn(async (_t: string, items: { name: string; price: number }[], key: string | null) => {
-            guard(); ownerOnly(key, 'add items');
+        addQuickItems: vi.fn(async (_t: string, items: { name: string; price: number }[], key: string | null, memberKey?: string | null) => {
+            guard();
+            if (!isOwner(key) && !(memberKey && Object.values(s.state.keys).includes(memberKey))) throw new Error('Join the split with your name to add items.');
             for (const i of items) s.state.items.push({ id: `i${s.state.seq++}`, name: i.name, price: i.price, assigned: [] });
         }),
         updateQuickItem: vi.fn(async (_t: string, id: string, patch: any, key: string | null) => { guard(); ownerOnly(key, 'edit items'); Object.assign(item(id), patch); }),

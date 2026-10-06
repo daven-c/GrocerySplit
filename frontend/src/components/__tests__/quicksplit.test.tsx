@@ -96,7 +96,7 @@ describe('Quick split page (no account)', () => {
         await waitFor(() => expect(screen.getAllByText('15.00 each', { exact: false }).length).toBeGreaterThan(0));
     });
 
-    it('everyone else can only tap THEMSELVES on and off items: no editing, no removing people, no tapping others', async () => {
+    it('everyone else can only tap THEMSELVES on and off items (and add items): no editing, no removing people, no tapping others', async () => {
         const u = userEvent.setup();
         fakeQuick.seed({ people: ['Ann', 'Bo'], items: [{ name: 'Pasta', price: 30, assigned: ['Bo'] }, { name: 'Salad', price: 10 }], tax: 2, ownerKey: 'OWNER' });
         asMember('Ann');
@@ -107,7 +107,8 @@ describe('Quick split page (no account)', () => {
         expect(screen.getByLabelText('Bo had Salad')).toBeDisabled();
         // nothing about the split itself is editable
         for (const label of ['Item name Pasta', 'Price of Pasta', 'Paid by', 'Tax', 'Tip', 'Split title']) expect(screen.getByLabelText(label)).toBeDisabled();
-        for (const label of ['New item name', 'Remove Bo', 'Remove Ann', 'Delete Pasta']) expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+        for (const label of ['Remove Bo', 'Remove Ann', 'Delete Pasta']) expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+        expect(screen.getByLabelText('New item name')).toBeInTheDocument(); // but they can add an item
         expect(screen.queryByRole('button', { name: 'Everyone' })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Import from JSON' })).not.toBeInTheDocument();
         await u.click(mine);
@@ -136,6 +137,27 @@ describe('Quick split page (no account)', () => {
         expect(boChip.getAttribute('style')).toBeNull(); // not picked: plain dashed chip
         expect(screen.getByText('paid the bill')).toBeInTheDocument();
         expect(screen.getByText('owes Ann')).toBeInTheDocument();
+    });
+
+    it('a joined guest can add an item; someone who has not joined (or has no key) cannot', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
+        asMember('Ann');
+        const first = view();
+        await u.type(await screen.findByLabelText('New item name'), 'Fries');
+        await u.type(screen.getByLabelText('New item price'), '6.5');
+        await u.click(screen.getByRole('button', { name: 'Add' }));
+        await waitFor(() => expect(fakeQuick.state.items.map(i => i.name)).toEqual(['Fries']));
+        expect(fakeQuick.api.addQuickItems).toHaveBeenCalledWith(TOKEN, [{ name: 'Fries', price: 6.5 }], null, 'key-Ann');
+        // a guest cannot edit or delete what they added; that is the owner's
+        expect(await screen.findByLabelText('Price of Fries')).toBeDisabled();
+        expect(screen.queryByLabelText('Delete Fries')).not.toBeInTheDocument();
+        first.unmount();
+        localStorage.clear(); // not joined on this device: no add form
+        view();
+        await screen.findByText('Who are you?');
+        expect(screen.queryByLabelText('New item name')).not.toBeInTheDocument();
+        await expect(fakeQuick.api.addQuickItems(TOKEN, [{ name: 'x', price: 1 }], null, 'guess')).rejects.toThrow('Join the split');
     });
 
     it('a name without its key on this browser cannot tap anything (and the server would refuse anyway)', async () => {
@@ -272,7 +294,7 @@ describe('Quick split page (no account)', () => {
         api.listGroups.mockResolvedValue([group]);
         api.createSession.mockResolvedValue('new1');
         fakeQuick.seed({ title: 'Dinner out', people: ['Daven', 'Cam'], tax: 2, items: [{ name: 'Pasta', price: 20, assigned: ['Daven', 'Cam'] }, { name: 'Wine', price: 10, assigned: ['Cam'] }], paidBy: 'Daven' });
-        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Daven' }));
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Daven', ownerKey: 'OWNER' }));
         view();
         await u.click(await screen.findByRole('button', { name: 'Import to a group' }));
         const dialog = await screen.findByRole('dialog');
@@ -288,10 +310,26 @@ describe('Quick split page (no account)', () => {
         expect(await within(dialog).findByText('Imported to Roomies')).toBeInTheDocument();
     });
 
-    it('a signed-out visitor is pointed to sign in instead', async () => {
-        fakeQuick.seed({ people: ['Ann'] });
+    it('a signed-out OWNER is pointed to sign in to save it to a group', async () => {
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER' }));
         view();
         expect(await screen.findByText(/Sign in to Splitpot to turn this split/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Import to a group' })).not.toBeInTheDocument();
+    });
+
+    it('only the person who made the split sees "Keep this in a group" (not guests, signed in or not)', async () => {
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
+        asMember('Ann');
+        const out = view();
+        await screen.findByLabelText('Split title');
+        expect(screen.queryByText('Keep this in a group')).not.toBeInTheDocument();
+        out.unmount();
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } }); // a signed-in guest
+        view();
+        await screen.findByLabelText('Split title');
+        await waitFor(() => expect(authMock.getSession).toHaveBeenCalled());
+        expect(screen.queryByText('Keep this in a group')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Import to a group' })).not.toBeInTheDocument();
     });
 });

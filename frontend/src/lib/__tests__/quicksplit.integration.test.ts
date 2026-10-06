@@ -28,10 +28,16 @@ run('quick split, signed out, against the real database', () => {
         expect((await getQuickSplit(token))!.people).toEqual(['Ann', 'Bo']);
     });
 
-    it('only the owner can add, edit or delete items, set tax/tip/payer, or remove people', async () => {
-        await expect(addQuickItems(token, [{ name: 'x', price: 1 }], null)).rejects.toThrow('Only the owner');
-        await expect(addQuickItems(token, [{ name: 'x', price: 1 }], ann)).rejects.toThrow('Only the owner'); // a member key is not the owner key
+    it('only the owner can edit or delete items, set tax/tip/payer, or remove people (anyone who joined can add an item)', async () => {
+        await expect(addQuickItems(token, [{ name: 'x', price: 1 }], null)).rejects.toThrow('Join the split');
+        await expect(addQuickItems(token, [{ name: 'x', price: 1 }], ann)).rejects.toThrow('Join the split'); // a member key is not the owner key
+        await expect(addQuickItems(token, [{ name: 'x', price: 1 }], null, 'made-up')).rejects.toThrow('Join the split');
         await addQuickItems(token, [{ name: 'Pasta', price: 30 }, { name: 'Salad', price: 10 }], key);
+        await addQuickItems(token, [{ name: 'Fries', price: 6 }], null, bo); // anyone who joined can add an item
+        const fries = (await getQuickSplit(token))!.items.find(i => i.name === 'Fries')!;
+        await expect(updateQuickItem(token, fries.id, { price: 1 }, bo)).rejects.toThrow('Only the owner'); // but not edit it
+        await expect(deleteQuickItem(token, fries.id, null)).rejects.toThrow('Only the owner');
+        await deleteQuickItem(token, fries.id, key);
         await setQuickSplit(token, { tax: 2, tip: 3, paid_by: 'Ann' }, key);
         pasta = (await getQuickSplit(token))!.items[0].id;
         await expect(updateQuickItem(token, pasta, { price: 1 }, ann)).rejects.toThrow('Only the owner');
