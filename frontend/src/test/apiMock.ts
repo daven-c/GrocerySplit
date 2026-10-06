@@ -26,7 +26,7 @@ export const receipt = {
 };
 export const rent = {
     ...base, id: 's2', kind: 'expense' as const, category: 'rent', paid_by: ME, name: 'October rent', session_date: '2026-10-01', items: [],
-    amount: 2400, split_method: 'shares' as const, split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 },
+    amount: 2400, split_method: 'percent' as const, split_data: { [ME]: 50, 'u-amy': 25, 'u-bo': 25 },
 };
 export const dinner = {
     ...base, id: 's3', kind: 'expense' as const, category: 'dining', paid_by: 'u-amy', name: 'Pizza night', session_date: '2026-09-20', items: [],

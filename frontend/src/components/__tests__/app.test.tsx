@@ -264,9 +264,9 @@ describe('Drafts in the app shell', () => {
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument(); // still a draft
         expect(api.deleteSession).not.toHaveBeenCalled();
 
-        await u.click(screen.getByRole('tab', { name: 'Percent' }));
+        await u.click(screen.getByRole('tab', { name: 'Shares' }));
         expect(await screen.findByLabelText('How much was it?')).toBeInTheDocument(); // back to the amount body
-        expect(screen.getByRole('tab', { name: 'Percent', selected: true })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Shares', selected: true })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Unsaved draft' })).toBeInTheDocument();
         expect(api.deleteSession).not.toHaveBeenCalled();
     });

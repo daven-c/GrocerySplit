@@ -63,8 +63,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             setDate(s.session_date);
             setCategory(s.category || 'other');
             setPaidBy(s.paid_by ?? s.user_id ?? '');
-            // Equal/shares expenses (from before those were removed) open as the same amounts, once members are known.
-            const legacy = s.split_method === 'equal' || s.split_method === 'shares';
+            // Equal/percent expenses (from before those were removed) open as the same amounts, once members are known.
+            const legacy = s.split_method === 'equal' || s.split_method === 'percent';
             const ids = Object.keys(data);
             const evenParts = allocate(Math.round((s.amount ?? 0) * 100), ids.map(() => 1));
             legacyRef.current = legacy ? { method: s.split_method!, data } : null;
@@ -167,7 +167,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const changeMethod = (to: SplitMethod) => {
         const next = convertSplit(method, to, data, total);
         setMethod(to);
-        setEven(to === 'exact');
+        setEven(to === 'exact' && (method !== 'shares' || new Set(Object.values(data)).size <= 1));
         setValues(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])));
     };
 

@@ -17,7 +17,7 @@ const ROWS = [
 ];
 const STEPS = [
     { n: '01', title: 'Add the cost', body: 'Import a grocery receipt with any AI chat, or enter any bill by hand: rent, utilities, dinner, a trip.' },
-    { n: '02', title: 'Say who shares it', body: 'Tap who had what on a receipt, or pick who is in on a bill and split it by amount or percent.' },
+    { n: '02', title: 'Say who shares it', body: 'Tap who had what on a receipt, or pick who is in on a bill and split it by amount or shares.' },
     { n: '03', title: 'Settle up', body: 'Splitpot tracks who paid and who owes, across every group. Mark payments as you make them.' },
 ];
 const POINTS = [
