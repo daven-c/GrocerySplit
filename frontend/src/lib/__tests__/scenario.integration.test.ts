@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 import * as api from '../api';
 import { computeBalances } from '../balances';
 import { everyoneEqual } from '../expenses';
+import { addQuickItems, claimQuickSplit, createQuickSplit, deleteQuickSplit, getQuickSplit, lockQuickSplit, renameQuickSplit } from '../quickSplit';
 
 const run = process.env.INTEGRATION ? describe : describe.skip;
 const password = process.env.TEST_PASSWORD as string;
@@ -178,6 +179,35 @@ run('what users do: expenses, paying back, and more expenses', () => {
         await as('a');
         expect((await api.getSession(rid)).name).toBe('Costco run');
         await api.deleteSession(rid);
+    });
+
+    it('a quick split made while signed in is listed under Personal and owned by the account, on any device', async () => {
+        await as('a');
+        const { token, ownerKey } = await createQuickSplit('Sushi night');
+        await addQuickItems(token, [{ name: 'Roll', price: 12 }]);
+        const mine = await api.listMyQuickSplits();
+        expect(mine.find(m => m.token === token)).toMatchObject({ title: 'Sushi night', people: 0, items: 1, total: 12, locked: false });
+        expect((await getQuickSplit(token))!.is_owner).toBe(true);
+        // another account sees it by link, can edit items, but neither lists it nor owns it
+        await as('b');
+        expect((await api.listMyQuickSplits()).some(m => m.token === token)).toBe(false);
+        expect((await getQuickSplit(token))!.is_owner).toBe(false);
+        await expect(renameQuickSplit(token, null, 'hijack')).rejects.toThrow(/Only the owner/);
+        await expect(deleteQuickSplit(token, 'wrong')).rejects.toThrow(/Only the owner/);
+        await expect(claimQuickSplit(token, 'wrong')).rejects.toThrow(/Only the owner/);
+        // the owning account manages it without the key (a different device)
+        await as('a');
+        await renameQuickSplit(token, null, 'From my phone');
+        await lockQuickSplit(token, null, true);
+        expect((await api.listMyQuickSplits()).find(m => m.token === token)).toMatchObject({ title: 'From my phone', locked: true });
+        await deleteQuickSplit(token, null);
+        expect((await api.listMyQuickSplits()).some(m => m.token === token)).toBe(false);
+        // an anonymous split is attached by claiming it with its key
+        const anon = await createQuickSplit('Anon');
+        await claimQuickSplit(anon.token, anon.ownerKey);
+        expect((await api.listMyQuickSplits()).some(m => m.token === anon.token)).toBe(true);
+        await deleteQuickSplit(anon.token, anon.ownerKey);
+        void ownerKey;
     });
 
     it('cleanup', async () => {

@@ -2,11 +2,11 @@ import { vi } from 'vitest';
 import type { QuickSplit } from '../lib/quickSplit';
 
 /** An in-memory stand-in for the qs_* database functions, with the same rules (unique names, locked = read-only). */
-interface State extends QuickSplit { gone: boolean; ownerKey: string; seq: number }
+interface State extends QuickSplit { gone: boolean; ownerKey: string; seq: number; claimed: boolean }
 
 const blank = (): State => ({
     title: 'Dinner', tax: 0, tip: 0, paid_by: null, locked: false, version: 0, expires_at: '2026-11-05T00:00:00Z',
-    people: [], items: [], gone: false, ownerKey: 'OWNER', seq: 0,
+    people: [], items: [], gone: false, ownerKey: 'OWNER', seq: 0, claimed: false,
 });
 
 const s: { state: State } = { state: blank() };
@@ -24,7 +24,12 @@ export const fakeQuick = {
         s.state = { ...blank(), ...rest, paid_by: paidBy ?? rest.paid_by ?? null, items: items.map((i, n) => ({ id: `i${n}`, name: i.name, price: i.price, assigned: i.assigned ?? [] })), seq: items.length };
     },
     api: {
-        getQuickSplit: vi.fn(async () => (s.state.gone ? null : structuredClone(s.state))),
+        getQuickSplit: vi.fn(async () => (s.state.gone ? null : structuredClone({ ...s.state, is_owner: s.state.claimed }))),
+        claimQuickSplit: vi.fn(async (_t: string, key: string) => {
+            guard(false);
+            if (key !== s.state.ownerKey) throw new Error('Only the owner can claim this split.');
+            s.state.claimed = true;
+        }),
         joinQuickSplit: vi.fn(async (_t: string, name: string) => {
             guard();
             if (s.state.people.some(p => p.toLowerCase() === name.trim().toLowerCase())) throw new Error('That name is taken.');
@@ -35,7 +40,11 @@ export const fakeQuick = {
             s.state.people = s.state.people.filter(p => p !== name);
             s.state.items.forEach(i => { i.assigned = i.assigned.filter(a => a !== name); });
         }),
-        setQuickSplit: vi.fn(async (_t: string, patch: any) => { guard(); Object.assign(s.state, patch); }),
+        setQuickSplit: vi.fn(async (_t: string, patch: any) => {
+            guard();
+            if ('title' in patch) throw new Error('Only the owner can rename this split.');
+            Object.assign(s.state, patch);
+        }),
         addQuickItems: vi.fn(async (_t: string, items: { name: string; price: number }[]) => {
             guard();
             for (const i of items) s.state.items.push({ id: `i${s.state.seq++}`, name: i.name, price: i.price, assigned: [] });
@@ -48,9 +57,14 @@ export const fakeQuick = {
             it.assigned = on ? (it.assigned.includes(person) ? it.assigned : [...it.assigned, person]) : it.assigned.filter(a => a !== person);
         }),
         setQuickAssigned: vi.fn(async (_t: string, id: string, people: string[]) => { guard(); item(id).assigned = s.state.people.filter(p => people.includes(p)); }),
+        renameQuickSplit: vi.fn(async (_t: string, key: string, title: string) => {
+            guard(false);
+            if (key !== s.state.ownerKey && !s.state.claimed) throw new Error('Only the owner can rename this split.');
+            s.state.title = title.trim();
+        }),
         lockQuickSplit: vi.fn(async (_t: string, key: string, locked: boolean) => {
             guard(false);
-            if (key !== s.state.ownerKey) throw new Error('Only the owner can lock this split.');
+            if (key !== s.state.ownerKey && !s.state.claimed) throw new Error('Only the owner can lock this split.');
             s.state.locked = locked;
         }),
         deleteQuickSplit: vi.fn(async () => { s.state.gone = true; }),

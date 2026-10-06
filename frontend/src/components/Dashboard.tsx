@@ -6,6 +6,7 @@ import { computeBalances } from '../lib/balances';
 import { firstName, fmt, fmtSigned, greeting, memberTones } from '../lib/people';
 import { totalOf } from '../lib/expenses';
 import { startQuickSplit } from '../lib/quickSplit';
+import { isEnabled } from '../lib/flags';
 import { Avatar, Button, Card, Icon } from './ui';
 
 type Sort = 'recent' | 'name' | 'balance' | 'spent';
@@ -144,9 +145,11 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                 <div className="flex items-center justify-between">
                     <h2 className="m-0 text-[17px] font-semibold">Groups</h2>
                     <div className="flex items-center gap-1">
-                        <Button variant="ghost" height={34} className="rounded-lg px-3" title="A shareable page to split one bill, no group needed" onClick={() => startQuickSplit().catch(err => setProblem(err.message || 'Could not start a quick split'))}>
-                            <Icon name="bolt" size={18} />Quick split
-                        </Button>
+                        {isEnabled('quickSplit') && (
+                            <Button variant="ghost" height={34} className="rounded-lg px-3" title="A shareable page to split one bill, no group needed" onClick={() => startQuickSplit().catch(err => setProblem(err.message || 'Could not start a quick split'))}>
+                                <Icon name="bolt" size={18} />Quick split
+                            </Button>
+                        )}
                         <Button variant="ghost" height={34} className="rounded-lg px-3" onClick={() => setNewGroupOpen(o => !o)}>
                             <Icon name="add" size={18} />New group
                         </Button>

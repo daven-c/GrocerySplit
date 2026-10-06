@@ -17,7 +17,7 @@ import ErrorBoundary from '../ErrorBoundary';
 const signIn = () => authMock.getSession.mockResolvedValue({ data: { session: signedInSession } });
 const narrowScreen = () => { (window as any).matchMedia = (q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }); };
 
-beforeEach(resetMocks);
+beforeEach(() => { resetMocks(); localStorage.removeItem('splitpot:flags'); });
 afterEach(cleanup);
 
 describe('Landing', () => {
@@ -220,6 +220,22 @@ describe('App shell', () => {
         const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
         await u.click(await within(sidebar).findByRole('button', { name: /Admin/ }));
         expect(await screen.findByRole('heading', { name: 'Admin' })).toBeInTheDocument();
+    });
+
+    it('feature flags: Personal can be switched off (nav item gone) and Quick split too (landing button gone)', async () => {
+        localStorage.setItem('splitpot:flags', JSON.stringify({ personal: false, quickSplit: false }));
+        signIn();
+        const first = render(<App />);
+        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        expect(within(sidebar).queryByRole('button', { name: 'Personal' })).not.toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'People' })).toBeInTheDocument();
+        first.unmount();
+        render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
+        expect(screen.queryByRole('button', { name: 'Split one bill, no account' })).not.toBeInTheDocument();
+        localStorage.removeItem('splitpot:flags');
+        cleanup();
+        render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
+        expect(screen.getByRole('button', { name: 'Split one bill, no account' })).toBeInTheDocument();
     });
 
     it('narrow screens get a header with the logo and a bottom tab bar instead of the sidebar', async () => {

@@ -90,6 +90,79 @@ describe('Quick split page (no account)', () => {
         expect(window.location.hash).toBe('');
     });
 
+    it('only the owner can rename the split; everyone else sees plain text', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ title: 'Dinner', ownerKey: 'KEY' });
+        const guest = view();
+        expect(await screen.findByLabelText('Split title')).toBeDisabled();
+        expect(screen.queryByText('Tap the title to rename it')).not.toBeInTheDocument();
+        guest.unmount();
+
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' })); // the owner, not even joined yet
+        view();
+        const title = await screen.findByLabelText('Split title');
+        expect(title).toBeEnabled();
+        await u.clear(title);
+        await u.type(title, 'Sushi night{Enter}');
+        await waitFor(() => expect(fakeQuick.state.title).toBe('Sushi night'));
+        expect(document.title).toMatch(/Sushi night/);
+    });
+
+    it('the owner can still rename a locked split; nobody else can', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ title: 'Dinner', locked: true, ownerKey: 'KEY' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' }));
+        view();
+        const title = await screen.findByLabelText('Split title');
+        expect(title).toBeEnabled();
+        await u.clear(title);
+        await u.type(title, 'Renamed{Enter}');
+        await waitFor(() => expect(fakeQuick.state.title).toBe('Renamed'));
+    });
+
+    it('has a clear way back to the app on every state of the page', async () => {
+        fakeQuick.seed({ people: ['Ann'] });
+        const first = view();
+        const home = await screen.findByRole('link', { name: /Home$/ });
+        expect(home).toHaveAttribute('href', '/');
+        first.unmount();
+        fakeQuick.state.gone = true;
+        view();
+        await screen.findByText("This split isn't here");
+        expect(screen.getByRole('link', { name: /Home$/ })).toHaveAttribute('href', '/');
+    });
+
+    it('signed in with the owner key: the split is attached to the account (so Personal lists it)', async () => {
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } });
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'KEY' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' }));
+        view();
+        await waitFor(() => expect(fakeQuick.api.claimQuickSplit).toHaveBeenCalledWith(TOKEN, 'KEY'));
+        expect(fakeQuick.state.claimed).toBe(true);
+    });
+
+    it('signed out, the owner key is not claimed anywhere', async () => {
+        fakeQuick.seed({ people: ['Ann'], ownerKey: 'KEY' });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'KEY' }));
+        view();
+        await screen.findByLabelText('Split title');
+        expect(fakeQuick.api.claimQuickSplit).not.toHaveBeenCalled();
+    });
+
+    it('the account that owns a split is its owner on any device, without the owner key', async () => {
+        const u = userEvent.setup();
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } });
+        fakeQuick.seed({ title: 'Dinner', ownerKey: 'KEY', claimed: true }); // no key in this browser
+        view();
+        const title = await screen.findByLabelText('Split title');
+        await waitFor(() => expect(title).toBeEnabled());
+        expect(screen.getByRole('button', { name: /Lock so nobody can change it/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Copy owner link/ })).not.toBeInTheDocument(); // there is no key to copy
+        await u.clear(title);
+        await u.type(title, 'From my phone{Enter}');
+        await waitFor(() => expect(fakeQuick.state.title).toBe('From my phone'));
+    });
+
     it('a wrong or expired link says so', async () => {
         fakeQuick.state.gone = true;
         view();

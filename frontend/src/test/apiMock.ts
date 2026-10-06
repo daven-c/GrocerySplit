@@ -39,7 +39,7 @@ export const apiMock = {
     listGroups: vi.fn(), listSessions: vi.fn(), listSettlements: vi.fn(), myInvites: vi.fn(), respondToInvite: vi.fn(),
     createGroup: vi.fn(), isAdmin: vi.fn(), getGroup: vi.fn(), getSession: vi.fn(), createSession: vi.fn(),
     deleteGroup: vi.fn(), removeMember: vi.fn(), inviteToGroup: vi.fn(), listPendingInvites: vi.fn(), revokeInvite: vi.fn(),
-    recordSettlement: vi.fn(), addGuest: vi.fn(), setGroupPinned: vi.fn(), listExpenseLog: vi.fn(), saveReceipt: vi.fn(), renameGuest: vi.fn(), removeGuest: vi.fn(), ensurePersonalGroup: vi.fn(), usernameAvailable: vi.fn(), getMyUsername: vi.fn(), updateUsername: vi.fn(), updateSettlement: vi.fn(), listSettlementLog: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
+    recordSettlement: vi.fn(), addGuest: vi.fn(), setGroupPinned: vi.fn(), listMyQuickSplits: vi.fn(), listExpenseLog: vi.fn(), saveReceipt: vi.fn(), renameGuest: vi.fn(), removeGuest: vi.fn(), ensurePersonalGroup: vi.fn(), usernameAvailable: vi.fn(), getMyUsername: vi.fn(), updateUsername: vi.fn(), updateSettlement: vi.fn(), listSettlementLog: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
     deleteItem: vi.fn(), deleteSession: vi.fn(), importReceiptIntoSession: vi.fn(), deleteStaleDrafts: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
     adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
 };
@@ -75,6 +75,7 @@ export function resetMocks() {
     apiMock.listSettlements.mockResolvedValue([]);
     apiMock.listSettlementLog.mockResolvedValue([]);
     apiMock.listExpenseLog.mockResolvedValue([]);
+    apiMock.listMyQuickSplits.mockResolvedValue([]);
     apiMock.usernameAvailable.mockResolvedValue(true);
     apiMock.getMyUsername.mockResolvedValue('daven');
     apiMock.ensurePersonalGroup.mockResolvedValue('gp');

@@ -5,6 +5,8 @@ import { useDismiss } from '../lib/hooks';
 import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
+import { isEnabled } from '../lib/flags';
+import { MyQuickSplit, listMyQuickSplits } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
@@ -46,6 +48,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [pending, setPending] = useState<PendingInvite[]>([]);
     const [email, setEmail] = useState('');
     const [personName, setPersonName] = useState('');
+    const [quickSplits, setQuickSplits] = useState<MyQuickSplit[]>([]);
     const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -71,13 +74,22 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const isOwner = !!group && group.owner_id === me;
     // The transfer change log: reloaded whenever the transfers change or the tab is opened.
     useEffect(() => {
-        if (tab !== 'activity') return;
+        if (tab !== 'activity' || !isEnabled('activity')) return;
         let cancelled = false;
         Promise.all([listExpenseLog(groupId), listSettlementLog(groupId)])
             .then(([e, t]) => !cancelled && setLog(mergeActivity(e, t)))
             .catch(() => !cancelled && setLog([]));
         return () => { cancelled = true; };
     }, [tab, groupId, settlements, sessions]);
+
+    // Quick splits you made while signed in live in Personal until they expire.
+    const inPersonal = !!group?.personal;
+    useEffect(() => {
+        if (!inPersonal || !isEnabled('quickSplit')) return;
+        let cancelled = false;
+        listMyQuickSplits().then(l => !cancelled && setQuickSplits(l)).catch(() => {});
+        return () => { cancelled = true; };
+    }, [inPersonal, groupId]);
 
     const records = useMemo(
         () => sessions.filter(s => s.group_id === groupId).sort((a, b) => b.session_date.localeCompare(a.session_date) || b.updated_at.localeCompare(a.updated_at)),
@@ -373,7 +385,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             <UnderlineTabs id="group" value={tab} onChange={setTab} tabs={[
                 { value: 'expenses', label: `Expenses · ${records.length}` },
                 { value: 'balances', label: 'Balances' },
-                { value: 'activity', label: 'Activity' },
+                ...(isEnabled('activity') ? [{ value: 'activity' as const, label: 'Activity' }] : []),
                 { value: 'members', label: `Members · ${group.members.length}` },
             ]} />
 
@@ -383,6 +395,23 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             <motion.div key={tab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                 {tab === 'expenses' && (
                     <div className="flex flex-col gap-6">
+                        {inPersonal && isEnabled('quickSplit') && quickSplits.length > 0 && (
+                            <div className="flex flex-col gap-2" aria-label="Your quick splits">
+                                <span className="text-[13px] font-medium text-faint">Quick splits · kept until they expire after 30 days without activity</span>
+                                <Card className="overflow-hidden">
+                                    {quickSplits.map((q, i) => (
+                                        <a key={q.token} href={`/s/${q.token}`} className={`flex items-center gap-4 px-[18px] py-3.5 bg-white hover:bg-wash transition-colors ${i ? 'border-t border-rule' : ''}`}>
+                                            <span className="w-[38px] h-[38px] rounded-full grid place-items-center bg-surface shrink-0"><Icon name={q.locked ? 'lock' : 'bolt'} size={18} /></span>
+                                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                <span className="text-[15px] font-semibold truncate">{q.title}</span>
+                                                <span className="text-[13px] text-faint">{q.people} {q.people === 1 ? 'person' : 'people'} · {q.items} {q.items === 1 ? 'item' : 'items'} · expires {new Date(q.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                            </span>
+                                            <span className="text-[15px] font-semibold shrink-0">{fmt(q.total)}</span>
+                                        </a>
+                                    ))}
+                                </Card>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2 h-[42px] px-3.5 bg-white border border-edge rounded-[10px]">
                             <Icon name="search" size={20} className="text-faint" />
                             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search expenses or items" aria-label="Search expenses" className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
@@ -523,7 +552,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     </div>
                 )}
 
-                {tab === 'activity' && (
+                {tab === 'activity' && isEnabled('activity') && (
                     <div className="flex flex-col gap-2">
                         <span className="text-[13px] text-muted">Every expense, receipt and transfer that was added, changed or deleted, by whom, and when.</span>
                         {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (

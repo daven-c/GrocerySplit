@@ -384,6 +384,23 @@ export interface SettlementLogEntry {
 }
 
 /** The change history of a group's transfers, newest first. Written by the database, never by the app. */
+export interface MyQuickSplit {
+    token: string;
+    title: string;
+    locked: boolean;
+    people: number;
+    items: number;
+    total: number;
+    updated_at: string;
+    expires_at: string;
+}
+
+/** The signed-in user's own quick splits that have not expired (they live under Personal until they do). */
+export async function listMyQuickSplits(): Promise<MyQuickSplit[]> {
+    const data = check(await supabase.rpc('my_quick_splits'));
+    return data.map((r: any) => ({ ...r, total: Number(r.total) }));
+}
+
 export interface ExpenseLogEntry {
     id: string;
     group_id: string;

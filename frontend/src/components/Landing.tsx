@@ -3,6 +3,7 @@ import { motion, FROM, enter, tapFlat, spring } from '../lib/motion';
 import { Icon, Logo } from './ui';
 import { toneFor } from '../lib/people';
 import { startQuickSplit } from '../lib/quickSplit';
+import { isEnabled } from '../lib/flags';
 
 interface LandingProps {
     onSignIn: () => void;
@@ -60,7 +61,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
                     </motion.p>
                     <motion.div {...enter(2)} className="flex flex-wrap gap-3 items-center">
                         <motion.button {...tapFlat} onClick={onGetStarted} className="h-12 px-[22px] rounded-xl bg-ink text-white text-base font-semibold hover:bg-ink-hover">Start a group, free</motion.button>
-                        <motion.button {...tapFlat} disabled={starting} onClick={quick} className="h-12 px-[18px] rounded-xl border border-line text-base font-semibold text-ink hover:bg-wash disabled:opacity-60">Split one bill, no account</motion.button>
+                        {isEnabled('quickSplit') && <motion.button {...tapFlat} disabled={starting} onClick={quick} className="h-12 px-[18px] rounded-xl border border-line text-base font-semibold text-ink hover:bg-wash disabled:opacity-60">Split one bill, no account</motion.button>}
                         <a href="#how" className="h-12 px-[18px] flex items-center text-base font-semibold text-ink hover:text-green">See how it works</a>
                     </motion.div>
                 </div>

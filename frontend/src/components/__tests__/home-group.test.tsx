@@ -13,7 +13,7 @@ import { renderWithData } from '../../test/render';
 import Dashboard from '../Dashboard';
 import GroupDetail from '../GroupDetail';
 
-beforeEach(resetMocks);
+beforeEach(() => { resetMocks(); localStorage.removeItem('splitpot:flags'); });
 afterEach(cleanup);
 
 describe('Home', () => {
@@ -400,6 +400,7 @@ describe('Group detail', () => {
     });
 
     it('the Activity tab shows the change ledger: who did what, with before and after', async () => {
+        localStorage.setItem('splitpot:flags', JSON.stringify({ activity: true }));
         const u = userEvent.setup();
         api.listSettlementLog.mockResolvedValue([
             { id: 'l3', group_id: 'g1', settlement_id: 'p1', action: 'deleted', actor: 'u-bo', from_user: 'u-amy', to_user: ME, amount: 65.5, prev_from_user: null, prev_to_user: null, prev_amount: null, created_at: '2026-10-05T12:00:00' },
@@ -415,6 +416,7 @@ describe('Group detail', () => {
     });
 
     it('the Activity tab lists expenses, receipts and transfers together: who created, edited (with what changed) or deleted', async () => {
+        localStorage.setItem('splitpot:flags', JSON.stringify({ activity: true }));
         const u = userEvent.setup();
         const e = (over: any) => ({ group_id: 'g1', session_id: 's', changes: [], kind: 'expense', ...over });
         api.listExpenseLog.mockResolvedValue([
@@ -436,6 +438,37 @@ describe('Group detail', () => {
         expect(screen.getByText(/recorded a transfer/)).toBeInTheDocument();
         const order = screen.getAllByText(/(created|edited|deleted|recorded) an? (expense|receipt|transfer)/).map(x => x.textContent!.match(/created|edited|deleted|recorded/)![0]);
         expect(order).toEqual(['deleted', 'edited', 'recorded', 'created']); // newest first
+    });
+
+    it('the Activity tab is off by default (feature flag), though the data is still recorded', async () => {
+        renderWithData(<GroupDetail {...props} />);
+        await screen.findByRole('tab', { name: /Expenses/ });
+        expect(screen.queryByRole('tab', { name: 'Activity' })).not.toBeInTheDocument();
+        expect(api.listExpenseLog).not.toHaveBeenCalled();
+        expect(api.listSettlementLog).not.toHaveBeenCalled();
+    });
+
+    it('Personal lists your unexpired quick splits (and shared groups do not)', async () => {
+        const g1 = (await import('../../test/apiMock')).group;
+        const qs = [
+            { token: 'a'.repeat(32), title: 'Sushi night', locked: false, people: 3, items: 4, total: 96.5, updated_at: '2026-10-05T10:00:00Z', expires_at: '2026-11-04T10:00:00Z' },
+            { token: 'b'.repeat(32), title: 'Locked lunch', locked: true, people: 1, items: 1, total: 12, updated_at: '2026-10-04T10:00:00Z', expires_at: '2026-11-03T10:00:00Z' },
+        ];
+        api.listMyQuickSplits.mockResolvedValue(qs);
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }, g1]);
+        const personal = renderWithData(<GroupDetail {...props} groupId="gp" />);
+        const list = await screen.findByLabelText('Your quick splits');
+        expect(within(list).getByText('Sushi night')).toBeInTheDocument();
+        expect(within(list).getByText(/3 people · 4 items · expires Nov 4/)).toBeInTheDocument();
+        expect(within(list).getByText('$96.50')).toBeInTheDocument();
+        expect(within(list).getByText('Sushi night').closest('a')).toHaveAttribute('href', `/s/${'a'.repeat(32)}`);
+        expect(within(list).getByText('Locked lunch')).toBeInTheDocument();
+        personal.unmount();
+        api.listMyQuickSplits.mockClear();
+        renderWithData(<GroupDetail {...props} />); // a shared group
+        await screen.findByRole('tab', { name: /Expenses/ });
+        expect(screen.queryByLabelText('Your quick splits')).not.toBeInTheDocument();
+        expect(api.listMyQuickSplits).not.toHaveBeenCalled();
     });
 
     it('shows the group total cost, not counting drafts', async () => {

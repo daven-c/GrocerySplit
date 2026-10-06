@@ -3,6 +3,7 @@ import { motion, tapFlat, spring } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { groupDot, HUES, toneFor } from '../lib/people';
 import { Avatar, Icon, Logo } from './ui';
+import { isEnabled } from '../lib/flags';
 
 export type NavView = 'home' | 'friends' | 'personal' | 'account' | 'admin';
 export type ShellView = 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
@@ -44,7 +45,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     const nav: { id: NavView; label: string; icon: string; badge?: number }[] = [
         { id: 'home', label: 'Home', icon: 'home', badge: invites.length || undefined },
         { id: 'friends', label: 'People', icon: 'group' },
-        { id: 'personal', label: 'Personal', icon: 'lock' },
+        ...(isEnabled('personal') ? [{ id: 'personal' as NavView, label: 'Personal', icon: 'lock' }] : []),
         { id: 'account', label: 'Account', icon: 'person' },
         ...(isAdmin ? [{ id: 'admin' as NavView, label: 'Admin', icon: 'admin_panel_settings' }] : []),
     ];
