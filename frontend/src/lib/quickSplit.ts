@@ -42,6 +42,9 @@ export async function getQuickSplit(token: string): Promise<QuickSplit | null> {
 /** Joining returns this person's private member key: keep it, it is what lets them (and only them) tap their own items. */
 export const joinQuickSplit = async (token: string, name: string): Promise<string> => String(await run('qs_join', { p_token: token, p_name: name }));
 
+/** "I'm Ann": get a fresh private key for a name that is already on the split (after losing a session or switching device). */
+export const reclaimQuickSplit = async (token: string, name: string): Promise<string> => String(await run('qs_reclaim', { p_token: token, p_name: name }));
+
 // Everything about the split itself is the owner's: pass the owner key, or null when signed in as the owning account.
 export const removeQuickPerson = (token: string, name: string, ownerKey: string | null) => run('qs_remove_person', { p_token: token, p_name: name, p_owner_key: ownerKey });
 export const setQuickSplit = (token: string, patch: Partial<Pick<QuickSplit, 'tax' | 'tip' | 'paid_by'>>, ownerKey: string | null) => run('qs_set', { p_token: token, p_patch: patch, p_owner_key: ownerKey });

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { supabase } from '../supabase';
 import {
     addQuickItems, assignQuickItem, createQuickSplit, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit, lockQuickSplit,
-    removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
+    reclaimQuickSplit, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../quickSplit';
 
 const run = process.env.INTEGRATION ? describe : describe.skip;
@@ -58,6 +58,15 @@ run('quick split, signed out, against the real database', () => {
         expect((await getQuickSplit(token))!.items[0].assigned).toEqual([]);
         await setQuickAssigned(token, pasta, ['Ann', 'Bo'], key);
         expect((await getQuickSplit(token))!.items[0].assigned).toHaveLength(2);
+    });
+
+    it('a lost session is recovered by tapping your own name again: a new key, and every device you used keeps working', async () => {
+        const ann2 = await reclaimQuickSplit(token, 'Ann');
+        expect(ann2).not.toBe(ann);
+        await assignQuickItem(token, pasta, 'Ann', true, { memberKey: ann2 });
+        await assignQuickItem(token, pasta, 'Ann', false, { memberKey: ann }); // the first device still works
+        await expect(assignQuickItem(token, pasta, 'Bo', true, { memberKey: ann2 })).rejects.toThrow('only choose items for yourself'); // never for someone else
+        await expect(reclaimQuickSplit(token, 'Nobody')).rejects.toThrow('not on the split');
     });
 
     it('removing a person (owner) clears them from items and from paid-by', async () => {

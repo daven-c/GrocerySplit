@@ -3,7 +3,7 @@ import { motion, MotionConfig, Pop, tapFlat } from '../lib/motion';
 import { supabase } from '../lib/supabase';
 import {
     QuickSplit as QuickSplitData, addQuickItems, assignQuickItem, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit,
-    claimQuickSplit, lockQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
+    claimQuickSplit, lockQuickSplit, reclaimQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../lib/quickSplit';
 import { computeSplit } from '../lib/calc';
 import { RECEIPT_PROMPT, parseReceiptJson } from '../lib/receiptImport';
@@ -132,8 +132,13 @@ export default function QuickSplit({ token }: { token: string }) {
                 const key = await joinQuickSplit(token, n);
                 remember(token, { me: n, memberKey: key });
                 setMemberKey(key);
+            } else if (isOwner) {
+                remember(token, { me: n }); // the owner can act as anyone, no key needed
             } else {
-                remember(token, { me: n });
+                // Lost the session (or a new device)? Picking your own name again gives this device a fresh key.
+                const key = await reclaimQuickSplit(token, n);
+                remember(token, { me: n, memberKey: key });
+                setMemberKey(key);
             }
             setMe(n);
             setNameInput('');
@@ -240,9 +245,9 @@ export default function QuickSplit({ token }: { token: string }) {
                 {!joined && !locked && (
                     <Card className="p-5 flex flex-col gap-3.5">
                         <span className="text-[17px] font-semibold">Who are you?</span>
-                        {isOwner && data.people.length > 0 && (
+                        {data.people.length > 0 && (
                             <div className="flex flex-col gap-2">
-                                <span className="text-[13px] text-muted">You own this split, so you can act as anyone on it.</span>
+                                <span className="text-[13px] text-muted">{isOwner ? 'You own this split, so you can act as anyone on it.' : 'Already on the split? Tap your name to get back in.'}</span>
                                 <div className="flex flex-wrap gap-2">
                                     {data.people.map(p => (
                                         <motion.button key={p} {...tapFlat} onClick={() => join(p, true)} className="h-9 px-3.5 rounded-full border border-line bg-white text-sm font-semibold hover:bg-wash">I'm {p}</motion.button>
@@ -251,7 +256,7 @@ export default function QuickSplit({ token }: { token: string }) {
                             </div>
                         )}
                         <div className="flex flex-col gap-2">
-                            <span className="text-[13px] text-muted">{data.people.length > 0 ? 'Add your name to pick your items. Each name can only be used once, and only you can change your own picks on this device.' : 'Add your name to start. Everyone else adds theirs when they open the link.'}</span>
+                            <span className="text-[13px] text-muted">{data.people.length > 0 ? 'Not there? Add your name. Each name can only be used once.' : 'Add your name to start. Everyone else adds theirs when they open the link.'}</span>
                             <div className="flex gap-2">
                                 <input aria-label="Your name" value={nameInput} maxLength={30} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && join(nameInput, false)} placeholder="Your name" className={`${inputCls} flex-1 min-w-0`} />
                                 <Button height={42} className="px-[18px]" disabled={!nameInput.trim()} onClick={() => join(nameInput, false)}>Join</Button>

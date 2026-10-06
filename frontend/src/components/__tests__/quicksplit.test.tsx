@@ -33,12 +33,11 @@ describe('Quick split page (no account)', () => {
     const OWNER = (extra: object = {}) => localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER', ...extra }));
     const asMember = (name: string) => localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: name, memberKey: `key-${name}` }));
 
-    it('a stranger opens the link and joins with a name that is not taken (they cannot become someone else)', async () => {
+    it('a stranger opens the link and joins with a name that is not taken', async () => {
         const u = userEvent.setup();
         fakeQuick.seed({ people: ['Ann'] });
         view();
         expect(await screen.findByText('Who are you?')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: "I'm Ann" })).not.toBeInTheDocument(); // only the owner can act as someone else
         await u.type(screen.getByLabelText('Your name'), 'ann');
         await u.click(screen.getByRole('button', { name: 'Join' }));
         expect(await screen.findByText('That name is taken.')).toBeInTheDocument();
@@ -48,6 +47,23 @@ describe('Quick split page (no account)', () => {
         expect(await screen.findByText('Cy', { selector: 'strong' })).toBeInTheDocument();
         const saved = JSON.parse(localStorage.getItem(`splitpot:quick:${TOKEN}`)!);
         expect(saved).toMatchObject({ me: 'Cy', memberKey: 'key-Cy' }); // remembered, with the private key
+    });
+
+    it('lost your session? "not you?" then tap your own name to get back in, with a fresh key', async () => {
+        const u = userEvent.setup();
+        fakeQuick.seed({ people: ['Ann', 'Bo'], items: [{ name: 'Pasta', price: 30 }], ownerKey: 'OWNER' });
+        localStorage.clear(); // cleared browser / new device: nothing remembered
+        view();
+        await u.click(await screen.findByRole('button', { name: "I'm Ann" }));
+        await waitFor(() => expect(fakeQuick.api.reclaimQuickSplit).toHaveBeenCalledWith(TOKEN, 'Ann'));
+        expect(await screen.findByText('Ann', { selector: 'strong' })).toBeInTheDocument();
+        expect(JSON.parse(localStorage.getItem(`splitpot:quick:${TOKEN}`)!)).toMatchObject({ me: 'Ann', memberKey: 'key-Ann' });
+        // and now they can pick their own items again
+        await u.click(await screen.findByLabelText('Ann had Pasta'));
+        await waitFor(() => expect(fakeQuick.state.items[0].assigned).toEqual(['Ann']));
+        // "not you?" puts the list back
+        await u.click(screen.getByRole('button', { name: 'not you?' }));
+        expect(await screen.findByRole('button', { name: "I'm Bo" })).toBeInTheDocument();
     });
 
     it('the owner can act as anyone already on the split', async () => {

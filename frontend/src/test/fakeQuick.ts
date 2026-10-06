@@ -48,6 +48,11 @@ export const fakeQuick = {
             s.state.keys[name.trim()] = `key-${name.trim()}`;
             return `key-${name.trim()}`;
         }),
+        reclaimQuickSplit: vi.fn(async (_t: string, name: string) => {
+            guard();
+            if (!s.state.people.includes(name)) throw new Error('That person is not on the split.');
+            return `key-${name}`;
+        }),
         removeQuickPerson: vi.fn(async (_t: string, name: string, key: string | null) => {
             guard(); ownerOnly(key, 'remove people');
             s.state.people = s.state.people.filter(p => p !== name);
