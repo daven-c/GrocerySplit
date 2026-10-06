@@ -8,9 +8,11 @@ import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { isEnabled } from '../lib/flags';
 import { MyQuickSplit, listMyQuickSplits } from '../lib/api';
 import { computeBalances } from '../lib/balances';
-import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
-import { fmt, memberTones } from '../lib/people';
-import { Avatar, AvatarStack, Button, Card, Icon, inputCls } from './ui';
+import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
+import { fmt, fmtSigned, groupTile, memberTones } from '../lib/people';
+import { startQuickSplit } from '../lib/quickSplit';
+import { toast } from './Toast';
+import { Avatar, AvatarStack, Button, Card, Icon, cellCls, inputCls, selectPillCls } from './ui';
 
 export type GroupTab = 'expenses' | 'balances' | 'activity' | 'members';
 
@@ -235,6 +237,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             await inviteToGroup(groupId, u);
             setEmail('');
             setNotice(`Invited @${u}. You can use them in expenses now; it all moves to their account when they accept.`);
+            toast('Invite sent');
             await refresh();
             setPending(await listPendingInvites(groupId));
         } catch (err: any) { setError(err.message); }
@@ -282,6 +285,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         try {
             await recordSettlement(groupId, from, to, amount);
             await refresh();
+            toast('Transfer recorded');
         } catch (err: any) {
             setError(err.message || 'Could not record that payment');
         } finally {
@@ -296,84 +300,108 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         remove: { title: 'Remove member?', body: `Remove ${shownConfirm?.name} from "${group.name}"? They lose access to its expenses.`, action: 'Remove' },
     };
 
+    const isPersonal = !!group.personal;
     const balanceLine = Math.abs(net) < 0.005 ? "Everyone's square" : net > 0 ? `You're owed ${fmt(net)} here` : `You owe ${fmt(net)} here`;
+    const balanceColor = Math.abs(net) < 0.005 ? 'text-body' : net > 0 ? 'text-green' : 'text-coral';
+    const tile = groupTile(group.id);
+    const publishedCount = records.filter(r => !r.draft).length;
+    const dayLabel = (iso: string) => new Date(iso + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const labelCls2 = 'flex flex-col gap-1.5 text-[14px] font-extrabold text-body';
+    const panelCls = 'rounded-[24px] bg-mint p-[18px] flex flex-col gap-3';
 
     return (
-        <div className="max-w-[820px] mx-auto flex flex-col gap-7">
+        <div className="max-w-[1000px] mx-auto flex flex-col gap-6">
             <Modal open={!!confirm} onClose={() => setConfirm(null)}>
                 {shownConfirm && (
                     <>
-                        <h3 className="m-0 mb-2 text-xl font-semibold text-ink">{confirmText[shownConfirm.kind].title}</h3>
-                        <p className="m-0 mb-6 text-muted leading-relaxed">{confirmText[shownConfirm.kind].body}</p>
+                        <h3 className="m-0 mb-2 text-xl font-black text-ink">{confirmText[shownConfirm.kind].title}</h3>
+                        <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">{confirmText[shownConfirm.kind].body}</p>
                         <div className="flex gap-3">
-                            <Button variant="secondary" wide height={42} onClick={() => setConfirm(null)}>Cancel</Button>
-                            <Button wide height={42} className="!bg-coral-strong hover:opacity-90" onClick={handleConfirm}>{confirmText[shownConfirm.kind].action}</Button>
+                            <Button variant="secondary" wide height={44} onClick={() => setConfirm(null)}>Cancel</Button>
+                            <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleConfirm}>{confirmText[shownConfirm.kind].action}</Button>
                         </div>
                     </>
                 )}
             </Modal>
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
-                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h3>
-                <p className="m-0 mb-4 text-sm text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.{pbEditId && ' Changes are logged under Activity.'}</p>
+                <h3 className="m-0 mb-1 text-xl font-black text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h3>
+                <p className="m-0 mb-4 text-sm font-semibold text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.{pbEditId && ' Changes are logged under Activity.'}</p>
                 <div className="flex flex-col gap-3">
-                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who paid
-                        <select value={pbFrom} onChange={e => changePayback(e.target.value, pbTo)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
+                    <label className={labelCls2}>Who paid
+                        <select value={pbFrom} onChange={e => changePayback(e.target.value, pbTo)} className="h-[46px] px-4 border-[1.5px] border-line rounded-full bg-field text-[15px] font-bold text-ink">
                             {group.members.map(m => <option key={m.user_id} value={m.user_id}>{who(m.user_id)}</option>)}
                         </select>
                     </label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who received
-                        <select value={pbTo} onChange={e => changePayback(pbFrom, e.target.value)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
+                    <label className={labelCls2}>Who received
+                        <select value={pbTo} onChange={e => changePayback(pbFrom, e.target.value)} className="h-[46px] px-4 border-[1.5px] border-line rounded-full bg-field text-[15px] font-bold text-ink">
                             {group.members.map(m => <option key={m.user_id} value={m.user_id}>{who(m.user_id)}</option>)}
                         </select>
                     </label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Amount
-                        <span className="flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
-                            <span className="font-mono text-faint">$</span>
-                            <input aria-label="Transfer amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[15px]" />
+                    <label className={labelCls2}>Amount
+                        <span className="flex items-center gap-1 h-[46px] px-4 border-[1.5px] border-line rounded-full bg-field focus-within:border-[oklch(0.55_0.1_158)]">
+                            <span className="font-black text-ghost">$</span>
+                            <input aria-label="Transfer amount" inputMode="decimal" value={pbAmount} onChange={e => setPbAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent text-[15px] font-extrabold" />
                         </span>
                     </label>
-                    {pbFrom && pbFrom === pbTo && <span role="alert" className="text-[13px] text-coral-strong">Pick two different people.</span>}
+                    {pbFrom && pbFrom === pbTo && <span role="alert" className="text-[13.5px] font-bold text-coral-strong">Pick two different people.</span>}
                 </div>
                 <div className="flex gap-3 mt-5">
-                    <Button variant="secondary" wide height={42} onClick={() => setPbOpen(false)}>Cancel</Button>
-                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>{pbEditId ? 'Save changes' : 'Save transfer'}</Button>
+                    <Button variant="secondary" wide height={44} onClick={() => setPbOpen(false)}>Cancel</Button>
+                    <Button wide height={44} disabled={settling || !pbValid} onClick={savePayback}>{pbEditId ? 'Save changes' : 'Save transfer'}</Button>
                 </div>
             </Modal>
 
-            <div className="flex flex-wrap items-end justify-between gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-[18px]">
                 <div className="flex flex-col gap-3 min-w-0">
                     {!narrow && (
-                        <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink"><Icon name="arrow_back" size={16} />Home</motion.button>
+                        <motion.button {...tapFlat} onClick={onBack} className="self-start h-[34px] pl-2 pr-3.5 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-body"><Icon name="arrow_back" size={17} />Home</motion.button>
                     )}
-                    <h1 className="m-0 text-[30px] font-semibold tracking-title truncate">{group.name}</h1>
-                    <div className="flex items-center gap-3">
-                        <AvatarStack size={28} people={group.members.map(m => ({ name: m.name, tone: tones[m.user_id] }))} />
-                        <span className="text-sm text-body">{balanceLine}</span>
-                    </div>
-                    <div className="text-sm text-muted">
-                        Total cost <span className="font-semibold text-ink">{fmt(totalCost)}</span> across {records.filter(r => !r.draft).length} {records.filter(r => !r.draft).length === 1 ? 'expense' : 'expenses'}
-                    </div>
+                    {isPersonal ? (
+                        <div className="flex flex-col gap-1.5 min-w-0">
+                            <h1 className="m-0 text-[32px] font-black tracking-title leading-[1.05] flex items-center gap-2.5">Personal<Icon name="lock" fill size={24} className="text-ghost" /></h1>
+                            <p className="m-0 text-base font-semibold text-muted max-w-[560px]">For expenses that don't belong to any group, plus the quick splits you've made. Only you can see this.</p>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-4 min-w-0">
+                            <span aria-hidden="true" className="w-16 h-16 rounded-full grid place-items-center text-[26px] font-black shrink-0" style={{ background: tile.bg, color: tile.fg }}>{(group.name.trim()[0] ?? '?').toUpperCase()}</span>
+                            <div className="flex flex-col gap-1.5 min-w-0">
+                                <h1 className="m-0 text-[32px] font-black tracking-title leading-[1.05] truncate">{group.name}</h1>
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                    <AvatarStack size={26} people={group.members.map(m => ({ name: m.name, tone: tones[m.user_id] }))} />
+                                    <span className={`text-[15px] font-extrabold ${balanceColor}`}>{balanceLine}</span>
+                                </div>
+                                <div className="text-sm font-semibold text-muted">
+                                    Total cost <span className="font-extrabold text-ink">{fmt(totalCost)}</span> across {publishedCount} {publishedCount === 1 ? 'expense' : 'expenses'}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {isPersonal && (
+                        <div className="text-sm font-semibold text-muted">
+                            Total cost <span className="font-extrabold text-ink">{fmt(totalCost)}</span> across {publishedCount} {publishedCount === 1 ? 'expense' : 'expenses'}
+                        </div>
+                    )}
                 </div>
                 <div className="relative" ref={addRef}>
-                    <Button height={42} className="px-[18px]" aria-expanded={addOpen} aria-haspopup="menu" onClick={() => setAddOpen(o => !o)}>
-                        <Icon name="add" size={20} />Add expense
+                    <Button height={46} className="pl-4 pr-5 text-[15px]" aria-expanded={addOpen} aria-haspopup="menu" onClick={() => setAddOpen(o => !o)}>
+                        <Icon name="add" size={21} />Add expense
                     </Button>
                     <AnimatePresence>
                         {addOpen && (
                             <motion.div
                                 role="menu"
-                                className="absolute right-0 top-12 z-10 w-[300px] max-w-[calc(100vw-32px)] bg-white border border-edge rounded-[14px] shadow-popover p-1.5 flex flex-col origin-top-right"
+                                className="absolute right-0 top-[54px] z-10 w-[300px] max-w-[calc(100vw-32px)] bg-white border border-edge rounded-[22px] shadow-popover p-2 flex flex-col gap-0.5 origin-top-right"
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[
-                                    { icon: 'payments', title: 'Split a total', desc: 'One price: rent, a bill, a trip. Split by amount or shares', go: addExpense },
-                                    { icon: 'receipt_long', title: 'Split a receipt', desc: 'Itemized: tap who had what, or import it from JSON', go: addReceipt },
-                                    { icon: 'swap_horiz', title: 'Record a transfer', desc: 'Someone paid someone back, or you did', go: openPayback },
+                                    { icon: 'payments', hue: 250, title: 'Add an expense', desc: 'Rent, bills, one total split by amounts or shares', go: addExpense },
+                                    { icon: 'checklist', hue: 75, title: 'Split by item', desc: 'Type the items in, or import them from a receipt, then tap who had what', go: addReceipt },
+                                    { icon: 'swap_horiz', hue: 330, title: 'Record a transfer', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
-                                    <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex gap-3 p-3 rounded-[10px] bg-white text-left text-ink hover:bg-wash transition-colors">
-                                        <Icon name={o.icon} size={22} />
-                                        <span className="flex flex-col gap-0.5"><span className="text-sm font-semibold">{o.title}</span><span className="text-[13px] text-muted leading-[1.4]">{o.desc}</span></span>
+                                    <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex items-center gap-3 p-2.5 rounded-2xl bg-white text-left text-ink hover:bg-wash transition-colors">
+                                        <span className="w-10 h-10 rounded-full grid place-items-center shrink-0" style={{ background: `oklch(0.95 0.05 ${o.hue})`, color: `oklch(0.45 0.13 ${o.hue})` }}><Icon name={o.icon} size={21} /></span>
+                                        <span className="flex flex-col gap-px"><span className="text-[15px] font-extrabold">{o.title}</span><span className="text-[13px] font-semibold text-muted leading-[1.35]">{o.desc}</span></span>
                                     </motion.button>
                                 ))}
                             </motion.div>
@@ -383,182 +411,188 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             </div>
 
             <UnderlineTabs id="group" value={tab} onChange={setTab} tabs={[
-                { value: 'expenses', label: `Expenses · ${records.length}` },
+                { value: 'expenses', label: 'Expenses', count: records.length },
                 { value: 'balances', label: 'Balances' },
                 ...(isEnabled('activity') ? [{ value: 'activity' as const, label: 'Activity' }] : []),
-                { value: 'members', label: `Members · ${group.members.length}` },
+                { value: 'members', label: 'Members', count: group.members.length },
             ]} />
 
-            <Pop show={!!error} className="px-3 py-2.5 rounded-[10px] bg-coral-tint text-coral-on text-[13px]">{error}</Pop>
-            <Pop show={!!notice} className="px-3 py-2.5 rounded-[10px] bg-green-tint text-green-on text-[13px]">{notice}</Pop>
+            <Pop show={!!error} className="px-4 py-2.5 rounded-[22px] bg-coral-tint text-coral-on text-[13.5px] font-extrabold">{error}</Pop>
+            <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>
 
             <motion.div key={tab} initial={{ y: 10 }} animate={{ y: 0 }} transition={{ duration: 0.18 }}>
                 {tab === 'expenses' && (
-                    <div className="flex flex-col gap-6">
-                        {inPersonal && isEnabled('quickSplit') && quickSplits.length > 0 && (
-                            <div className="flex flex-col gap-2" aria-label="Your quick splits">
-                                <span className="text-[13px] font-medium text-faint">Quick splits · kept until they expire after 30 days without activity</span>
-                                <Card className="overflow-hidden">
-                                    {quickSplits.map((q, i) => (
-                                        <a key={q.token} href={`/s/${q.token}`} className={`flex items-center gap-4 px-[18px] py-3.5 bg-white hover:bg-wash transition-colors ${i ? 'border-t border-rule' : ''}`}>
-                                            <span className="w-[38px] h-[38px] rounded-full grid place-items-center bg-surface shrink-0"><Icon name={q.locked ? 'lock' : 'bolt'} size={18} /></span>
-                                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                                <span className="text-[15px] font-semibold truncate">{q.title}</span>
-                                                <span className="text-[13px] text-faint">{q.people} {q.people === 1 ? 'person' : 'people'} · {q.items} {q.items === 1 ? 'item' : 'items'} · expires {new Date(q.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                            </span>
-                                            <span className="text-[15px] font-semibold shrink-0">{fmt(q.total)}</span>
-                                        </a>
-                                    ))}
-                                </Card>
+                    <div className="flex flex-wrap gap-5 items-start">
+                        <div className="flex-[999_1_420px] min-w-0 flex flex-col gap-[18px]">
+                            <div className="flex items-center gap-2.5 h-12 px-[18px] rounded-full bg-soft">
+                                <Icon name="search" size={21} className="text-faint" />
+                                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search expenses or items" aria-label="Search expenses" className="flex-1 min-w-0 border-0 bg-transparent text-[15px] font-bold" />
                             </div>
-                        )}
-                        <div className="flex items-center gap-2 h-[42px] px-3.5 bg-white border border-edge rounded-[10px]">
-                            <Icon name="search" size={20} className="text-faint" />
-                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search expenses or items" aria-label="Search expenses" className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
-                        </div>
 
-                        {categoriesPresent.length > 1 && (
-                            <div className="flex flex-wrap gap-2 -mt-2" role="group" aria-label="Filter by category">
-                                {[{ id: null as string | null, label: 'All', icon: '' }, ...categoriesPresent].map(c => {
-                                    const on = category === c.id;
-                                    return (
-                                        <motion.button key={c.label} {...tapFlat} onClick={() => setCategory(on && c.id ? null : c.id)} aria-pressed={on}
-                                            className={`h-8 px-3 rounded-full text-[13px] font-semibold border transition-colors flex items-center gap-1.5 ${on ? 'bg-ink text-white border-ink' : 'bg-white text-body border-line hover:bg-surface'}`}>
-                                            {c.icon && <Icon name={c.icon} size={16} />}{c.label}
-                                        </motion.button>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {months.map(m => (
-                            <div key={m.label} className="flex flex-col gap-2">
-                                <span className="text-[13px] font-medium text-faint">{m.label}</span>
-                                <Card className="overflow-hidden">
-                                    {m.rows.map((e, i) => {
-                                        if (e.type === 'transfer') {
-                                            const p = e.p;
-                                            const d = new Date(e.date + 'T00:00');
-                                            return (
-                                                <motion.div key={`pb-${p.id}`} {...listItem(i)} className={`flex items-center gap-4 px-[18px] py-3.5 bg-white ${i ? 'border-t border-rule' : ''}`}>
-                                                    <span className="w-[42px] shrink-0 flex flex-col items-center leading-[1.1]">
-                                                        <span className="text-[11px] font-medium text-faint">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
-                                                        <span className="text-lg font-semibold">{d.getDate()}</span>
-                                                    </span>
-                                                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                                        <span className="text-[15px] font-semibold truncate flex items-center gap-1.5">
-                                                            <Icon name="swap_horiz" size={16} className="text-green" />{nameOf(p.from_user)} paid {nameOf(p.to_user)}
-                                                        </span>
-                                                        <span className="text-[13px] text-faint">Transfer</span>
-                                                    </span>
-                                                    <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                                        <span className="text-[15px] font-semibold text-green">{fmt(p.amount)}</span>
-                                                        <span className="flex gap-2.5">
-                                                            <button type="button" onClick={() => editPayback(p)} className="text-xs font-semibold text-ink underline underline-offset-2">Edit</button>
-                                                            <button type="button" onClick={() => removePayback(p.id)} className="text-xs font-semibold text-ink underline underline-offset-2">Delete</button>
-                                                        </span>
-                                                    </span>
-                                                </motion.div>
-                                            );
-                                        }
-                                        const r = e.rec;
-                                        const d = new Date(r.session_date + 'T00:00');
-                                        const total = totalOf(r);
-                                        const share = myShare(r, meMember);
-                                        const meta = r.kind === 'expense' ? categoryOf(r.category).label : `${r.items.length} ${r.items.length === 1 ? 'item' : 'items'}`;
+                            {categoriesPresent.length > 1 && (
+                                <div className="flex flex-wrap gap-2 -mt-1.5" role="group" aria-label="Filter by category">
+                                    {[{ id: null as string | null, label: 'All', icon: '' }, ...categoriesPresent].map(c => {
+                                        const on = category === c.id;
                                         return (
-                                            <motion.div key={r.id} {...listItem(i)}>
-                                                <motion.button
-                                                    {...tapFlat}
-                                                    onClick={() => onOpenRecord(r.id, r.kind)}
-                                                    className={`w-full flex items-center gap-4 px-[18px] py-3.5 bg-white text-left hover:bg-wash transition-colors ${i ? 'border-t border-rule' : ''}`}
-                                                >
-                                                    <span className="w-[42px] shrink-0 flex flex-col items-center leading-[1.1]">
-                                                        <span className="text-[11px] font-medium text-faint">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
-                                                        <span className="text-lg font-semibold">{d.getDate()}</span>
-                                                    </span>
-                                                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                                        <span className="text-[15px] font-semibold truncate flex items-center gap-1.5">
-                                                            {r.kind === 'expense' && <Icon name={categoryOf(r.category).icon} size={16} className="text-faint" />}{r.name}
-                                                        </span>
-                                                        <span className="text-[13px] text-faint">{meta} · paid by {nameOf(r.paid_by)}</span>
-                                                    </span>
-                                                    <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                                        <span className="text-[15px] font-semibold">{fmt(total)}</span>
-                                                        <span className="text-xs text-faint">your share {fmt(share)}</span>
-                                                    </span>
-                                                </motion.button>
-                                            </motion.div>
+                                            <motion.button key={c.label} {...tapFlat} onClick={() => setCategory(on && c.id ? null : c.id)} aria-pressed={on}
+                                                className={`h-8 px-3 rounded-full text-[13px] font-extrabold transition-colors flex items-center gap-1.5 ${on ? 'bg-ink text-white' : 'bg-soft text-body hover:bg-[#EFEAE3]'}`}>
+                                                {c.icon && <Icon name={c.icon} size={16} />}{c.label}
+                                            </motion.button>
                                         );
                                     })}
-                                </Card>
-                            </div>
-                        ))}
+                                </div>
+                            )}
 
-                        {months.length === 0 && (
-                            <p className="m-0 p-8 text-center text-sm text-faint border border-dashed border-line rounded-[14px]">
-                                {records.length ? 'Nothing matches that search.' : 'No expenses yet. Add one and everyone in the group can see it.'}
-                            </p>
+                            {months.map(m => (
+                                <div key={m.label} className="flex flex-col gap-2">
+                                    <span className="text-sm font-extrabold text-faint pl-1.5">{m.label}</span>
+                                    <Card className="p-1.5">
+                                        {m.rows.map((e, i) => {
+                                            if (e.type === 'transfer') {
+                                                const p = e.p;
+                                                return (
+                                                    <motion.div key={`pb-${p.id}`} {...listItem(i)} className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-wash transition-colors">
+                                                        <span className="w-11 h-11 rounded-full grid place-items-center shrink-0 bg-green-tint text-green-icon"><Icon name="swap_horiz" size={21} /></span>
+                                                        <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                            <span className="text-base font-extrabold truncate">{nameOf(p.from_user)} paid {nameOf(p.to_user)}</span>
+                                                            <span className="text-[13.5px] font-semibold text-faint">Transfer · {dayLabel(e.date)}</span>
+                                                        </span>
+                                                        <span className="shrink-0 flex flex-col items-end gap-0.5">
+                                                            <span className="text-base font-black text-green">{fmt(p.amount)}</span>
+                                                            <span className="flex gap-2.5">
+                                                                <button type="button" onClick={() => editPayback(p)} className="text-xs font-extrabold text-ink underline underline-offset-2">Edit</button>
+                                                                <button type="button" onClick={() => removePayback(p.id)} className="text-xs font-extrabold text-ink underline underline-offset-2">Delete</button>
+                                                            </span>
+                                                        </span>
+                                                    </motion.div>
+                                                );
+                                            }
+                                            const r = e.rec;
+                                            const total = totalOf(r);
+                                            const share = myShare(r, meMember);
+                                            const lent = r.paid_by === me ? Math.max(0, Math.round((total - share) * 100) / 100) : 0;
+                                            const ct = categoryTone(r.category);
+                                            const meta = `${r.kind === 'receipt' ? `${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} · ` : ''}paid by ${nameOf(r.paid_by)} · ${dayLabel(r.session_date)}`;
+                                            return (
+                                                <motion.div key={r.id} {...listItem(i)}>
+                                                    <motion.button
+                                                        {...tapFlat}
+                                                        onClick={() => onOpenRecord(r.id, r.kind)}
+                                                        className="w-full flex items-center gap-3.5 p-3 rounded-[18px] text-left text-ink hover:bg-wash transition-colors"
+                                                    >
+                                                        <span aria-hidden="true" className="w-11 h-11 rounded-full grid place-items-center shrink-0" style={{ background: ct.bg, color: ct.fg }}><Icon name={categoryOf(r.category).icon} size={21} /></span>
+                                                        <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                                            <span className="text-base font-extrabold truncate">{r.name}</span>
+                                                            <span className="text-[13.5px] font-semibold text-faint">{meta}</span>
+                                                        </span>
+                                                        <span className="shrink-0 flex flex-col items-end gap-px">
+                                                            <span className="text-base font-black">{fmt(total)}</span>
+                                                            {lent > 0.004
+                                                                ? <span className="text-[12.5px] font-bold text-green">you lent {fmt(lent)}</span>
+                                                                : <span className="text-[12.5px] font-bold text-faint">your share {fmt(share)}</span>}
+                                                        </span>
+                                                    </motion.button>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </Card>
+                                </div>
+                            ))}
+
+                            {months.length === 0 && (
+                                <p className="m-0 p-9 text-center text-[15px] font-bold text-faint rounded-[24px] bg-wash">
+                                    {records.length ? 'Nothing matches that search.' : isPersonal ? 'No expenses yet. Add one to keep track of what you paid for others.' : 'No expenses yet. Add one and everyone in the group can see it.'}
+                                </p>
+                            )}
+                        </div>
+
+                        {isPersonal && isEnabled('quickSplit') && (
+                            <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-2.5" aria-label="Your quick splits">
+                                <div className="flex items-center justify-between px-1.5">
+                                    <span className="text-[17px] font-black">Your quick splits</span>
+                                    <motion.button {...tapFlat} onClick={() => startQuickSplit().catch(err => setError(err.message || 'Could not start a quick split'))} className="h-[34px] pl-2 pr-3 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-ink"><Icon name="bolt" size={17} />New</motion.button>
+                                </div>
+                                {quickSplits.map(q => (
+                                    <a key={q.token} href={`/s/${q.token}`} className="flex flex-col gap-3 p-4 rounded-[22px] bg-mint hover:bg-[oklch(0.95_0.04_158)] transition-colors text-ink no-underline">
+                                        <span className="flex justify-between items-start gap-2.5"><span className="text-base font-black flex items-center gap-1.5">{q.locked && <Icon name="lock" fill size={16} />}{q.title}</span><span className="text-base font-black">{fmt(q.total)}</span></span>
+                                        <span className="text-[12.5px] font-bold text-[#5E6A60]">{q.people} {q.people === 1 ? 'person' : 'people'} · {q.items} {q.items === 1 ? 'item' : 'items'} · expires {new Date(q.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                    </a>
+                                ))}
+                                <span className="text-[12.5px] font-semibold text-faint leading-[1.5] px-1.5">Quick splits are shareable pages for one bill. Anyone with the link can join, no account needed. They stay here until they expire after 30 days without activity.</span>
+                            </div>
                         )}
                     </div>
                 )}
 
                 {tab === 'balances' && ledger && (
-                    <div className="flex flex-col gap-5">
-                        <Card className="overflow-hidden">
-                            <div className="px-[18px] pt-4 pb-1 text-[15px] font-semibold">Where everyone stands</div>
-                            {ledger.members.map((m, i) => {
+                    <div className="flex flex-wrap gap-5 items-start">
+                        <Card className="flex-[999_1_420px] min-w-0 p-5 flex flex-col gap-4">
+                            <span className="text-lg font-black">Where everyone stands</span>
+                            {[...ledger.members].sort((a, b) => b.net - a.net).map((m, i) => {
                                 const member = group.members.find(x => x.user_id === m.userId)!;
                                 const square = Math.abs(m.net) < 0.005;
+                                const w = `${(Math.abs(m.net) / maxNet) * 100}%`;
                                 return (
-                                    <motion.div key={m.userId} {...listItem(i)} className={`flex flex-col gap-1.5 px-[18px] py-3.5 ${i ? 'border-t border-rule' : ''}`}>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar name={member.name} tone={tones[m.userId]} size={36} />
-                                            <span className="flex-1 min-w-0 text-[15px] font-semibold truncate">{who(m.userId)}</span>
-                                            <span className="shrink-0 flex flex-col items-end gap-0.5">
-                                                {square ? <span className="text-[15px] font-semibold text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix={m.net < 0 ? '-$' : '$'} className={`text-[15px] font-semibold ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
-                                                <span className="text-xs text-faint">{square ? 'all square' : m.net > 0 ? 'up' : 'down'}</span>
-                                            </span>
-                                        </div>
-                                        <div className="h-[3px] ml-12 rounded-sm bg-surface">
-                                            <motion.div className={`h-full rounded-sm opacity-60 ${m.net > 0 ? 'bg-green' : 'bg-coral'}`} initial={false} animate={{ width: `${(Math.abs(m.net) / maxNet) * 100}%` }} transition={{ duration: 0.25 }} />
-                                        </div>
+                                    <motion.div key={m.userId} {...listItem(i)} className="flex items-center gap-3">
+                                        <Avatar name={member.name} tone={tones[m.userId]} size={40} />
+                                        <span className="w-[84px] shrink-0 flex flex-col">
+                                            <span className="text-[15px] font-extrabold truncate">{who(m.userId)}</span>
+                                            <span className="text-[12.5px] font-bold text-faint">{square ? 'all square' : m.net > 0 ? 'up' : 'down'}</span>
+                                        </span>
+                                        <span className="flex-1 min-w-[60px] grid grid-cols-[1fr_2px_1fr] items-center h-7" aria-hidden="true">
+                                            <span className="flex justify-end"><motion.span className="h-3 rounded-l-md bg-[oklch(0.78_0.12_32)]" initial={false} animate={{ width: m.net < 0 ? w : '0%' }} transition={{ duration: 0.3 }} /></span>
+                                            <span className="h-7 bg-line rounded-[1px]" />
+                                            <span className="flex"><motion.span className="h-3 rounded-r-md bg-[oklch(0.74_0.14_155)]" initial={false} animate={{ width: m.net > 0 ? w : '0%' }} transition={{ duration: 0.3 }} /></span>
+                                        </span>
+                                        <span className="w-[90px] text-right shrink-0">
+                                            {square ? <span className="text-base font-black text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix={m.net < 0 ? '-$' : '+$'} className={`text-base font-black ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                        </span>
                                     </motion.div>
                                 );
                             })}
+                            <span className="text-[12.5px] font-semibold text-faint leading-[1.5]">Up means the group owes them; down means they owe the group. It always adds up to zero.</span>
                         </Card>
 
-                        <div className="flex flex-col gap-2">
-                            <span className="text-[15px] font-semibold">Suggested transfers</span>
-                            {ledger.transfers.length === 0 ? (
-                                <p className="m-0 px-4 py-3.5 rounded-[14px] bg-green-tint text-green-on text-sm font-medium">Everyone's square.</p>
-                            ) : (
-                                <Card className="overflow-hidden">
-                                    <AnimatePresence initial={false}>
-                                        {ledger.transfers.map((t, i) => (
-                                            <motion.div key={`${t.from}-${t.to}`} {...listItem(i)} className={`flex flex-wrap items-center gap-3 px-[18px] py-3 ${i ? 'border-t border-rule' : ''}`}>
-                                                <span className="flex-1 min-w-[160px] text-sm">
-                                                    <span className="font-semibold">{who(t.from)}</span> {t.from === me ? 'pay' : 'pays'} <span className="font-semibold">{who(t.to)}</span>
-                                                </span>
-                                                <span className="font-mono text-sm font-medium">{fmt(t.amount)}</span>
-                                                <Button variant="secondary" height={32} className="rounded-lg px-3 text-[13px]" disabled={settling} onClick={() => settle(t.from, t.to, t.amount)}>Record transfer</Button>
-                                            </motion.div>
-                                        ))}
-                                    </AnimatePresence>
-                                </Card>
+                        <div className="flex-[1_1_320px] min-w-0 flex flex-col gap-2.5">
+                            <span className="text-[17px] font-black px-1.5">Settle up</span>
+                            <AnimatePresence initial={false}>
+                                {ledger.transfers.map((t, i) => {
+                                    const mine = t.from === me || t.to === me;
+                                    const fromM = group.members.find(x => x.user_id === t.from);
+                                    const toM = group.members.find(x => x.user_id === t.to);
+                                    return (
+                                        <motion.div key={`${t.from}-${t.to}`} {...listItem(i)} className={`flex items-center gap-2.5 py-3 pl-3.5 pr-3 rounded-[22px] ${mine ? 'bg-wash' : 'bg-white border border-edge'}`}>
+                                            <span className="flex items-center gap-0.5 shrink-0">
+                                                {fromM && <Avatar name={fromM.name} tone={tones[t.from]} size={34} />}
+                                                <Icon name="arrow_forward" size={18} className="text-ghost" />
+                                                {toM && <Avatar name={toM.name} tone={tones[t.to]} size={34} />}
+                                            </span>
+                                            <span className="flex-1 min-w-0 flex flex-col gap-px">
+                                                <span className="text-[14.5px] font-extrabold"><span>{who(t.from)}</span> {t.from === me ? 'pay' : 'pays'} <span>{who(t.to)}</span></span>
+                                                <span className="text-base font-black">{fmt(t.amount)}</span>
+                                            </span>
+                                            <Button variant={mine ? 'primary' : 'secondary'} height={36} className="px-3.5 text-[13.5px] shrink-0" disabled={settling} onClick={() => settle(t.from, t.to, t.amount)}>
+                                                {t.from === me ? 'Mark paid' : t.to === me ? 'Mark received' : 'Record transfer'}
+                                            </Button>
+                                        </motion.div>
+                                    );
+                                })}
+                            </AnimatePresence>
+                            {ledger.transfers.length === 0 && (
+                                <p className="m-0 flex items-center gap-2.5 p-[18px] rounded-[22px] bg-green-tint text-[15px] font-extrabold text-[oklch(0.38_0.11_155)]"><Icon name="check_circle" fill size={22} />Everyone's square. Nothing to settle.</p>
                             )}
-                            <span className="text-xs leading-normal text-faint">The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.</span>
+                            <span className="text-[12.5px] font-semibold text-faint leading-[1.5] px-1.5">The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.</span>
                         </div>
                     </div>
                 )}
 
                 {tab === 'activity' && isEnabled('activity') && (
-                    <div className="flex flex-col gap-2">
-                        <span className="text-[13px] text-muted">Every expense, receipt and transfer that was added, changed or deleted, by whom, and when.</span>
-                        {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (
-                            <Card className="p-5 text-sm text-muted">No activity yet.</Card>
+                    <div className="flex flex-col gap-2.5">
+                        <span className="text-[13.5px] font-semibold text-muted">Every expense, receipt and transfer that was added, changed or deleted, by whom, and when.</span>
+                        {log === null ? <p className="text-faint font-bold animate-pulse">Loading…</p> : log.length === 0 ? (
+                            <Card className="p-5 text-sm font-bold text-muted">No activity yet.</Card>
                         ) : (
-                            <Card className="overflow-hidden">
+                            <Card className="p-1.5">
                                 {log.map((a, i) => {
                                     const nm = (id: string | null) => (id ? who(id) : 'Someone');
                                     const when = new Date(a.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -567,19 +601,19 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     if (a.type === 'transfer') {
                                         const l = a.entry;
                                         const move = (f: string, t: string, amt: number) => `${nm(f)} → ${nm(t)} ${fmt(amt)}`;
-                                        line = <><span className="font-semibold">{nm(l.actor)}</span> {l.action === 'created' ? 'recorded' : l.action} a transfer</>;
+                                        line = <><span className="font-extrabold">{nm(l.actor)}</span> {l.action === 'created' ? 'recorded' : l.action} a transfer</>;
                                         details = [l.action === 'edited' && l.prev_amount != null ? `${move(l.prev_from_user!, l.prev_to_user!, l.prev_amount)} became ${move(l.from_user, l.to_user, l.amount)}` : move(l.from_user, l.to_user, l.amount)];
                                     } else {
                                         const l = a.entry;
                                         const what = l.kind === 'receipt' ? 'receipt' : 'expense';
-                                        line = <><span className="font-semibold">{nm(l.actor)}</span> {l.action} {what === 'receipt' ? 'a receipt' : 'an expense'}: <span className="font-semibold">{l.name}</span> · {fmt(l.total)}</>;
+                                        line = <><span className="font-extrabold">{nm(l.actor)}</span> {l.action} {what === 'receipt' ? 'a receipt' : 'an expense'}: <span className="font-extrabold">{l.name}</span> · {fmt(l.total)}</>;
                                         details = l.action === 'edited' ? l.changes.map(describeChange) : [];
                                     }
                                     return (
-                                        <div key={a.id} className={`px-[18px] py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
-                                            <span className="text-[14px]">{line}</span>
-                                            {details.map((d, j) => <span key={j} className="text-[13px] text-muted">{d}</span>)}
-                                            <span className="text-xs text-faint">{when}</span>
+                                        <div key={a.id} className={`px-3.5 py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
+                                            <span className="text-[14.5px] font-semibold">{line}</span>
+                                            {details.map((d, j) => <span key={j} className="text-[13.5px] font-semibold text-muted">{d}</span>)}
+                                            <span className="text-xs font-bold text-faint">{when}</span>
                                         </div>
                                     );
                                 })}
@@ -589,57 +623,21 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                 )}
 
                 {tab === 'members' && (
-                    <div className="flex flex-col gap-5">
-                        {group.personal && (
-                            <div className="px-3.5 py-3 rounded-[10px] bg-surface text-sm text-body">This is your Personal section. Only you can see it, and the people in it are just names, so they never show up under People. Use it to keep track of what you paid for others.</div>
-                        )}
-                        {isOwner && !group.personal && (
-                            <Card className="p-[18px] flex flex-col gap-2.5">
-                                <span className="text-[15px] font-semibold">Invite someone</span>
-                                <div className="flex gap-2">
-                                    <span className="flex-1 min-w-0 flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
-                                        <span className="text-faint">@</span>
-                                        <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} placeholder="username" aria-label="Invite by username" autoCapitalize="none" className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
-                                    </span>
-                                    <Button height={42} onClick={handleInvite} disabled={!email.trim()}>Send invite</Button>
-                                </div>
-                                <span className="text-[13px] leading-normal text-faint">While an invite is pending you can already add them to expenses. They'll see the invite when they sign in, and everything moves to their account when they accept. They can find their username under Account.</span>
-                                <AnimatePresence initial={false}>
-                                    {pending.map(p => (
-                                        <motion.div key={p.id} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center gap-2.5 px-3 py-2.5 bg-surface rounded-[10px]">
-                                            <Icon name="schedule" size={18} className="text-faint" />
-                                            <span className="flex-1 text-sm truncate">{p.name}</span>
-                                            <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err: any) { setError(err.message || 'Could not cancel that invite'); } }} className="text-[13px] font-semibold text-coral">Revoke</motion.button>
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-                            </Card>
-                        )}
-                        {isOwner && group.personal && (
-                            <Card className="p-[18px] flex flex-col gap-2.5">
-                                <span className="text-[15px] font-semibold">Add someone by name</span>
-                                <div className="flex gap-2">
-                                    <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className={`${inputCls} flex-1 min-w-0 text-sm`} />
-                                    <Button height={42} variant="secondary" onClick={addPerson} disabled={!personName.trim()}>Add</Button>
-                                </div>
-                                <span className="text-[13px] leading-normal text-faint">No account needed and nobody is notified. Use them in expenses like anyone else.</span>
-                            </Card>
-                        )}
-
-                        <Card className="overflow-hidden">
+                    <div className="flex flex-wrap gap-5 items-start">
+                        <Card className="flex-[999_1_420px] min-w-0 p-1.5">
                             {group.members.map((m, i) => (
-                                <motion.div key={m.user_id} {...listItem(i)} className={`flex flex-wrap items-center gap-3.5 px-[18px] py-3.5 ${i ? 'border-t border-rule' : ''}`}>
-                                    <Avatar name={m.name} tone={tones[m.user_id]} size={36} />
+                                <motion.div key={m.user_id} {...listItem(i)} className="flex flex-wrap items-center gap-3.5 p-3">
+                                    <Avatar name={m.name} tone={tones[m.user_id]} size={44} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                        <span className="text-[15px] font-semibold truncate">{m.name}</span>
-                                        <span className="text-[13px] text-faint truncate">{m.pending ? (group.personal ? 'Just a name' : 'Invite pending') : m.username ? `@${m.username}` : m.email}</span>
+                                        <span className="text-base font-extrabold truncate">{m.name}</span>
+                                        <span className="text-[13.5px] font-semibold text-faint truncate">{m.pending ? (isPersonal ? 'Just a name' : 'Invite pending') : m.username ? `@${m.username}` : m.email}</span>
                                     </span>
-                                    {m.role === 'owner' && <span className="text-xs text-muted">Owner</span>}
-                                    {m.pending && <span className="text-xs font-medium text-muted px-2 py-0.5 rounded-full bg-surface">{group.personal ? 'Name only' : 'Invited'}</span>}
+                                    {m.role === 'owner' && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">Owner</span>}
+                                    {m.pending && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">{isPersonal ? 'Name only' : 'Invited'}</span>}
                                     {isOwner && m.pending && (
-                                        <span className="flex items-center gap-2.5 text-xs font-semibold text-body">
-                                            {group.personal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>}
-                                                                            <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
+                                        <span className="flex items-center gap-2.5 text-xs font-extrabold text-body">
+                                            {isPersonal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>}
+                                            <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
                                     )}
                                     {isOwner && m.role !== 'owner' && !m.pending && (
@@ -648,21 +646,54 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                         </motion.button>
                                     )}
                                     {guestOp?.id === m.user_id && (
-                                        <div className="basis-full flex flex-wrap items-center gap-2 pt-2">
-                                            <input autoFocus aria-label={`New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder="New name" maxLength={60} className="h-9 px-2.5 border border-line rounded-lg bg-white text-sm flex-1 min-w-[160px]" />
-                                            <Button height={36} className="px-3.5" disabled={!guestOp.value.trim()} onClick={runGuestOp}>Rename</Button>
-                                            <Button variant="secondary" height={36} className="px-3.5" onClick={() => setGuestOp(null)}>Cancel</Button>
+                                        <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                                            <input autoFocus aria-label={`New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder="New name" maxLength={60} className="h-10 px-4 border-[1.5px] border-line rounded-full bg-field text-sm font-bold flex-1 min-w-[160px]" />
+                                            <Button height={38} className="px-4" disabled={!guestOp.value.trim()} onClick={runGuestOp}>Rename</Button>
+                                            <Button variant="secondary" height={38} className="px-4" onClick={() => setGuestOp(null)}>Cancel</Button>
                                         </div>
                                     )}
                                 </motion.div>
                             ))}
                         </Card>
 
-                        {group.personal ? null : isOwner ? (
-                            <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'delete' })} className="self-start text-sm font-semibold text-coral">Delete group</motion.button>
-                        ) : (
-                            <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'leave' })} className="self-start text-sm font-semibold text-coral">Leave group</motion.button>
-                        )}
+                        <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5">
+                            {isPersonal && (
+                                <div className="px-4 py-3.5 rounded-[22px] bg-wash text-sm font-semibold text-body leading-[1.5]">This is your Personal section. Only you can see it, and the people in it are just names, so they never show up under People. Use it to keep track of what you paid for others.</div>
+                            )}
+                            {isOwner && !isPersonal && (
+                                <div className={panelCls}>
+                                    <span className="text-base font-black">Invite someone</span>
+                                    <span className="flex items-center gap-1 h-[46px] px-4 border-[1.5px] border-transparent rounded-full bg-white focus-within:border-[oklch(0.55_0.1_158)]">
+                                        <span className="font-bold text-faint">@</span>
+                                        <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} placeholder="username" aria-label="Invite by username" autoCapitalize="none" className="flex-1 min-w-0 border-0 bg-transparent text-[15px] font-bold" />
+                                    </span>
+                                    <Button variant="band" height={44} wide onClick={handleInvite} disabled={!email.trim()}>Send invite</Button>
+                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">While an invite is pending you can already add them to expenses. They'll see the invite when they sign in, and everything moves to their account when they accept. They can find their username under Account.</span>
+                                    <AnimatePresence initial={false}>
+                                        {pending.map(p => (
+                                            <motion.div key={p.id} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white rounded-full">
+                                                <Icon name="schedule" size={18} className="text-faint" />
+                                                <span className="flex-1 min-w-0 text-sm font-bold truncate">{p.name}</span>
+                                                <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err: any) { setError(err.message || 'Could not cancel that invite'); } }} className="text-[13px] font-extrabold text-coral">Revoke</motion.button>
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            )}
+                            {isOwner && isPersonal && (
+                                <div className={panelCls}>
+                                    <span className="text-base font-black">Add someone by name</span>
+                                    <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className="h-[46px] px-4 border-[1.5px] border-transparent rounded-full bg-white text-[15px] font-bold" />
+                                    <Button variant="band" height={44} wide onClick={addPerson} disabled={!personName.trim()}>Add</Button>
+                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">No account needed and nobody is notified. Use them in expenses like anyone else.</span>
+                                </div>
+                            )}
+                            {isPersonal ? null : isOwner ? (
+                                <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'delete' })} className="self-start px-1.5 py-1 text-[14.5px] font-extrabold text-coral">Delete group</motion.button>
+                            ) : (
+                                <motion.button {...tapFlat} onClick={() => setConfirm({ kind: 'leave' })} className="self-start px-1.5 py-1 text-[14.5px] font-extrabold text-coral">Leave group</motion.button>
+                            )}
+                        </div>
                     </div>
                 )}
             </motion.div>

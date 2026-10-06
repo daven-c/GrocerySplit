@@ -15,6 +15,13 @@ export const CATEGORIES = [
     { id: 'other', label: 'Other', icon: 'receipt_long' },
 ] as const;
 
+/** Hue of each category's icon circle (design tokens). */
+export const CATEGORY_HUES: Record<string, number> = { groceries: 155, rent: 250, utilities: 75, dining: 30, travel: 210, transport: 270, entertainment: 330, shopping: 300, other: 60 };
+export const categoryTone = (id: string) => {
+    const h = CATEGORY_HUES[id] ?? 60;
+    return { hue: h, bg: `oklch(0.95 0.05 ${h})`, fg: `oklch(0.45 0.13 ${h})`, pickedFg: `oklch(0.38 0.12 ${h})`, pickedBorder: `oklch(0.85 0.08 ${h})` };
+};
+
 export const categoryOf = (id: string) => CATEGORIES.find(c => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
 
 export const METHODS: { value: SplitMethod; label: string; hint: string }[] = [

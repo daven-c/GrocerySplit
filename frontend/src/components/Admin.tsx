@@ -25,7 +25,7 @@ function generatePassword(): string {
 function Stat({ label, value, tone = 'plain', i = 0 }: { label: string; value: number | string; tone?: 'plain' | 'amber' | 'green'; i?: number }) {
     const tones = { plain: 'bg-white border border-edge text-ink', amber: 'bg-coral-tint text-coral-on', green: 'bg-green-tint text-green-on' };
     return (
-        <motion.div {...enter(i)} className={`rounded-[14px] px-[18px] py-4 flex flex-col gap-0.5 ${tones[tone]}`}>
+        <motion.div {...enter(i)} className={`rounded-[22px] px-[18px] py-4 flex flex-col gap-0.5 ${tones[tone]}`}>
             <span className="text-[13px] opacity-70">{label}</span>
             <span className="text-2xl font-semibold">{typeof value === 'number' ? <AnimatedNumber value={value} decimals={0} /> : value}</span>
         </motion.div>
@@ -124,7 +124,7 @@ export default function Admin() {
                 <motion.button {...tapFlat} onClick={load} aria-label="Refresh" className="w-10 h-10 grid place-items-center rounded-full text-muted hover:bg-surface"><Icon name="refresh" size={22} /></motion.button>
             </div>
 
-            <Pop show={!!error} className="px-3 py-2.5 rounded-[10px] bg-coral-tint text-coral-on text-[13px]">{error}</Pop>
+            <Pop show={!!error} className="px-3 py-2.5 rounded-full bg-coral-tint text-coral-on text-[13px]">{error}</Pop>
 
             <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat i={0} label="Users" value={stats.total} />
@@ -160,7 +160,7 @@ export default function Admin() {
                         <Button type="submit" height={42} className="self-start" disabled={creating}>{creating ? 'Creating…' : 'Create user'}</Button>
                     </form>
                 </Collapse>
-                <Pop show={!!created} className="mx-5 mb-5 p-4 bg-green-tint rounded-[14px] text-sm text-green-on flex flex-col gap-2">
+                <Pop show={!!created} className="mx-5 mb-5 p-4 bg-green-tint rounded-[22px] text-sm text-green-on flex flex-col gap-2">
                     {created && (
                         <>
                             <p className="m-0 font-semibold">User created. Share these credentials now; the password is not shown again.</p>
@@ -173,11 +173,11 @@ export default function Admin() {
 
             <section className="flex flex-col gap-3">
                 <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex-1 flex items-center gap-2 h-[42px] px-3.5 bg-white border border-edge rounded-[10px]">
+                    <div className="flex-1 flex items-center gap-2 h-[42px] px-3.5 bg-white border border-edge rounded-full">
                         <Icon name="search" size={20} className="text-faint" />
                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email..." className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
                     </div>
-                    <select value={sort} onChange={e => setSort(e.target.value as any)} aria-label="Sort users" className="h-[42px] bg-white border border-line rounded-[10px] px-3.5 text-sm font-semibold text-ink">
+                    <select value={sort} onChange={e => setSort(e.target.value as any)} aria-label="Sort users" className="h-[42px] bg-white border border-line rounded-full px-3.5 text-sm font-semibold text-ink">
                         <option value="newest">Newest first</option>
                         <option value="active">Recently active</option>
                         <option value="name">Name A–Z</option>
@@ -187,7 +187,7 @@ export default function Admin() {
                 {loading ? (
                     <p className="text-center text-faint py-8 m-0 animate-pulse">Loading users…</p>
                 ) : shown.length === 0 ? (
-                    <p className="m-0 p-8 text-center text-sm text-faint border border-dashed border-line rounded-[14px]">No matching users.</p>
+                    <p className="m-0 p-8 text-center text-sm text-faint border border-dashed border-line rounded-[22px]">No matching users.</p>
                 ) : (
                     <Card className="overflow-hidden">
                         <AnimatePresence initial={false}>

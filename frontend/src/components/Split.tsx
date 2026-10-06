@@ -5,9 +5,10 @@ import { getSession, updateSession, saveReceipt, addItem, updateItem, deleteItem
 import { ParsedReceipt } from '../lib/receiptImport';
 import ReceiptUpload from './ReceiptUpload';
 import { computeSplit } from '../lib/calc';
-import { CATEGORIES, SplitMethod, convertSplit, everyoneEqual } from '../lib/expenses';
+import { CATEGORIES, SplitMethod, categoryOf, convertSplit, everyoneEqual } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, ChangesBar, DraftBar, Icon } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, selectPillCls } from './ui';
+import { toast as notify } from './Toast';
 
 interface SplitProps {
     sessionId: string;
@@ -26,8 +27,6 @@ const dateMeta = (iso: string) => {
     return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
 };
 
-const smallInput = 'w-16 h-7 px-1.5 border border-edge rounded-md text-right font-mono text-sm bg-wash';
-const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 
 export default function Split({ sessionId, narrow, onBack, onImport, onSaved, onDiscard, onSwitched }: SplitProps) {
     const { me, groups, refresh } = useAppData();
@@ -193,6 +192,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             );
             await refresh();
             setReload(r => r + 1); // pick up the saved version (real ids for new items)
+            notify('Changes saved');
         } catch (err) {
             console.error(err);
             flash('Could not save the changes.');
@@ -220,6 +220,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 ...(paidBy ? { paid_by: paidBy } : {}), category, draft: false,
             });
             await refresh();
+            notify('Receipt saved');
             onSaved();
         } catch (err) {
             console.error(err);
@@ -240,69 +241,64 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
     const maxShare = Math.max(...split.totals.map(([, v]) => v), 0.01);
     const paintTone = paint ? tones[memberByName(paint)?.user_id ?? ''] : null;
+    const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
 
     return (
-        <div className="max-w-[1080px] mx-auto flex flex-col gap-6">
+        <div className="max-w-[1080px] mx-auto flex flex-col gap-5">
             <AnimatePresence>
                 {toast && (
                     <motion.div key="toast" initial={{ opacity: 0.8, y: -24, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: -16, x: '-50%' }} transition={spring}
-                        role="status" className={`fixed top-6 left-1/2 px-6 py-3 rounded-full font-semibold text-sm z-[100] text-white ${toast.type === 'success' ? 'bg-ink' : 'bg-coral-strong'}`}>
+                        role="status" className={`fixed top-6 left-1/2 px-6 py-3 rounded-full font-extrabold text-sm z-[100] text-white ${toast.type === 'success' ? 'bg-ink' : 'bg-coral-strong'}`}>
                         {toast.message}
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <Modal open={!!itemToDelete} onClose={() => setItemToDelete(null)}>
-                <h3 className="m-0 mb-2 text-xl font-semibold">Delete item?</h3>
-                <p className="m-0 mb-6 text-muted leading-relaxed">Remove this item from the receipt? Everyone's totals update.</p>
+                <h3 className="m-0 mb-2 text-xl font-black">Delete item?</h3>
+                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">Remove this item from the receipt? Everyone's totals update.</p>
                 <div className="flex gap-3">
-                    <Button variant="secondary" wide height={42} onClick={() => setItemToDelete(null)}>Cancel</Button>
-                    <Button wide height={42} className="!bg-coral-strong hover:opacity-90" onClick={confirmDeleteItem}>Delete</Button>
+                    <Button variant="secondary" wide height={44} onClick={() => setItemToDelete(null)}>Cancel</Button>
+                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={confirmDeleteItem}>Delete</Button>
                 </div>
             </Modal>
             <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h3 className="m-0 mb-2 text-xl font-semibold">Delete expense?</h3>
-                <p className="m-0 mb-6 text-muted leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
+                <h3 className="m-0 mb-2 text-xl font-black">Delete expense?</h3>
+                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
                 <div className="flex gap-3">
-                    <Button variant="secondary" wide height={42} onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                    <Button wide height={42} className="!bg-coral-strong hover:opacity-90" onClick={handleDeleteReceipt}>Delete</Button>
+                    <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleDeleteReceipt}>Delete</Button>
                 </div>
             </Modal>
 
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div className="flex flex-col gap-2 min-w-0 flex-1">
                     {!narrow && (
-                        <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink"><Icon name="arrow_back" size={16} />{group.name}</motion.button>
+                        <motion.button {...tapFlat} onClick={onBack} className="self-start h-[34px] pl-2 pr-3.5 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-body"><Icon name="arrow_back" size={17} />{group.personal ? 'Personal' : group.name}</motion.button>
                     )}
                     <input
                         value={name}
                         onChange={e => setName(e.target.value)}
                         aria-label="Receipt name"
-                        className="m-0 p-0 border-0 border-b border-dashed border-transparent hover:border-dash bg-transparent text-[30px] font-semibold tracking-title w-full max-w-[420px]"
+                        className="m-0 p-0 border-0 border-b-2 border-dashed border-transparent hover:border-line bg-transparent text-[32px] font-black tracking-title w-full max-w-[440px]"
                     />
-                    <span className="text-sm text-muted">{dateMeta(date)} · {items.length} {items.length === 1 ? 'item' : 'items'} · paid by {payerLabel}</span>
+                    <span className="text-[14.5px] font-semibold text-muted">{dateMeta(date)} · {categoryOf(category).label} · {items.length} {items.length === 1 ? 'item' : 'items'} · paid by {payerLabel}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[13px] text-faint">Total</span>
-                    <AnimatedNumber value={total} prefix="$" className="text-[34px] font-semibold tracking-[-0.03em]" />
+                    <span className="text-[13.5px] font-bold text-faint">Total</span>
+                    <AnimatedNumber value={total} prefix="$" className="text-4xl font-black tracking-[-0.03em] leading-[1.1]" />
                 </div>
             </div>
 
             {record.draft && <DraftBar what="expense" canSave saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
             {dirty && <ChangesBar canSave saving={saving} onSave={handleSaveChanges} onCancel={() => setReload(r => r + 1)} />}
 
-            <div className="flex flex-wrap gap-6 items-start">
+            <div className="flex flex-wrap gap-5 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
-                    <Card className="p-4 flex flex-col gap-3">
-                        <span className="text-sm font-semibold">Itemized receipt</span>
-                        <span className="text-[13px] text-muted -mt-1.5">Tap who had each item. Tax and tip are shared by what each person had.</span>
-                        <Button variant="secondary" height={38} className="self-start px-3.5" disabled={saving} onClick={() => void switchTo('exact')}>Split one total instead</Button>
-                    </Card>
-
-                    <Card className="p-4 flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 py-4 px-[18px] rounded-[24px] bg-wash">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold">{paint ? `Tap the items ${paint} had` : 'Pick a person, then tap their items'}</span>
-                            <span className="text-[13px] text-muted whitespace-nowrap">{assignedCount} of {items.length} assigned</span>
+                            <span className="text-[15px] font-black">{paint ? `Tap the items ${paint} had` : 'Pick a person, then tap their items'}</span>
+                            <span className="text-[13.5px] font-bold text-muted whitespace-nowrap">{assignedCount} of {items.length} assigned</span>
                         </div>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Who to assign">
                             {members.map(m => {
@@ -310,20 +306,20 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                 return (
                                     <motion.button
                                         key={m.user_id}
-                                        {...tap}
+                                        {...tapFlat}
                                         aria-pressed={on}
                                         onClick={() => setPaint(on ? null : m.name)}
-                                        className={`flex items-center gap-2 h-9 pl-1 pr-3.5 rounded-full border text-sm font-semibold transition-colors ${on ? 'bg-ink text-white border-ink' : 'bg-white text-ink border-line'}`}
+                                        className={`flex items-center gap-2 h-[42px] pl-[5px] pr-4 rounded-full text-[15px] font-extrabold transition-colors ${on ? 'bg-ink text-white' : 'bg-white text-ink shadow-[0_1px_3px_rgba(38,34,30,0.1)]'}`}
                                     >
-                                        <Avatar name={m.name} tone={tones[m.user_id]} size={28} />{display(m.name)}
+                                        <Avatar name={m.name} tone={tones[m.user_id]} size={32} />{display(m.name)}
                                     </motion.button>
                                 );
                             })}
                         </div>
-                        <div className="h-1 rounded-sm bg-rule overflow-hidden">
-                            <motion.div className="h-full rounded-sm bg-green-brand" initial={false} animate={{ width: `${items.length ? (assignedCount / items.length) * 100 : 0}%` }} transition={{ duration: 0.25 }} />
+                        <div className="h-1.5 rounded-[3px] bg-line overflow-hidden">
+                            <motion.div className="h-full rounded-[3px] bg-[oklch(0.62_0.15_155)]" initial={false} animate={{ width: `${items.length ? (assignedCount / items.length) * 100 : 0}%` }} transition={{ duration: 0.25 }} />
                         </div>
-                    </Card>
+                    </div>
 
                     <Card className="overflow-hidden">
                         <AnimatePresence initial={false} mode="popLayout">
@@ -341,20 +337,20 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                         exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
                                         transition={spring}
                                         onClick={() => { if (paint && !isEditing) void toggle(item, paint); }}
-                                        className={`flex flex-col gap-2.5 px-[18px] py-3.5 transition-colors ${i ? 'border-t border-rule' : ''} ${paint && !isEditing ? 'cursor-pointer' : ''}`}
+                                        className={`flex flex-col gap-2.5 px-5 py-3.5 transition-colors duration-150 ${i ? 'border-t border-rule' : ''} ${paint && !isEditing ? 'cursor-pointer' : ''}`}
                                         style={{ background: hit && paintTone ? paintTone.tint : '#fff' }}
                                     >
                                         {isEditing && editing ? (
                                             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                                <input autoFocus aria-label="Item name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="flex-1 min-w-0 h-9 px-2.5 border border-line rounded-lg text-[15px]" />
-                                                <span className="flex items-center gap-1 font-mono text-sm">$<input aria-label="Item price" inputMode="decimal" placeholder="0.00" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-20 h-9 px-2 border border-line rounded-lg text-right font-mono text-sm" /></span>
-                                                <motion.button {...tap} aria-label="Save item" onClick={saveEdit} className="w-9 h-9 grid place-items-center rounded-lg bg-ink text-white"><Icon name="check" size={18} /></motion.button>
-                                                <motion.button {...tap} aria-label="Delete item" onClick={() => setItemToDelete(item.id)} className="w-9 h-9 grid place-items-center rounded-lg text-coral hover:bg-coral-tint"><Icon name="delete" size={18} /></motion.button>
+                                                <input autoFocus aria-label="Item name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="flex-1 min-w-0 h-10 px-4 border-[1.5px] border-line rounded-full bg-field text-[15px] font-bold" />
+                                                <span className="flex items-center gap-1 text-sm font-extrabold text-muted">$<input aria-label="Item price" inputMode="decimal" placeholder="0.00" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} onKeyDown={e => e.key === 'Enter' && saveEdit()} className={`w-20 ${cellCls} !h-10`} /></span>
+                                                <motion.button {...tap} aria-label="Save item" onClick={saveEdit} className="w-10 h-10 grid place-items-center rounded-full bg-ink text-white"><Icon name="check" size={18} /></motion.button>
+                                                <motion.button {...tap} aria-label="Delete item" onClick={() => setItemToDelete(item.id)} className="w-10 h-10 grid place-items-center rounded-full text-coral hover:bg-coral-tint"><Icon name="delete" size={18} /></motion.button>
                                             </div>
                                         ) : (
                                             <div className="flex items-baseline gap-3">
-                                                <button type="button" onClick={e => { if (paint) return; /* in paint mode the row handles the tap */ e.stopPropagation(); setEditing({ id: item.id, name: item.name, price: String(item.price) }); }} className="flex-1 min-w-0 text-left text-[15px] font-medium truncate hover:underline decoration-dash underline-offset-4" title="Edit item">{item.name}</button>
-                                                <span className="font-mono text-sm">{fmt(item.price)}</span>
+                                                <button type="button" onClick={e => { if (paint) return; /* in paint mode the row handles the tap */ e.stopPropagation(); setEditing({ id: item.id, name: item.name, price: String(item.price) }); }} className="flex-1 min-w-0 text-left text-base font-extrabold truncate hover:underline decoration-dash underline-offset-4" title="Edit item">{item.name}</button>
+                                                <span className="text-[15.5px] font-extrabold">{fmt(item.price)}</span>
                                             </div>
                                         )}
                                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -369,16 +365,16 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                                         aria-label={`${m.name} on ${item.name}`}
                                                         aria-pressed={on}
                                                         onClick={e => { e.stopPropagation(); void toggle(item, m.name); }}
-                                                        className="w-[30px] h-[30px] rounded-full grid place-items-center text-xs font-semibold p-0"
-                                                        style={{ background: on ? t.bg : 'transparent', color: on ? t.fg : '#B3AFA6', border: `1px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#CFCBC2'}` }}
+                                                        className="w-[34px] h-[34px] rounded-full grid place-items-center text-[13px] font-black p-0"
+                                                        style={{ background: on ? t.bg : '#fff', color: on ? t.fg : '#C2B8AC', border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#E3DBD0'}` }}
                                                     >
                                                         {m.name[0].toUpperCase()}
                                                     </motion.button>
                                                 );
                                             })}
-                                            <motion.button {...tap} onClick={e => { e.stopPropagation(); void toggleAll(item); }} className="h-[30px] px-2.5 rounded-full bg-transparent text-xs font-semibold text-muted hover:bg-surface">All</motion.button>
-                                            <span className={`ml-auto text-xs ${n === 0 ? 'text-coral' : 'text-faint'}`}>
-                                                {n === 0 ? 'Not assigned yet' : n === 1 ? `Just ${only}` : `${fmt(item.price / n)} each`}
+                                            <motion.button {...tapFlat} onClick={e => { e.stopPropagation(); void toggleAll(item); }} className="h-[34px] px-3 rounded-full bg-soft text-[13px] font-extrabold text-body">Everyone</motion.button>
+                                            <span className={`ml-auto text-[13px] font-bold ${n === 0 ? 'text-coral' : 'text-faint'}`}>
+                                                {n === 0 ? 'Nobody yet' : n === 1 ? `Just ${only}` : `${fmt(item.price / n)} each`}
                                             </span>
                                         </div>
                                     </motion.div>
@@ -386,72 +382,68 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                             })}
                         </AnimatePresence>
                         {items.length === 0 && (
-                            <p className="m-0 px-[18px] py-6 text-center text-sm text-faint">No items yet. Add one by hand, or import them from a receipt.</p>
+                            <p className="m-0 px-5 py-6 text-center text-sm font-bold text-faint">No items yet. Add one by hand, or import them from a receipt.</p>
                         )}
-                        <div className="flex bg-wash border-t border-rule">
-                            <motion.button {...tapFlat} onClick={handleAddItem} className="flex-1 flex items-center gap-2 px-[18px] py-3.5 text-sm font-semibold text-body hover:bg-surface transition-colors">
-                                <Icon name="add" size={18} />Add an item
-                            </motion.button>
-                            <motion.button {...tapFlat} onClick={live ? onImport : () => setImporting(true)} className="flex items-center gap-2 px-[18px] py-3.5 border-l border-rule text-sm font-semibold text-body hover:bg-surface transition-colors">
-                                <Icon name="upload_file" size={18} />Import from JSON
-                            </motion.button>
-                        </div>
+                        <motion.button {...tapFlat} onClick={handleAddItem} className="w-full flex items-center gap-2 px-5 py-4 border-t border-rule bg-field text-[15px] font-extrabold text-body hover:bg-wash transition-colors">
+                            <Icon name="add_circle" size={20} />Add an item
+                        </motion.button>
                     </Card>
                 </div>
 
                 <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
                     <Card className="p-5 flex flex-col gap-4">
-                        <span className="text-[15px] font-semibold">Who pays what</span>
+                        <span className="text-lg font-black">Who pays what</span>
                         {split.totals.map(([n, amt]) => {
                             const m = memberByName(n);
                             const t = m ? tones[m.user_id] : null;
                             if (!m || !t) return null;
                             return (
-                                <div key={m.user_id} className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2.5">
-                                        <Avatar name={n} tone={t} size={28} />
-                                        <span className="flex-1 flex flex-col">
-                                            <span className="text-sm font-semibold">{display(n)}</span>
-                                            <span className="text-xs text-faint">{m.user_id === paidBy ? 'paid the bill' : `owes ${payerLabel}`}</span>
-                                        </span>
-                                        <AnimatedNumber value={amt} prefix="$" className="font-mono text-sm font-medium" />
-                                    </div>
-                                    <div className="h-[3px] ml-[38px] rounded-sm bg-surface">
-                                        <motion.div className="h-full rounded-sm opacity-55" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} />
-                                    </div>
+                                <div key={m.user_id} className="flex items-center gap-3">
+                                    <Avatar name={n} tone={t} size={36} />
+                                    <span className="flex-1 flex flex-col gap-[5px]">
+                                        <span className="flex justify-between"><span className="text-[15px] font-extrabold">{display(n)}</span><AnimatedNumber value={amt} prefix="$" className="text-[15.5px] font-black" /></span>
+                                        <span className="h-1.5 rounded-[3px] bg-soft"><motion.span className="block h-full rounded-[3px] opacity-50" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} /></span>
+                                        <span className="text-[12.5px] font-bold text-faint">{m.user_id === paidBy ? 'paid the bill' : `owes ${payerLabel}`}</span>
+                                    </span>
                                 </div>
                             );
                         })}
-                        <div className="border-t border-rule pt-3.5 flex flex-col gap-2.5 text-sm">
-                            <div className="flex justify-between text-body"><span>Items</span><span className="font-mono">{fmt(subtotal)}</span></div>
-                            {split.unassignedSubtotal > 0.004 && <div className="flex justify-between text-coral"><span>Not assigned yet</span><span className="font-mono">{fmt(split.unassignedSubtotal)}</span></div>}
-                            <label className="flex justify-between items-center text-body">Tax<span className="flex items-center gap-0.5 font-mono">$<input aria-label="Tax" inputMode="decimal" value={tax} placeholder="0.00" onChange={e => setTax(e.target.value)} className={smallInput} /></span></label>
-                            <label className="flex justify-between items-center text-body">Tip<span className="flex items-center gap-0.5 font-mono">$<input aria-label="Tip" inputMode="decimal" value={tip} placeholder="0.00" onChange={e => setTip(e.target.value)} className={smallInput} /></span></label>
-                            <div className="flex justify-between font-semibold text-[15px] pt-1"><span>Total</span><AnimatedNumber value={total} prefix="$" className="font-mono" /></div>
+                        <div className="border-t border-rule pt-3.5 flex flex-col gap-2.5 text-[15px] font-bold text-body">
+                            <div className="flex justify-between"><span>Items</span><span>{fmt(subtotal)}</span></div>
+                            {split.unassignedSubtotal > 0.004 && <div className="flex justify-between text-coral"><span>Not assigned yet</span><span>{fmt(split.unassignedSubtotal)}</span></div>}
+                            <label className="flex justify-between items-center">Tax<span className="flex items-center gap-1">$<input aria-label="Tax" inputMode="decimal" value={tax} placeholder="0.00" onChange={e => setTax(e.target.value)} className={`w-20 ${cellCls}`} /></span></label>
+                            <label className="flex justify-between items-center">Tip<span className="flex items-center gap-1">$<input aria-label="Tip" inputMode="decimal" value={tip} placeholder="0.00" onChange={e => setTip(e.target.value)} className={`w-20 ${cellCls}`} /></span></label>
+                            <div className="flex justify-between text-[17px] font-black text-ink pt-0.5"><span>Total</span><AnimatedNumber value={total} prefix="$" /></div>
                         </div>
-                        <p className="m-0 text-xs leading-normal text-faint">Tax and tip are shared in proportion to what each person had. Pennies always add up.</p>
+                        <p className="m-0 text-[13px] font-semibold leading-[1.5] text-faint">Tax and tip are shared in proportion to what each person had. Pennies always add up.</p>
                     </Card>
 
-                    <Card className="px-5 py-4 flex flex-col gap-3">
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
-                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
+                    <div className="bg-wash rounded-[24px] py-4 px-[18px] flex flex-col gap-3">
+                        <label className={labelCls2}>Paid by
+                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
                                 {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
                             </select>
                         </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Date
-                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm text-ink" />
+                        <label className={labelCls2}>Date
+                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-[14.5px] font-bold text-ink" />
                         </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Category
-                            <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
+                        <label className={labelCls2}>Category
+                            <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                             </select>
                         </label>
-                        <div className="flex items-center justify-between pt-1">
-                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral">Delete expense</motion.button>}
-                            <span className="text-xs text-faint" aria-live="polite">{record.draft ? 'Not saved yet' : dirty ? 'Unsaved changes' : 'Saved'}</span>
+                        <div className="flex justify-between items-center pt-1 gap-3">
+                            <motion.button {...tapFlat} onClick={live ? onImport : () => setImporting(true)} className="text-[13.5px] font-extrabold text-body underline underline-offset-[3px]">Import items from a photo</motion.button>
+                            {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13.5px] font-extrabold text-coral">Delete expense</motion.button>}
                         </div>
-                    </Card>
+                    </div>
+
+                    <div className="border-[1.5px] border-dashed border-line rounded-[24px] py-4 px-[18px] flex flex-col gap-2.5">
+                        <span className="text-[15px] font-black">Itemized receipt</span>
+                        <span className="text-[13.5px] font-semibold text-muted leading-[1.45]">Tap who had each item. Tax and tip are shared by what each person had.</span>
+                        <Button variant="secondary" height={38} className="self-start px-4 text-sm" disabled={saving} onClick={() => void switchTo('exact')}>Split one total instead</Button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -19,10 +19,8 @@ afterEach(cleanup);
 describe('Home', () => {
     const props = { user: { id: ME, name: 'Daven Chang' }, narrow: false, newGroupTick: 0, onOpenGroup: vi.fn(), onGoFriends: vi.fn() };
 
-    it('greets by time of day and shows what you are owed across groups', async () => {
+    it('shows what you are owed and what you owe across groups (the greeting lives in the green band)', async () => {
         renderWithData(<Dashboard {...props} />);
-        expect(await screen.findByRole('heading', { level: 1, name: /^(Morning|Afternoon|Evening), Daven$/ })).toBeInTheDocument();
-        expect(screen.getByText("Here's where things stand across your groups.")).toBeInTheDocument();
         // Amy owes 8.85 + 600 - 30, Bo owes 3.97 + 600
         await waitFor(() => expect(screen.getByText('$1,182.82')).toBeInTheDocument(), { timeout: 3000 });
         expect(screen.getByText("You're owed")).toBeInTheDocument();
@@ -64,10 +62,15 @@ describe('Home', () => {
         renderWithData(<Dashboard {...props} />);
         await screen.findByText('Roomies');
         expect(order()).toEqual(['Roomies', 'Ski Trip']); // Roomies has the recent expenses
-        await u.selectOptions(screen.getByLabelText('Sort groups'), 'Name');
+        const sorts = within(screen.getByRole('group', { name: 'Sort groups' }));
+        expect(sorts.getByRole('button', { name: 'Recent' })).toHaveAttribute('aria-pressed', 'true');
+        await u.click(sorts.getByRole('button', { name: 'A–Z' }));
         expect(order()).toEqual(['Roomies', 'Ski Trip']);
-        await u.selectOptions(screen.getByLabelText('Sort groups'), 'Most spent');
+        await u.click(sorts.getByRole('button', { name: 'Balance' }));
         expect(order()).toEqual(['Roomies', 'Ski Trip']);
+        await u.click(sorts.getByRole('button', { name: 'Spent' }));
+        expect(order()).toEqual(['Roomies', 'Ski Trip']);
+        expect(sorts.getByRole('button', { name: 'Spent' })).toHaveAttribute('aria-pressed', 'true');
         expect(localStorage.getItem('splitpot:groupSort')).toBe('spent');
     });
 
@@ -95,16 +98,16 @@ describe('Home', () => {
 
     it('creates a group inline and opens it on its Members tab', async () => {
         const u = userEvent.setup();
-        renderWithData(<Dashboard {...props} />);
+        const { rerender } = renderWithData(<Dashboard {...props} />);
         await screen.findByText('Roomies');
-        await u.click(screen.getByRole('button', { name: /New group/ }));
+        rerender(<Dashboard {...props} newGroupTick={1} />); // the "New group" button in the green band bumps this
         const input = await screen.findByLabelText('Group name');
         await u.type(input, 'Book club{Enter}');
         await waitFor(() => expect(api.createGroup).toHaveBeenCalledWith('Book club'));
         await waitFor(() => expect(props.onOpenGroup).toHaveBeenCalledWith('g9', 'members'));
     });
 
-    it('the sidebar "+" (newGroupTick) opens the creator', async () => {
+    it('the "New group" button (newGroupTick) opens the creator', async () => {
         const { rerender } = renderWithData(<Dashboard {...props} />);
         await screen.findByText('Roomies');
         expect(screen.queryByLabelText('Group name')).not.toBeInTheDocument();
@@ -116,7 +119,8 @@ describe('Home', () => {
         const u = userEvent.setup();
         api.myInvites.mockResolvedValue([{ id: 'inv1', group_id: 'g9', group_name: 'Book Club', inviter_name: 'Sam', created_at: '2026-10-05' }]);
         renderWithData(<Dashboard {...props} />);
-        expect(await screen.findByText('Sam invited you to Book Club')).toBeInTheDocument();
+        expect(await screen.findByText('Sam', { selector: 'b' })).toBeInTheDocument();
+        expect(screen.getByText('Book Club', { selector: 'b' })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Join group' }));
         await waitFor(() => expect(api.respondToInvite).toHaveBeenCalledWith('inv1', true));
     });
@@ -125,7 +129,7 @@ describe('Home', () => {
         const u = userEvent.setup();
         api.myInvites.mockResolvedValue([{ id: 'inv2', group_id: 'g9', group_name: 'Book Club', inviter_name: 'Sam', created_at: '2026-10-05' }]);
         renderWithData(<Dashboard {...props} />);
-        await u.click(await screen.findByRole('button', { name: 'Decline' }));
+        await u.click(await screen.findByRole('button', { name: 'Not now' }));
         await waitFor(() => expect(api.respondToInvite).toHaveBeenCalledWith('inv2', false));
     });
 
@@ -144,21 +148,21 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} />);
         expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
         expect(await screen.findByText("You're owed $1,182.82 here")).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Expenses · 3' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('tab', { name: 'Expenses 3' })).toHaveAttribute('aria-selected', 'true');
         expect(screen.getByText('October')).toBeInTheDocument();
         expect(screen.getByText('September')).toBeInTheDocument();
         // receipt row: items count, payer and your share
         const costco = screen.getByText('Costco').closest('button')!;
-        expect(within(costco).getByText('3 items · paid by Daven')).toBeInTheDocument();
+        expect(within(costco).getByText('3 items · paid by Daven · Oct 1')).toBeInTheDocument();
         expect(within(costco).getByText('$40.10')).toBeInTheDocument();
-        expect(within(costco).getByText('your share $4.88')).toBeInTheDocument();
+        expect(within(costco).getByText('you lent $35.22')).toBeInTheDocument(); // you paid: what the others owe you
         // expense rows: category in place of item count, share from the split
         const rent = screen.getByText('October rent').closest('button')!;
-        expect(within(rent).getByText('Rent & home · paid by Daven')).toBeInTheDocument();
+        expect(within(rent).getByText('paid by Daven · Oct 1')).toBeInTheDocument();
         expect(within(rent).getByText('$2,400.00')).toBeInTheDocument();
-        expect(within(rent).getByText('your share $1,200.00')).toBeInTheDocument();
+        expect(within(rent).getByText('you lent $1,200.00')).toBeInTheDocument();
         const pizza = screen.getByText('Pizza night').closest('button')!;
-        expect(within(pizza).getByText('Dining & drinks · paid by Amy')).toBeInTheDocument();
+        expect(within(pizza).getByText('paid by Amy · Sep 20')).toBeInTheDocument();
         expect(within(pizza).getByText('your share $30.00')).toBeInTheDocument();
     });
 
@@ -200,18 +204,17 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         const menu = await screen.findByRole('menu');
-        expect(within(menu).getAllByRole('menuitem').map(i => within(i).getByText(/^[A-Z]/, { selector: 'span.text-sm' }).textContent)).toEqual(['Split a total', 'Split a receipt', 'Record a transfer']);
-        expect(within(menu).queryByText('Split groceries')).not.toBeInTheDocument(); // groceries are the "By item" split now
-        expect(within(menu).queryByText('Import from a photo')).not.toBeInTheDocument();
+        expect(within(menu).getAllByRole('menuitem').map(i => within(i).getByText(/^[A-Z]/, { selector: 'span.text-\\[15px\\]' }).textContent)).toEqual(['Add an expense', 'Split by item', 'Record a transfer']);
+        expect(within(menu).queryByText('Scan a receipt')).not.toBeInTheDocument(); // importing a receipt lives inside Split by item
         await u.keyboard('{Escape}');
         await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     });
 
-    it('"Split a total" creates a draft expense with nobody selected, to be filled in the editor', async () => {
+    it('"Add an expense" creates a draft expense with nobody selected, to be filled in the editor', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a total'));
+        await u.click(await screen.findByText('Add an expense'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
             groupId: 'g1', kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
             splitMethod: 'exact', splitData: {},
@@ -219,22 +222,22 @@ describe('Group detail', () => {
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense', true));
     });
 
-    it('"Split a receipt" creates an itemized draft with everyone in it, ready to paint or import', async () => {
+    it('"Split by item" creates an itemized draft with everyone in it, ready to paint', async () => {
         const u = userEvent.setup();
         api.createSession.mockResolvedValue('s9');
         const onOpenRecord = vi.fn();
         renderWithData(<GroupDetail {...props} onOpenRecord={onOpenRecord} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a receipt'));
+        await u.click(await screen.findByText('Split by item'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries', draft: true }));
         await waitFor(() => expect(onOpenRecord).toHaveBeenCalledWith('s9', 'receipt', true));
     });
 
-    it('a double click on "Split a total" creates only one record', async () => {
+    it('a double click on "Add an expense" creates only one record', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.dblClick(await screen.findByText('Split a total'));
+        await u.dblClick(await screen.findByText('Add an expense'));
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalled());
         expect(api.createSession).toHaveBeenCalledTimes(1);
     });
@@ -375,9 +378,9 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} />);
         expect(await screen.findByText('Amy paid Daven')).toBeInTheDocument();
         expect(screen.getByText('Daven paid Bo')).toBeInTheDocument();
-        expect(screen.getAllByText('Transfer')).toHaveLength(2);
+        expect(screen.getAllByText(/^Transfer · /)).toHaveLength(2);
         expect(screen.getByText('$50.00')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: 'Expenses · 3' })).toBeInTheDocument(); // transfers are not expenses
+        expect(screen.getByRole('tab', { name: 'Expenses 3' })).toBeInTheDocument(); // transfers are not expenses
         expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2); // including the one Bo recorded
         expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2);
         await u.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
@@ -409,7 +412,7 @@ describe('Group detail', () => {
         ]);
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('tab', { name: 'Activity' }));
-        expect(await screen.findByText(/Bo/, { selector: 'span.font-semibold' })).toBeInTheDocument();
+        expect(await screen.findByText(/Bo/, { selector: 'span.font-extrabold' })).toBeInTheDocument();
         expect(screen.getByText('deleted a transfer', { exact: false })).toBeInTheDocument();
         expect(screen.getByText('Amy → Daven $50.00 became Amy → Daven $65.50')).toBeInTheDocument();
         expect(api.listSettlementLog).toHaveBeenCalledWith('g1');
@@ -563,14 +566,13 @@ describe('Group detail', () => {
         const you = screen.getByText('Daven', { selector: 'span.truncate' }).closest('div')!;
         await waitFor(() => expect(within(you).getByText('up')).toBeInTheDocument());
         expect(screen.getAllByText('down')).toHaveLength(2);
-        const down = screen.getAllByText('down').map(d => d.previousElementSibling!.textContent);
-        expect(down.every(t => t!.startsWith('-$'))).toBe(true); // a negative balance keeps its minus sign
-        expect(within(you).getByText('$1,182.82')).toBeInTheDocument(); // positive ones don't get one
-        expect(await screen.findByText('$1,182.82')).toBeInTheDocument(); // you are up by what both owe you
+        const down = screen.getAllByText('down').map(d => d.closest('div')!.textContent!);
+        expect(down.every(t => /-\$[\d,.]+/.test(t))).toBe(true); // a negative balance keeps its minus sign
+        expect(within(you).getByText('+$1,182.82')).toBeInTheDocument(); // an up balance gets a plus
         // suggested transfers below
-        expect(screen.getByText('Suggested transfers')).toBeInTheDocument();
+        expect(screen.getByText('Settle up')).toBeInTheDocument();
         expect(screen.getByText("The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.")).toBeInTheDocument();
-        const buttons = screen.getAllByRole('button', { name: 'Record transfer' });
+        const buttons = screen.getAllByRole('button', { name: 'Mark received' }); // both involve you, so they say so
         expect(buttons).toHaveLength(2);
         await u.click(buttons[0]); // the biggest first: Bo pays you
         await waitFor(() => expect(api.recordSettlement).toHaveBeenCalledWith('g1', 'u-bo', ME, 603.97));
@@ -579,8 +581,8 @@ describe('Group detail', () => {
     it('Balances: everyone square shows no suggested transfers', async () => {
         api.listSessions.mockResolvedValue([]);
         renderWithData(<GroupDetail {...props} initialTab="balances" />);
-        expect(await screen.findByText("Everyone's square.")).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Record transfer' })).not.toBeInTheDocument();
+        expect(await screen.findByText("Everyone's square. Nothing to settle.")).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Mark|Record transfer/ })).not.toBeInTheDocument();
     });
 
     it('on narrow screens the back link lives in the header, not the page', async () => {

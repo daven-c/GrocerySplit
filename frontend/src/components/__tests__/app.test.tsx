@@ -23,13 +23,14 @@ afterEach(cleanup);
 describe('Landing', () => {
     it('sells general cost splitting, with groceries as one use', () => {
         render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
-        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Split any cost, down to the penny.');
-        expect(screen.getByText(/Groceries, rent, bills and trips/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Split the groceries down to the penny.');
+        expect(screen.getByText(/Snap the receipt, tap who had what/)).toBeInTheDocument();
         expect(screen.getByText('Three steps from crumpled receipt to settled up.')).toBeInTheDocument();
-        expect(screen.getByText('Add the cost')).toBeInTheDocument();
+        expect(screen.getByText('Read the receipt')).toBeInTheDocument();
         expect(screen.getByText('Exact, every time')).toBeInTheDocument();
-        expect(screen.getByText('One balance per friend')).toBeInTheDocument();
-        expect(screen.getByText('Your next shared cost is the easy one.')).toBeInTheDocument();
+        expect(screen.getByText('Rent and bills too')).toBeInTheDocument();
+        expect(screen.getByText('Quick splits, no account')).toBeInTheDocument();
+        expect(screen.getByText('Your next shop is the easy one.')).toBeInTheDocument();
         expect(screen.getByText(/Splitpot · costsplit\.davenc\.dev/)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '#how');
     });
@@ -49,7 +50,7 @@ describe('Auth', () => {
     it('sign up reveals the name field with the new copy; sign in hides it', async () => {
         const u = userEvent.setup();
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
-        expect(screen.getByRole('heading', { name: 'Start a pot' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Start your first pot' })).toBeInTheDocument();
         expect(screen.getByPlaceholderText('What your friends call you')).toBeInTheDocument();
         expect(screen.getByText('Pick a username: people invite you to groups by it, and your email stays private.')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Sign in' }));
@@ -124,35 +125,36 @@ describe('App shell', () => {
     it('signed out: landing page, then sign-up or sign-in screens, and back', async () => {
         const u = userEvent.setup();
         render(<App />);
-        expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Get started' }));
-        expect(await screen.findByRole('heading', { name: 'Start a pot' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Start your first pot' })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Back to the home page' }));
-        expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Sign in' }));
         expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
     });
 
-    it('signed in (wide): sidebar with nav, groups and you; Home shows balances', async () => {
+    it('signed in (wide): green top bar with nav and your avatar; Home shows the balance hero and groups', async () => {
         signIn();
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
-        expect(within(sidebar).getByText('splitpot')).toBeInTheDocument();
-        for (const n of ['Home', 'People', 'Personal', 'Account']) expect(within(sidebar).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
-        expect(within(sidebar).queryByRole('button', { name: /Admin/ })).not.toBeInTheDocument();
-        expect(await within(sidebar).findByRole('button', { name: 'Roomies' })).toBeInTheDocument();
-        expect(within(sidebar).getByText('Daven Chang')).toBeInTheDocument();
-        expect(within(sidebar).getByText('me@x.com')).toBeInTheDocument();
-        expect(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/)).toBeInTheDocument();
-        expect(screen.queryByRole('navigation', { name: 'Primary' })?.closest('aside')).toBeTruthy(); // nav lives in the sidebar
+        const nav = await screen.findByRole('navigation', { name: 'Primary' });
+        expect(screen.getByRole('button', { name: 'Splitpot home' })).toHaveTextContent('splitpot');
+        for (const n of ['Home', 'People', 'Personal']) expect(within(nav).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
+        expect(within(nav).queryByRole('button', { name: /Account|Admin/ })).not.toBeInTheDocument(); // Account is the avatar, not a tab
+        expect(screen.getByRole('button', { name: 'Account' })).toHaveTextContent('D');
+        expect(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /^(Morning|Afternoon|Evening), Daven\. Overall you're (up|down|all square)$/ })).toBeInTheDocument();
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument(); // the sidebar is gone
+        expect(screen.getByRole('button', { name: 'New group' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Quick split/ })).toBeInTheDocument();
     });
 
     it('navigates Home → group → receipt → back, Friends, Account, and signs out to the landing page', async () => {
         const u = userEvent.setup();
         signIn();
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
-        await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        await u.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         expect(await screen.findByRole('heading', { name: 'Roomies' })).toBeInTheDocument();
         await u.click(await screen.findByText('Costco'));
         expect(await screen.findByDisplayValue('Costco')).toBeInTheDocument();
@@ -162,11 +164,11 @@ describe('App shell', () => {
         expect(await screen.findByLabelText('Expense name')).toBeInTheDocument(); // expenses open the expense editor
         await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
-        await u.click(within(sidebar).getByRole('button', { name: 'Account' }));
+        await u.click(screen.getByRole('button', { name: 'Account' }));
         expect(await screen.findByLabelText('Display name')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: /Sign out/ }));
         await waitFor(() => expect(authMock.signOut).toHaveBeenCalled());
-        expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
     });
 
     it('Personal is its own section: it creates your private group once and opens it, highlighted in the nav', async () => {
@@ -176,17 +178,16 @@ describe('App shell', () => {
         api.ensurePersonalGroup.mockImplementation(async () => { api.listGroups.mockResolvedValue([group, personal]); return 'gp'; });
         signIn();
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
         expect(within(sidebar).queryByRole('button', { name: 'Personal', current: 'page' })).not.toBeInTheDocument();
         await u.click(within(sidebar).getByRole('button', { name: 'Personal' }));
         await waitFor(() => expect(api.ensurePersonalGroup).toHaveBeenCalled());
         expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
         expect(within(sidebar).getByRole('button', { name: 'Personal', current: 'page' })).toBeInTheDocument();
-        expect(within(sidebar).queryAllByRole('button', { name: /^Personal$/ })).toHaveLength(1); // not duplicated in the group list
 
         // Home is Home again, even though the last group opened was Personal
         await u.click(within(sidebar).getByRole('button', { name: 'Home' }));
-        expect(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/)).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /^(Morning|Afternoon|Evening), Daven\. Overall/ })).toBeInTheDocument();
         expect(within(sidebar).getByRole('button', { name: 'Home', current: 'page' })).toBeInTheDocument();
         expect(within(sidebar).getByRole('button', { name: 'Personal' })).not.toHaveAttribute('aria-current');
     });
@@ -195,20 +196,20 @@ describe('App shell', () => {
         const u = userEvent.setup();
         signIn();
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
         (window.scrollTo as any).mockClear();
         await u.click(within(sidebar).getByRole('button', { name: 'People' }));
         await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 0));
     });
 
-    it('shows an invite count on Home and the sidebar "+" opens the group creator', async () => {
+    it('shows an invite count on Home and the "New group" button opens the group creator', async () => {
         const u = userEvent.setup();
         signIn();
         api.myInvites.mockResolvedValue([{ id: 'i', group_id: 'g9', group_name: 'Book Club', inviter_name: 'Sam', created_at: '2026-10-05' }]);
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
         expect(await within(sidebar).findByRole('button', { name: /Home\s*1/ })).toBeInTheDocument();
-        await u.click(within(sidebar).getByRole('button', { name: 'New group' }));
+        await u.click(screen.getByRole('button', { name: 'New group' }));
         expect(await screen.findByLabelText('Group name')).toBeInTheDocument();
     });
 
@@ -217,7 +218,7 @@ describe('App shell', () => {
         signIn();
         api.isAdmin.mockResolvedValue(true);
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
         await u.click(await within(sidebar).findByRole('button', { name: /Admin/ }));
         expect(await screen.findByRole('heading', { name: 'Admin' })).toBeInTheDocument();
     });
@@ -226,16 +227,16 @@ describe('App shell', () => {
         localStorage.setItem('splitpot:flags', JSON.stringify({ personal: false, quickSplit: false }));
         signIn();
         const first = render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
         expect(within(sidebar).queryByRole('button', { name: 'Personal' })).not.toBeInTheDocument();
         expect(within(sidebar).getByRole('button', { name: 'People' })).toBeInTheDocument();
         first.unmount();
         render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
-        expect(screen.queryByRole('button', { name: 'Split one bill, no account' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Quick split, no account' })).not.toBeInTheDocument();
         localStorage.removeItem('splitpot:flags');
         cleanup();
         render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
-        expect(screen.getByRole('button', { name: 'Split one bill, no account' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Quick split, no account' })).toBeInTheDocument();
     });
 
     it('narrow screens get a header with the logo and a bottom tab bar instead of the sidebar', async () => {
@@ -245,8 +246,9 @@ describe('App shell', () => {
         render(<App />);
         const tabs = await screen.findByRole('navigation', { name: 'Primary' });
         expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
-        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'People', 'lock' + 'Personal', 'person' + 'Account']);
-        expect(screen.getByRole('banner')).toHaveTextContent('splitpot');
+        expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'People', 'lock' + 'Personal']);
+        expect(screen.getByText('splitpot')).toBeInTheDocument(); // the green band on Home
+        expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument(); // the avatar opens Account
         await u.click(within(tabs).getByRole('button', { name: /People/ }));
         expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();
         expect(screen.getByRole('banner')).toHaveTextContent('People');
@@ -262,7 +264,7 @@ describe('App shell', () => {
         const header = await screen.findByRole('banner');
         await waitFor(() => expect(header).toHaveTextContent('Roomies'));
         await u.click(within(header).getByRole('button', { name: 'Back' }));
-        expect(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/)).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /^(Morning|Afternoon|Evening), Daven\. Overall/ })).toBeInTheDocument();
     });
 });
 
@@ -274,10 +276,10 @@ describe('Drafts in the app shell', () => {
         const base = api.getSession.getMockImplementation()!;
         api.getSession.mockImplementation(async (id: string) => (id === 's9' ? structuredClone(await draftExpense()) : base(id)));
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
-        await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        await u.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a total'));
+        await u.click(await screen.findByText('Add an expense'));
         await screen.findByRole('region', { name: 'Unsaved draft' });
         return { u, sidebar };
     };
@@ -309,10 +311,10 @@ describe('Drafts in the app shell', () => {
         api.getSession.mockImplementation(async (id: string) => (id === 's9' ? structuredClone(rec) : structuredClone((await import('../../test/apiMock')).sessions.find(x => x.id === id)!)));
         api.updateSession.mockImplementation(async (_id: string, patch: any) => { rec = { ...rec, ...patch }; });
         render(<App />);
-        const sidebar = await screen.findByRole('complementary', { name: 'Sidebar' });
-        await u.click(await within(sidebar).findByRole('button', { name: 'Roomies' }));
+        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        await u.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
-        await u.click(await screen.findByText('Split a total'));
+        await u.click(await screen.findByText('Add an expense'));
         await screen.findByLabelText('How much was it?'); // the amount-based body
 
         await u.click(screen.getByRole('button', { name: 'Split by item' }));
@@ -349,7 +351,7 @@ describe('Startup never leaves a blank page', () => {
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         authMock.getSession.mockRejectedValue(new Error('Lock timed out'));
         render(<App />);
-        expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         spy.mockRestore();
     });
 
@@ -361,9 +363,9 @@ describe('Startup never leaves a blank page', () => {
         authMock.onAuthStateChange.mockImplementation((cb: any) => { listener = cb; return { data: { subscription: { unsubscribe() {} } } }; });
         render(<App />);
         await act(async () => { await vi.advanceTimersByTimeAsync(6100); });
-        expect(await screen.findByRole('heading', { level: 1, name: /Split any cost/ })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         act(() => listener('SIGNED_IN', signedInSession));
-        expect(await screen.findByRole('complementary', { name: 'Sidebar' })).toBeInTheDocument();
+        expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
         warn.mockRestore();
         vi.useRealTimers();
     });

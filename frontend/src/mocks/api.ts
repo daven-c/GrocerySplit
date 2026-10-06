@@ -1,6 +1,6 @@
 // In-memory stand-in for lib/api so the whole UI can be exercised in a browser without a backend or
 // credentials: `npm run dev:mock`. Never bundled into production builds.
-import type { Group, Invite, Item, PendingInvite, Session, Settlement, AdminUser, AdminTotals } from '../lib/api';
+import type { Group, Invite, Item, PendingInvite, Session, Settlement, AdminUser, AdminTotals, ExpenseLogEntry, MyQuickSplit, SettlementLogEntry } from '../lib/api';
 
 const ME = 'u-me';
 const wait = <T,>(v: T, ms = 60) => new Promise<T>(r => setTimeout(() => r(v), ms));
@@ -9,9 +9,9 @@ const id = (p: string) => `${p}${seq++}`;
 
 let groups: Group[] = [
     { id: 'g1', name: 'Roomies', owner_id: ME, created_at: '2026-01-01', members: [
-        { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@example.com', role: 'owner' },
-        { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@example.com', role: 'member' },
-        { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@example.com', role: 'member' },
+        { user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@example.com', username: 'daven', role: 'owner' },
+        { user_id: 'u-amy', joined_at: '2026-01-02T00:00:00Z', name: 'Amy', email: 'amy@example.com', username: 'amy_s', role: 'member' },
+        { user_id: 'u-bo', joined_at: '2026-01-03T00:00:00Z', name: 'Bo', email: 'bo@example.com', username: 'bo_b', role: 'member', pending: true },
     ] },
     { id: 'g2', name: 'Ski Trip', owner_id: 'u-amy', created_at: '2026-02-01', members: [
         { user_id: 'u-amy', joined_at: '2026-02-01T00:00:00Z', name: 'Amy', email: 'amy@example.com', role: 'owner' },
@@ -85,3 +85,31 @@ export const adminListUsers = () => wait(structuredClone(users));
 export const adminTotals = (): Promise<AdminTotals> => wait({ groups: 2, receipts: 3, items: 9, settlements: 0 });
 export const adminCreateUser = async (i: any) => wait({ id: id('u'), email: i.email, name: i.name });
 export const adminConfirmUser = async () => wait({ ok: true as const });
+
+// ---- newer API surface (usernames, Personal, pinning, activity, quick splits, atomic receipt saves) ----
+export const usernameAvailable = async (u: string) => wait(u !== 'taken');
+export const getMyUsername = () => wait('daven');
+export const updateUsername = async () => wait(undefined);
+export const setGroupPinned = async (gid: string, pinned: boolean) => { groups = groups.map(g => g.id === gid ? { ...g, members: g.members.map(m => m.user_id === ME ? { ...m, pinned } : m) } : g); return wait(undefined); };
+export const ensurePersonalGroup = async () => {
+    let p = groups.find(g => g.personal);
+    if (!p) {
+        p = { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [{ user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@example.com', username: 'daven', role: 'owner' }] };
+        groups = [...groups, p];
+    }
+    return wait(p.id);
+};
+export const addGuest = async (gid: string, name: string) => { const gidn = id('guest'); groups = groups.map(g => g.id === gid ? { ...g, members: [...g.members, { user_id: gidn, joined_at: new Date().toISOString(), name, email: '', role: 'member', pending: true }] } : g); return wait(gidn); };
+export const renameGuest = async (uid: string, name: string) => { groups = groups.map(g => ({ ...g, members: g.members.map(m => m.user_id === uid ? { ...m, name } : m) })); return wait(undefined); };
+export const removeGuest = async (uid: string) => { groups = groups.map(g => ({ ...g, members: g.members.filter(m => m.user_id !== uid) })); return wait(undefined); };
+export const updateSettlement = async (sid: string, from_user: string, to_user: string, amount: number) => { settlements = settlements.map(s => s.id === sid ? { ...s, from_user, to_user, amount } : s); return wait(undefined); };
+export const listSettlementLog = async (): Promise<SettlementLogEntry[]> => wait([]);
+export const listExpenseLog = async (): Promise<ExpenseLogEntry[]> => wait([]);
+export const listMyQuickSplits = async (): Promise<MyQuickSplit[]> => wait([
+    { token: 'a'.repeat(32), title: 'Sushi night', locked: false, people: 4, items: 6, total: 142.5, updated_at: '2026-10-05T10:00:00Z', expires_at: '2026-11-04T10:00:00Z' },
+    { token: 'b'.repeat(32), title: 'Pizza Friday', locked: true, people: 3, items: 2, total: 48, updated_at: '2026-09-30T10:00:00Z', expires_at: '2026-10-30T10:00:00Z' },
+]);
+export const saveReceipt = async (sid: string, patch: any, items: any[]) => {
+    sessions = sessions.map(s => s.id === sid ? { ...s, ...patch, items: items.map(i => ({ id: i.id ?? id('i'), name: i.name, price: i.price, assigned_users: i.assigned_users })) } : s);
+    return wait(undefined);
+};
