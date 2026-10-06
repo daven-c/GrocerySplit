@@ -356,7 +356,7 @@ describe('Expense editor (general cost splitting)', () => {
         await u.clear(name);
         await u.type(name, 'November rent');
         await u.selectOptions(screen.getByLabelText('Paid by'), 'Bo');
-        await u.click(within(screen.getByRole('group', { name: 'Category' })).getByRole('button', { name: 'Utilities & bills' }));
+        await u.selectOptions(screen.getByLabelText('Category'), 'utilities');
         expect(await screen.findByText(/paid by Bo/)).toBeInTheDocument();
         expect(api.updateSession).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -420,18 +420,17 @@ describe('Expense editor (general cost splitting)', () => {
         expect(api.updateSession).not.toHaveBeenCalled();
     });
 
-    it('category is a row of pills inside the cost card; paid by and date sit beside the totals on wide screens and above the cost on a phone', async () => {
-        const wide = renderWithData(<ExpenseEditor {...props} />);
-        const cost = await screen.findByLabelText('How much was it?');
+    it('the paid by, date and category card is the first card, above the cost, on wide screens and phones', async () => {
         const after = (x: Node, y: Node) => !!(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
-        expect(after(cost, screen.getByLabelText('Paid by'))).toBe(true);
-        const cats = within(screen.getByRole('group', { name: 'Category' }));
-        expect(cats.getByRole('button', { name: 'Rent & home' })).toHaveAttribute('aria-pressed', 'true');
-        expect(cats.getByRole('button', { name: 'Groceries' })).toHaveAttribute('aria-pressed', 'false');
-        wide.unmount();
-        renderWithData(<ExpenseEditor {...props} narrow />);
-        const phoneCost = await screen.findByLabelText('How much was it?');
-        expect(after(screen.getByLabelText('Paid by'), phoneCost)).toBe(true); // details first, as asked for phones
+        for (const narrow of [false, true]) {
+            const view = renderWithData(<ExpenseEditor {...props} narrow={narrow} />);
+            const cost = await screen.findByLabelText('How much was it?');
+            expect(after(screen.getByLabelText('Paid by'), cost)).toBe(true);
+            expect(after(screen.getByLabelText('Date'), cost)).toBe(true);
+            expect(after(screen.getByLabelText('Category'), cost)).toBe(true);
+            expect(screen.getByLabelText('Category')).toHaveValue('rent'); // a select, not pills
+            view.unmount();
+        }
     });
 
     it('a new expense starts with nobody selected', async () => {
@@ -606,7 +605,7 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         await u.clear(name);
         await u.type(name, 'Dinner');
         await u.type(screen.getByLabelText('How much was it?'), '90');
-        await u.click(within(screen.getByRole('group', { name: 'Category' })).getByRole('button', { name: 'Dining & drinks' }));
+        await u.selectOptions(screen.getByLabelText('Category'), 'dining');
         await idle();
         expect(api.updateSession).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save expense' }));

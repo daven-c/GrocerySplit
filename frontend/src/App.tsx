@@ -75,12 +75,11 @@ const App: React.FC = () => {
 
     const discard = useCallback((id: string) => { void deleteSession(id).catch(err => console.error('Could not discard draft', err)); }, []);
 
-    const openRecord = useCallback((id: string, kind: 'receipt' | 'expense', draft = false, opts?: { scan?: boolean }) => {
+    const openRecord = useCallback((id: string, kind: 'receipt' | 'expense', draft = false) => {
         if (draftId && draftId !== id) discard(draftId); // opening something else abandons an unsaved draft
         setDraftId(draft ? id : draftId === id ? id : null);
         setRecordId(id);
-        // "Scan a receipt" starts the new receipt on the import page.
-        setView(kind === 'expense' ? 'expense' : opts?.scan ? 'import' : 'split');
+        setView(kind === 'expense' ? 'expense' : 'split');
     }, [draftId, discard]);
 
     // Walking away from the editor (any screen outside the editor/import flow) discards an unsaved draft.

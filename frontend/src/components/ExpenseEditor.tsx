@@ -3,7 +3,7 @@ import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '..
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
-import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, categoryTone, convertSplit, splitExpense } from '../lib/expenses';
+import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
 import { toast } from './Toast';
@@ -212,7 +212,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const hint = METHODS.find(m => m.value === method)?.hint;
 
     const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
-    // Paid by / date / delete. Beside the totals on wide screens; first on a phone, above the cost.
+    // Paid by / date / category / delete: the first card, above the cost.
     const details = (
         <div className="bg-wash rounded-[24px] py-4 px-[18px] flex flex-col gap-3">
             <label className={labelCls2}>Paid by
@@ -223,6 +223,11 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             </label>
             <label className={labelCls2}>Date
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-[14.5px] font-bold text-ink" />
+            </label>
+            <label className={labelCls2}>Category
+                <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
+                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
             </label>
             {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="self-start text-[13.5px] font-extrabold text-coral pt-1">Delete expense</motion.button>}
         </div>
@@ -260,31 +265,13 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
 
             <div className="flex flex-wrap gap-5 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
-                    {narrow && details}
+                    {details}
 
                     <Card className="p-5 flex flex-col gap-4">
                         <label htmlFor="amount" className="text-base font-black">How much was it?</label>
                         <div className="flex items-center gap-1.5 h-[68px] px-[22px] rounded-[22px] bg-wash">
                             <span className="text-[30px] font-black text-ghost">$</span>
                             <input id="amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent text-[34px] font-black tracking-[-0.02em] text-ink" />
-                        </div>
-                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Category">
-                            {CATEGORIES.map(c => {
-                                const on = category === c.id;
-                                const ct = categoryTone(c.id);
-                                return (
-                                    <motion.button
-                                        key={c.id}
-                                        {...tapFlat}
-                                        aria-pressed={on}
-                                        onClick={() => setCategory(c.id)}
-                                        className="h-9 pl-2.5 pr-3.5 flex items-center gap-1.5 rounded-full text-[13.5px] font-extrabold border-[1.5px] transition-colors"
-                                        style={on ? { background: ct.bg, color: ct.pickedFg, borderColor: ct.pickedBorder } : { background: '#fff', color: '#5E564E', borderColor: '#EDE7DF' }}
-                                    >
-                                        <Icon name={c.icon} size={17} />{c.label}
-                                    </motion.button>
-                                );
-                            })}
                         </div>
                     </Card>
 
@@ -365,8 +352,6 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                         <div className="border-t border-rule pt-3.5 flex justify-between text-[17px] font-black"><span>Total</span><AnimatedNumber value={total} prefix="$" /></div>
                         <p className="m-0 text-[13px] font-semibold leading-[1.5] text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
                     </Card>
-
-                    {!narrow && details}
 
                     <div className="border-[1.5px] border-dashed border-line rounded-[24px] py-4 px-[18px] flex flex-col gap-2.5">
                         <span className="text-[15px] font-black">Have a receipt with items?</span>

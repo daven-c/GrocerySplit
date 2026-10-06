@@ -22,7 +22,7 @@ interface GroupDetailProps {
     narrow: boolean;
     onBack: () => void;
     /** `draft` is true for a record that was just created and is not saved until its author says so. */
-    onOpenRecord: (id: string, kind: 'receipt' | 'expense', draft?: boolean, opts?: { scan?: boolean }) => void;
+    onOpenRecord: (id: string, kind: 'receipt' | 'expense', draft?: boolean) => void;
 }
 
 type Confirm = null | { kind: 'leave' | 'delete' | 'remove'; userId?: string; name?: string };
@@ -154,14 +154,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const memberNames = group.members.map(m => m.name);
 
-    const addReceipt = async (scan = false) => {
+    const addReceipt = async () => {
         setAddOpen(false);
         if (creating.current) return;
         creating.current = true;
         try {
             const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
             await refresh();
-            onOpenRecord(id, 'receipt', true, scan ? { scan: true } : undefined);
+            onOpenRecord(id, 'receipt', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
     };
 
@@ -396,8 +396,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             >
                                 {[
                                     { icon: 'payments', hue: 250, title: 'Add an expense', desc: 'Rent, bills, one total split by amounts or shares', go: addExpense },
-                                    { icon: 'photo_camera', hue: 155, title: 'Scan a receipt', desc: 'Any AI chat reads the photo for you', go: () => addReceipt(true) },
-                                    { icon: 'checklist', hue: 75, title: 'Split by item', desc: 'Type the items in and tap who had what', go: () => addReceipt(false) },
+                                    { icon: 'checklist', hue: 75, title: 'Split by item', desc: 'Type the items in, or import them from a receipt, then tap who had what', go: addReceipt },
                                     { icon: 'swap_horiz', hue: 330, title: 'Record a transfer', desc: 'Someone paid someone back, or you did', go: openPayback },
                                 ].map(o => (
                                     <motion.button key={o.title} role="menuitem" {...tapFlat} onClick={o.go} className="flex items-center gap-3 p-2.5 rounded-2xl bg-white text-left text-ink hover:bg-wash transition-colors">

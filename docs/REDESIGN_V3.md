@@ -7,21 +7,21 @@ The redesign (`design_handoff_splitpot_redesign 2`) is applied as a **visual lay
 - Solid green brand band. The sidebar is gone: desktop has a 72px green top bar (logo, Home / People / Personal / Admin pills, an avatar button that opens Account); phone has a white sticky header with a round back button and a 3-tab bar.
 - Home: green hero with the overall balance (the greeting moved there), balance card, warm invite cards ("Not now" / "Join group"), "Your groups" with sort chips and pin buttons.
 - Group: tile header, "Add expense" popover, filled-pill tabs with counts, month cards with category icon rows ("you lent" / "your share"), two-column Balances with diverging bars and "Mark paid / Mark received", Members with a mint invite panel.
-- Scan a receipt (import), receipt editor (assign panel, chips, "Everyone", share bars), expense editor (category pills, "Split it" card), People, Account, Auth (green half + form), Landing (green hero), Quick split (mint share panel, name pills).
+- Scan a receipt (import), receipt editor (assign panel, chips, "Everyone", share bars), expense editor ("Split it" card), People, Account, Auth (green half + form), Landing (green hero), Quick split (mint share panel, name pills).
 - Toasts (ink pill, 2.4s) after save, join, create group, invite, settle and copy.
 
 ## Missing from the design (kept, restyled to match)
 | Area | The design has no... | What the app does |
 |---|---|---|
 | **Personal** | Balances tab, people management (add by name, rename, remove), search / month grouping / category filter | Personal is the design's two-column page **plus** the same Expenses / Balances / Members tabs as a group |
-| Add menu | "Record a transfer" | A fourth menu item |
+| Add menu | "Record a transfer"; "Scan a receipt" was dropped (importing a receipt is part of Split by item) | The menu is Add an expense / Split by item / Record a transfer |
 | Group list | transfers (with Edit / Delete) | Shown as rows in the month cards |
 | Group | total-cost line, Activity tab | Kept (Activity stays behind the `activity` feature flag, off) |
 | Home | group search, "Spent" sort | Search pill and a 4th sort chip |
 | Home | quick access to groups from a sidebar | Gone with the sidebar (as designed); groups are one click from Home |
 | Members | username invites, name-only people, pending names | Same fields, in the mint panel |
 | Receipt editor | category, "Split one total instead", item rename/delete | Category pill select in the details panel; a dashed "Itemized receipt" card; tapping an item name still edits it |
-| Expense editor | Paid by / date above the cost (an earlier request) | Design layout on desktop (cost first, details beside the totals); on a phone the details come first |
+| Expense editor | (kept as before, by request) | The previous layout: the Paid by / date / category card first, above the cost, with a category select; "Who pays what" and "Have a receipt with items?" on the right |
 | Auth / Account | username fields | Kept |
 | Admin | any screen | Inherits the new tokens only |
 | Quick split | join / "I'm Ann" re-select, owner / guest rules, JSON import, lock, rename, delete, save-to-group | All kept; Tax / Tip live in the "Who owes what" card as designed |
