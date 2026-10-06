@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { useAutosave } from '../lib/hooks';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
 import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, DraftBar, Icon, SplitByTabs } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs } from './ui';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -27,7 +26,7 @@ const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-s
 const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
 
 export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDiscard, onSwitched }: ExpenseEditorProps) {
-    const { me, groups, sessions: sharedSessions, refresh, patchSession } = useAppData();
+    const { me, groups, refresh } = useAppData();
     const [record, setRecord] = useState<Session | null>(null);
     const [name, setName] = useState('');
     const [amount, setAmount] = useState('');
@@ -46,7 +45,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const savedMeta = useRef('');
     const savedSplit = useRef('');
     const legacyRef = useRef<{ method: SplitMethod; data: SplitData } | null>(null);
-    const autosave = useAutosave(600);
+    const [reload, setReload] = useState(0); // bumped by Cancel to put the saved version back
 
     const group = groups.find(g => g.id === record?.group_id);
     const members = group?.members ?? [];
@@ -76,7 +75,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'exact', s.split_data ?? {}]);
         }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
         return () => { cancelled = true; };
-    }, [sessionId]);
+    }, [sessionId, reload]);
 
     // Someone who has left the group can't owe anything, so drop them (saving then cleans the stored split).
     const active = useMemo(() => {
@@ -113,41 +112,34 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
         setValues(Object.fromEntries(ids.map((id, i) => [id, String(parts[i] / 100)])));
     }, [method, even, total, activeKey]);
 
-    // Mirror edits into the shared copy right away so balances elsewhere update immediately. The amount and split
-    // are only mirrored while the split adds up, matching what will actually be saved.
-    useEffect(() => {
-        if (!record) return;
-        patchSession(sessionId, s => ({
-            ...s, name: name.trim() || s.name, session_date: date || s.session_date, category, paid_by: paidBy || s.paid_by,
-            ...(split.valid ? { amount: total, split_method: method, split_data: data } : {}),
-        }));
-    }, [record, name, date, category, paidBy, total, method, data, split.valid, sessionId, patchSession, sharedSessions]);
+    // Existing expenses are edited in place but written only when you press Save (one entry in Activity per save);
+    // Cancel puts the saved version back. A new draft has its own Save / Discard.
+    const metaSig = JSON.stringify([name.trim() || 'Expense', date || record?.session_date, category, paidBy]);
+    const splitSig = JSON.stringify([total, method, data]);
+    const dirty = !!record && !record.draft && (metaSig !== savedMeta.current || splitSig !== savedSplit.current);
 
-    // Details (name, date, category, payer) always autosave. The amount and split only save when the split
-    // adds up, so a half-edited split is never written; edits made meanwhile are not lost either.
-    useEffect(() => {
-        if (!record || record.draft) return; // a new draft saves when you press Save
-        const metaSig = JSON.stringify([name.trim() || 'Expense', date || record.session_date, category, paidBy]);
-        const splitSig = JSON.stringify([total, method, data]);
-        const metaDirty = metaSig !== savedMeta.current;
-        const splitDirty = split.valid && splitSig !== savedSplit.current;
-        if (!metaDirty && !splitDirty) { autosave.cancel(); return; } // nothing to write (or only an invalid split)
-        autosave.schedule(async () => {
+    const handleSaveChanges = async () => {
+        if (!record || !dirty || !split.valid) return;
+        setSaving(true);
+        setError('');
+        try {
             await updateSession(sessionId, {
-                ...(metaDirty ? { name: name.trim() || 'Expense', session_date: date || record.session_date, category, ...(paidBy ? { paid_by: paidBy } : {}) } : {}),
-                ...(splitDirty ? { amount: total, split_method: method, split_data: data } : {}),
+                name: name.trim() || 'Expense', session_date: date || record.session_date, category, ...(paidBy ? { paid_by: paidBy } : {}),
+                amount: total, split_method: method, split_data: data,
             });
-            if (metaDirty) savedMeta.current = metaSig;
-            if (splitDirty) savedSplit.current = splitSig;
-            void refresh();
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [name, total, date, category, paidBy, method, data, record, split.valid]);
+            savedMeta.current = metaSig;
+            savedSplit.current = splitSig;
+            await refresh();
+        } catch (err: any) {
+            setError(err.message || 'Could not save the changes');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // "By item" turns this into an itemized record; any items it had before are still there.
     const switchToItems = async () => {
         if (!record || saving) return;
-        autosave.cancel();
         setSaving(true);
         setError('');
         try {
@@ -215,11 +207,6 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const payerLabel = payer?.name ?? 'someone';
     const display = (_id: string, n: string) => n;
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
-    const status = record.draft
-        ? { text: split.valid ? 'Not saved yet' : `Not saved yet: ${split.problem}`, bad: !split.valid }
-        : !split.valid
-        ? { text: `Not saved yet: ${split.problem}`, bad: true }
-        : { text: autosave.state === 'saving' ? 'Saving…' : autosave.state === 'error' ? "Couldn't save changes" : autosave.state === 'saved' ? 'All changes saved' : 'Changes save automatically', bad: autosave.state === 'error' };
     const hint = METHODS.find(m => m.value === method)?.hint;
 
     return (
@@ -248,11 +235,30 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             </div>
 
             {record.draft && <DraftBar what="expense" canSave={split.valid} problem={split.valid ? null : split.problem} saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
+            {dirty && <ChangesBar canSave={split.valid} problem={split.valid ? null : split.problem} saving={saving} onSave={handleSaveChanges} onCancel={() => setReload(r => r + 1)} />}
 
             {error && <p role="alert" className="m-0 text-[13px] text-coral-strong">{error}</p>}
 
             <div className="flex flex-wrap gap-6 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
+                    <Card className="px-5 py-4 flex flex-col gap-3">
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
+                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
+                                {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                            </select>
+                        </label>
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Date
+                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm text-ink" />
+                        </label>
+                        <label className="flex items-center justify-between gap-3 text-sm text-body">Category
+                            <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
+                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                            </select>
+                        </label>
+                        {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="self-start text-[13px] font-semibold text-coral pt-1">Delete expense</motion.button>}
+                    </Card>
+
                     <Card className="p-5 flex flex-col gap-3">
                         <label htmlFor="amount" className="text-sm font-semibold">How much was it?</label>
                         <div className="flex items-center gap-2 h-14 px-4 border border-line rounded-xl bg-white focus-within:border-ink">
@@ -348,27 +354,6 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                             <span className="text-[13px] text-muted">Tap who had each item instead of splitting one total. Tax and tip are shared by what each person had.</span>
                         </span>
                         <Button variant="secondary" height={38} className="shrink-0 px-3.5" disabled={saving} onClick={switchToItems}>Split by item</Button>
-                    </Card>
-
-                    <Card className="px-5 py-4 flex flex-col gap-3">
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
-                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
-                                {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
-                            </select>
-                        </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Date
-                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm text-ink" />
-                        </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Category
-                            <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
-                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                        </label>
-                        <div className="flex items-center justify-between pt-1 gap-3">
-                            {record.draft ? <span /> : <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13px] font-semibold text-coral shrink-0">Delete expense</motion.button>}
-                            <span className={`text-xs text-right ${status.bad ? 'text-coral' : 'text-faint'}`} aria-live="polite">{status.text}</span>
-                        </div>
                     </Card>
                 </div>
             </div>

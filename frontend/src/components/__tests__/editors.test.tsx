@@ -51,11 +51,14 @@ describe('Receipt editor (grocery split)', () => {
         await u.click(screen.getByRole('button', { name: 'Amy', pressed: false }));
         expect(screen.getByText('Tap the items Amy had')).toBeInTheDocument();
         await u.click(screen.getByText('Chicken Breast'));
-        await waitFor(() => expect(api.updateItem).toHaveBeenCalledWith('s1', 'i3', { assigned_users: ['Amy'] }));
         await waitFor(() => expect(screen.getByText('3 of 3 assigned')).toBeInTheDocument());
         // tapping an item Amy already has removes her
         await u.click(screen.getByText('Eggs'));
-        await waitFor(() => expect(api.updateItem).toHaveBeenCalledWith('s1', 'i2', { assigned_users: ['Bo'] }));
+        expect(api.updateItem).not.toHaveBeenCalled(); // nothing is written until Save
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.arrayContaining([
+            expect.objectContaining({ id: 'i3', assigned_users: ['Amy'] }), expect.objectContaining({ id: 'i2', assigned_users: ['Bo'] }),
+        ])));
         // tap the pill again to leave paint mode
         await u.click(screen.getByRole('button', { name: 'Amy', pressed: true }));
         expect(screen.getByText('Pick a person, then tap their items')).toBeInTheDocument();
@@ -66,26 +69,49 @@ describe('Receipt editor (grocery split)', () => {
         renderWithData(<Split {...props} />);
         await screen.findByText('Eggs');
         await u.click(screen.getByRole('button', { name: 'Daven on Eggs' }));
-        await waitFor(() => expect(api.updateItem).toHaveBeenCalledWith('s1', 'i2', { assigned_users: ['Amy', 'Bo', 'Daven'] }));
+        expect(screen.getByRole('button', { name: 'Daven on Eggs' })).toHaveAttribute('aria-pressed', 'true');
         await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'All' }));
-        await waitFor(() => expect(api.updateItem).toHaveBeenCalledWith('s1', 'i3', { assigned_users: ['Daven', 'Amy', 'Bo'] }));
+        expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'true');
         await u.click(within(rowOf('Chicken Breast')).getByRole('button', { name: 'All' }));
-        await waitFor(() => expect(api.updateItem).toHaveBeenLastCalledWith('s1', 'i3', { assigned_users: [] }));
+        expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'false');
+        expect(api.updateItem).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.arrayContaining([
+            expect.objectContaining({ id: 'i2', assigned_users: ['Amy', 'Bo', 'Daven'] }), expect.objectContaining({ id: 'i3', assigned_users: [] }),
+        ])));
     });
 
-    it('rolls back an assignment and says so when saving fails', async () => {
+    it('a failed save says so and keeps your changes so you can try again', async () => {
         const u = userEvent.setup();
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        api.updateItem.mockRejectedValueOnce(new Error('offline'));
+        api.saveReceipt.mockRejectedValueOnce(new Error('offline'));
         renderWithData(<Split {...props} />);
         await screen.findByText('Chicken Breast');
         await u.click(screen.getByRole('button', { name: 'Bo on Chicken Breast' }));
-        expect(await screen.findByText('Could not save that change.')).toBeInTheDocument();
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'false'));
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        expect(await screen.findByText('Could not save the changes.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'true'); // still there
+        expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeInTheDocument();
         spy.mockRestore();
     });
 
-    it('tax and tip update the totals live and autosave', async () => {
+    it('Cancel throws the edits away and nothing is written', async () => {
+        const u = userEvent.setup();
+        renderWithData(<Split {...props} />);
+        expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument(); // nothing to save yet
+        const name = await screen.findByLabelText('Receipt name');
+        await u.type(name, ' edited');
+        await u.click(screen.getByRole('button', { name: 'Bo on Chicken Breast' }));
+        expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.getByLabelText('Receipt name')).toHaveValue('Costco'));
+        expect(screen.getByRole('button', { name: 'Bo on Chicken Breast' })).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+        expect(api.saveReceipt).not.toHaveBeenCalled();
+        expect(api.updateSession).not.toHaveBeenCalledWith('s1', expect.objectContaining({ name: expect.anything() }));
+    });
+
+    it('tax and tip update the totals live and are saved with Save', async () => {
         const u = userEvent.setup();
         renderWithData(<Split {...props} />);
         await screen.findByDisplayValue('Costco');
@@ -94,11 +120,13 @@ describe('Receipt editor (grocery split)', () => {
         await u.type(tax, '0');
         await u.type(screen.getByLabelText('Tip'), '5');
         await waitFor(() => expect(screen.getAllByText('$41.90').length).toBeGreaterThan(0), SLOW); // 36.90 + 0 + 5
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', expect.objectContaining({ tax: 0, tip: 5 })), SLOW);
-        expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+        expect(api.saveReceipt).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.objectContaining({ tax: 0, tip: 5 }), expect.any(Array)));
+        await waitFor(() => expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument());
     });
 
-    it('renaming, changing the payer, date and category all autosave (no save button)', async () => {
+    it('renaming, changing the payer, date and category are one save', async () => {
         const u = userEvent.setup();
         renderWithData(<Split {...props} />);
         const name = await screen.findByLabelText('Receipt name');
@@ -107,22 +135,27 @@ describe('Receipt editor (grocery split)', () => {
         await u.selectOptions(screen.getByLabelText('Paid by'), 'Amy');
         await u.selectOptions(screen.getByLabelText('Category'), 'Shopping');
         fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-09' } });
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', expect.objectContaining({ name: 'Costco run', paid_by: 'u-amy', category: 'shopping', session_date: '2026-10-09' })), SLOW);
-        expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument();
         expect(await screen.findByText(/paid by Amy/)).toBeInTheDocument();
+        expect(api.saveReceipt).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledTimes(1));
+        expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.objectContaining({ name: 'Costco run', paid_by: 'u-amy', category: 'shopping', session_date: '2026-10-09' }), expect.any(Array));
     });
 
     it('adds an item and opens it for inline editing, then saves name and price', async () => {
         const u = userEvent.setup();
         renderWithData(<Split {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add an item/ }));
-        await waitFor(() => expect(api.addItem).toHaveBeenCalledWith('s1', 'New item', 0));
         const nameInput = await screen.findByLabelText('Item name');
+        expect(api.addItem).not.toHaveBeenCalled(); // an unsaved item lives only on screen
         await u.clear(nameInput);
         await u.type(nameInput, 'Sourdough');
         await u.type(screen.getByLabelText('Item price'), '6.5{Enter}');
-        await waitFor(() => expect(api.updateItem).toHaveBeenCalledWith('s1', 'i9', { name: 'Sourdough', price: 6.5 }));
         expect(await screen.findByText('Sourdough')).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.arrayContaining([
+            { id: undefined, name: 'Sourdough', price: 6.5, assigned_users: [] },
+        ])));
     });
 
     it('editing an item offers delete with a confirmation', async () => {
@@ -136,7 +169,10 @@ describe('Receipt editor (grocery split)', () => {
         expect(api.deleteItem).not.toHaveBeenCalled();
         await u.click(await screen.findByRole('button', { name: 'Delete item' }));
         await u.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
-        await waitFor(() => expect(api.deleteItem).toHaveBeenCalledWith('s1', expect.any(String)));
+        expect(api.deleteItem).not.toHaveBeenCalled(); // removed on screen, written on Save
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.any(Array)));
+        expect(api.saveReceipt.mock.calls[0][2]).toHaveLength(2);
     });
 
     it('deleting the receipt asks first, then returns to the group', async () => {
@@ -159,11 +195,12 @@ describe('Receipt editor (grocery split)', () => {
         renderWithData(<Split {...props} />);
         await screen.findByDisplayValue('Costco');
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: ['Daven', 'Amy', 'Bo'] }));
-        await u.type(screen.getByLabelText('Tip'), '2'); // autosave -> refresh() -> new group objects
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', expect.objectContaining({ tip: 2 })), SLOW);
+        await u.type(screen.getByLabelText('Tip'), '2'); // editing must not re-trigger the sync
         await new Promise(r => setTimeout(r, 300));
         const syncs = api.updateSession.mock.calls.filter(c => Object.keys(c[1]).length === 1 && 'participants' in c[1]);
         expect(syncs).toHaveLength(1);
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.objectContaining({ tip: 2 }), expect.any(Array)));
     });
 
     it('a cleared date shows "No date" on receipts too', async () => {
@@ -180,7 +217,9 @@ describe('Receipt editor (grocery split)', () => {
         renderWithData(<Split {...props} onImport={onImport} />);
         expect(await screen.findByText('No items yet. Add one by hand, or import them from a receipt.')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: /Import from JSON/ }));
-        expect(onImport).toHaveBeenCalled();
+        // an existing receipt imports in place, as unsaved changes
+        expect(await screen.findByRole('heading', { name: 'Import from JSON' })).toBeInTheDocument();
+        expect(onImport).not.toHaveBeenCalled();
     });
 
     it('keeps the stored participant list in step with the group', async () => {
@@ -223,7 +262,8 @@ describe('Expense editor (general cost splitting)', () => {
             const cents = ['Daven', 'Amy', 'Bo'].map(n => within(shareFor(n)).getAllByText(/^\$\d/).at(-1)!.textContent);
             expect(cents.sort()).toEqual(['$33.33', '$33.33', '$33.34']);
         });
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ amount: 100, split_method: 'exact', split_data: { [ME]: 33.34, 'u-amy': 33.33, 'u-bo': 33.33 } })), SLOW);
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ amount: 100, split_method: 'exact', split_data: { [ME]: 33.34, 'u-amy': 33.33, 'u-bo': 33.33 } })));
         await u.clear(screen.getByLabelText('Amy amount'));
         await u.type(screen.getByLabelText('Amy amount'), '10');
         await u.clear(screen.getByLabelText('How much was it?'));
@@ -239,19 +279,20 @@ describe('Expense editor (general cost splitting)', () => {
         expect(amy).toHaveValue('600'); // rent opens as 1200 / 600 / 600
         await u.clear(amy);
         await u.type(amy, '500');
-        expect(await screen.findByText('100.00 still to assign.')).toBeInTheDocument();
-        expect(screen.getByText('Not saved yet: 100.00 still to assign.')).toBeInTheDocument();
-        await new Promise(r => setTimeout(r, 900)); // longer than the debounce
+        expect((await screen.findAllByText('100.00 still to assign.')).length).toBeGreaterThan(0);
+        expect(within(screen.getByRole('region', { name: 'Unsaved changes' })).getByText('100.00 still to assign.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled(); // can't save a split that doesn't add up
         expect(api.updateSession).not.toHaveBeenCalled();
 
         await u.clear(amy);
         await u.type(amy, '700');
-        expect(await screen.findByText('100.00 over the total.')).toBeInTheDocument(); // 1200 + 700 + 600 = 2500
+        expect((await screen.findAllByText('100.00 over the total.')).length).toBeGreaterThan(0); // 1200 + 700 + 600 = 2500
         const bo = screen.getByLabelText('Bo amount');
         await u.clear(bo);
         await u.type(bo, '500');
         expect(await screen.findByText('Adds up to $2,400.00')).toBeInTheDocument(); // 1200 + 700 + 500
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 700, 'u-bo': 500 } })), SLOW);
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 700, 'u-bo': 500 } })));
     });
 
     it('Shares: split in proportion; opens on Shares for a shares expense and saves the weights', async () => {
@@ -267,7 +308,8 @@ describe('Expense editor (general cost splitting)', () => {
         await u.clear(bo);
         await u.type(bo, '2');
         await waitFor(() => expect(within(shareFor('Bo')).getByText('$960.00')).toBeInTheDocument()); // 2:1:2 of 2400
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'shares', split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 2 } })), SLOW);
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'shares', split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 2 } })));
     });
 
     it('switching amounts to shares starts everyone at 1; shares back to amounts keeps the proportions', async () => {
@@ -292,7 +334,8 @@ describe('Expense editor (general cost splitting)', () => {
         await u.click(screen.getByLabelText('Bo is in on this'));
         await waitFor(() => expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument());
         expect(within(shareFor('Bo')).getByText('—')).toBeInTheDocument();
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 1200 } })), SLOW);
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 1200 } })));
     });
 
     it('Select everyone / Clear everyone, and an empty split cannot be saved', async () => {
@@ -300,13 +343,13 @@ describe('Expense editor (general cost splitting)', () => {
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
         await u.click(screen.getByRole('button', { name: 'Clear everyone' }));
-        expect(await screen.findByText('Choose at least one person.')).toBeInTheDocument();
+        expect((await screen.findAllByText('Choose at least one person.')).length).toBeGreaterThan(0);
         expect(screen.getByText('Choose who shares this cost.')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Select everyone' }));
         expect(await screen.findByText('Adds up to $2,400.00')).toBeInTheDocument();
     });
 
-    it('paid by, category and name changes autosave', async () => {
+    it('paid by, category and name changes are saved together, once, with Save', async () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...props} />);
         const name = await screen.findByLabelText('Expense name');
@@ -314,8 +357,12 @@ describe('Expense editor (general cost splitting)', () => {
         await u.type(name, 'November rent');
         await u.selectOptions(screen.getByLabelText('Paid by'), 'Bo');
         await u.selectOptions(screen.getByLabelText('Category'), 'utilities');
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ name: 'November rent', paid_by: 'u-bo', category: 'utilities' })), SLOW);
         expect(await screen.findByText(/paid by Bo/)).toBeInTheDocument();
+        expect(api.updateSession).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledTimes(1));
+        expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ name: 'November rent', paid_by: 'u-bo', category: 'utilities' }));
+        await waitFor(() => expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument());
     });
 
     it('shows the amounts hint and who pays what with the payer labelled', async () => {
@@ -338,12 +385,14 @@ describe('Expense editor (general cost splitting)', () => {
         await screen.findByDisplayValue('October rent');
         await u.click(screen.getByLabelText('Cam is in on this'));
         await u.selectOptions(screen.getByLabelText('Paid by'), 'Cam');
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({
             paid_by: 'g-cam', split_data: { [ME]: 1200, 'u-amy': 600, 'u-bo': 600, 'g-cam': 0 },
-        })), SLOW);
+        })));
     });
 
-    it('drops someone who has left the group from the split, and saves the cleaned split', async () => {
+    it('drops someone who has left the group from the split, and offers to save the cleaned split', async () => {
+        const u = userEvent.setup();
         const { rent } = await import('../../test/apiMock');
         api.getSession.mockResolvedValue({ ...rent, split_data: { ...rent.split_data, 'u-gone': 1 } });
         renderWithData(<ExpenseEditor {...props} />);
@@ -351,26 +400,58 @@ describe('Expense editor (general cost splitting)', () => {
         // 2:1:1 of 2400 among the three current members; the departed member takes no share
         await waitFor(() => expect(within(shareFor('Daven')).getByText('$1,200.00')).toBeInTheDocument());
         expect(screen.getByText('Adds up to $2,400.00')).toBeInTheDocument();
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 600, 'u-bo': 600 } })), SLOW);
+        expect(api.updateSession).not.toHaveBeenCalled(); // nothing is written behind your back
+        await u.click(await screen.findByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({ split_method: 'exact', split_data: { [ME]: 1200, 'u-amy': 600, 'u-bo': 600 } })));
     });
 
-    it('edits to the name, payer and category still save while the split is invalid, without writing the split', async () => {
+    it('Cancel puts the saved version back, and nothing was written', async () => {
+        const u = userEvent.setup();
+        renderWithData(<ExpenseEditor {...props} />);
+        const name = await screen.findByLabelText('Expense name');
+        await u.type(name, ' (oops)');
+        await u.selectOptions(screen.getByLabelText('Paid by'), 'Bo');
+        await u.click(screen.getByLabelText('Bo is in on this'));
+        await u.click(screen.getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.getByLabelText('Expense name')).toHaveValue('October rent'));
+        expect(screen.getByLabelText('Paid by')).toHaveValue('u-me');
+        expect(screen.getByLabelText('Bo is in on this')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+        expect(api.updateSession).not.toHaveBeenCalled();
+    });
+
+    it('the paid by, date and category card comes before the cost card', async () => {
+        renderWithData(<ExpenseEditor {...props} />);
+        const paid = await screen.findByLabelText('Paid by');
+        const cost = screen.getByLabelText('How much was it?');
+        expect(!!(paid.compareDocumentPosition(cost) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    });
+
+    it('a new expense starts with nobody selected', async () => {
+        const u = userEvent.setup();
+        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).rent, id: 's9', draft: true, name: 'New expense', amount: 0, split_method: 'exact' as const, split_data: {} });
+        renderWithData(<ExpenseEditor {...props} sessionId="s9" />);
+        const bar = await screen.findByRole('region', { name: 'Unsaved draft' });
+        for (const n of ['Daven', 'Amy', 'Bo']) expect(screen.getByLabelText(`${n} is in on this`)).toHaveAttribute('aria-pressed', 'false');
+        expect(within(bar).getByText('Choose at least one person.')).toBeInTheDocument();
+        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeDisabled();
+        await u.click(screen.getByLabelText('Amy is in on this'));
+        await u.type(screen.getByLabelText('How much was it?'), '30');
+        await waitFor(() => expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled());
+    });
+
+    it('while the split does not add up, Save is blocked entirely, so a half-edited split is never written', async () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...props} />);
         await screen.findByDisplayValue('October rent');
         await u.clear(screen.getByLabelText('Amy amount'));
         await u.type(screen.getByLabelText('Amy amount'), '500'); // now 100 short: invalid
-        expect(await screen.findByText('100.00 still to assign.')).toBeInTheDocument();
         const name = screen.getByLabelText('Expense name');
         await u.clear(name);
         await u.type(name, 'Rent (Oct)');
-        await u.selectOptions(screen.getByLabelText('Paid by'), 'Amy');
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledTimes(1), SLOW);
-        const patch = api.updateSession.mock.calls[0][1];
-        expect(patch).toMatchObject({ name: 'Rent (Oct)', paid_by: 'u-amy' });
-        expect(patch).not.toHaveProperty('split_data');
-        expect(patch).not.toHaveProperty('amount');
-        expect(patch).not.toHaveProperty('split_method');
+        expect((await screen.findAllByText('100.00 still to assign.')).length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+        expect(api.updateSession).not.toHaveBeenCalled();
     });
 
     it('a cleared date shows "No date" instead of "Invalid Date" and keeps the stored date', async () => {

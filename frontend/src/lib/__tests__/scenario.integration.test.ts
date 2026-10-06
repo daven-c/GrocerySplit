@@ -9,23 +9,25 @@ import { everyoneEqual } from '../expenses';
 const run = process.env.INTEGRATION ? describe : describe.skip;
 const password = process.env.TEST_PASSWORD as string;
 const sessions: Record<string, { access_token: string; refresh_token: string }> = {};
-async function as(u: 'a' | 'b') {
+let current: 'a' | 'b' | 'c' | null = null;
+async function as(u: 'a' | 'b' | 'c') {
     const c = sessions[u];
-    if (c && !(await supabase.auth.setSession(c)).error) return;
+    if (c && !(await supabase.auth.setSession(c)).error) { current = u; return; }
     await supabase.auth.signOut({ scope: 'local' });
     const { data, error } = await supabase.auth.signInWithPassword({ email: `gs-test-${u}@mailinator.com`, password });
     expect(error).toBeNull();
     sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
+    current = u;
 }
 
-/** Usernames are what invites go by; look one up without changing who is signed in. */
+/** Usernames are what invites go by; look one up and go back to being whoever was signed in. */
 const handles: Record<string, string> = {};
-async function handle(u: 'a' | 'b') {
+async function handle(u: 'a' | 'b' | 'c') {
     if (!handles[u]) {
-        const cur = (await supabase.auth.getSession()).data.session;
+        const was = current;
         await as(u);
         handles[u] = await api.getMyUsername();
-        if (cur) await supabase.auth.setSession({ access_token: cur.access_token, refresh_token: cur.refresh_token });
+        if (was && was !== u) await as(was);
     }
     return handles[u];
 }
@@ -130,6 +132,52 @@ run('what users do: expenses, paying back, and more expenses', () => {
         await expect(api.updateUsername('x')).rejects.toThrow('3 to 20');
         await as('a');
         await api.updateUsername(before);
+    });
+
+    it('Activity records every creation, edit and deletion, once per save, by whoever did it', async () => {
+        await as('a');
+        const before = (await api.listExpenseLog(groupId)).length;
+        // a draft is invisible until saved
+        const id = await api.createSession({ groupId, kind: 'expense', draft: true, name: 'Dinner', category: 'dining', amount: 0, splitMethod: 'exact', splitData: {} });
+        await api.updateSession(id, { amount: 40, split_data: { [a]: 20, [b]: 20 } });
+        expect((await api.listExpenseLog(groupId)).length).toBe(before);
+        await expect(api.updateSession(id, { draft: false, split_data: {} })).rejects.toThrow(/at least one person/i); // nobody selected can't be saved
+        await api.updateSession(id, { draft: false });
+        await as('b');
+        await api.updateSession(id, { amount: 50, split_data: { [a]: 25, [b]: 25 }, paid_by: b });
+        await as('a');
+        await api.deleteSession(id);
+        const log = (await api.listExpenseLog(groupId)).filter(l => l.session_id === id);
+        expect(log.map(l => l.action)).toEqual(['deleted', 'edited', 'created']); // newest first
+        expect(log[1]).toMatchObject({ actor: b, name: 'Dinner', total: 50 });
+        expect(log[1].changes.map(c => c.field).sort()).toEqual(['amount', 'paid_by', 'split']);
+        expect(log[1].changes.find(c => c.field === 'paid_by')).toMatchObject({ from: 'Test A', to: 'Test B' });
+        expect(log[0]).toMatchObject({ actor: a, total: 50 });
+    });
+
+    it('saving a receipt is one atomic step and one log entry, with an item-level diff', async () => {
+        await as('a');
+        const rid = await api.createSession({ groupId, name: 'Costco', category: 'groceries', participants: ['Test A', 'Test B'], items: [{ name: 'Milk', price: 4 }, { name: 'Eggs', price: 3 }] });
+        const rec = await api.getSession(rid);
+        const milk = rec.items.find(i => i.name === 'Milk')!;
+        await api.saveReceipt(rid, { name: 'Costco run', tax: 1 }, [
+            { id: milk.id, name: 'Milk', price: 5, assigned_users: ['Test A'] },
+            { name: 'Bread', price: 2, assigned_users: [] },
+        ]);
+        const after = await api.getSession(rid);
+        expect(after.name).toBe('Costco run');
+        expect(after.items.map(i => i.name).sort()).toEqual(['Bread', 'Milk']);
+        expect(after.items.find(i => i.name === 'Milk')).toMatchObject({ price: 5, assigned_users: ['Test A'] });
+        const edits = (await api.listExpenseLog(groupId)).filter(l => l.session_id === rid && l.action === 'edited');
+        expect(edits).toHaveLength(1);
+        expect(edits[0].total).toBe(8); // 5 + 2 + tax 1
+        expect(edits[0].changes.find(c => c.field === 'items')).toMatchObject({ added: ['Bread'], removed: ['Eggs'], changed: ['Milk'] });
+        // an outsider cannot save someone else's receipt
+        await as('c');
+        await expect(api.saveReceipt(rid, { name: 'hacked' }, [])).rejects.toThrow();
+        await as('a');
+        expect((await api.getSession(rid)).name).toBe('Costco run');
+        await api.deleteSession(rid);
     });
 
     it('cleanup', async () => {

@@ -384,6 +384,36 @@ export interface SettlementLogEntry {
 }
 
 /** The change history of a group's transfers, newest first. Written by the database, never by the app. */
+export interface ExpenseLogEntry {
+    id: string;
+    group_id: string;
+    session_id: string;
+    action: 'created' | 'edited' | 'deleted';
+    actor: string | null;
+    kind: 'receipt' | 'expense';
+    name: string;
+    total: number;
+    /** What changed on an edit, as raw values: [{ field: 'amount', from: 20, to: 25 }, ...]. */
+    changes: { field: string; from?: any; to?: any; added?: string[]; removed?: string[]; changed?: string[] }[];
+    created_at: string;
+}
+
+/** Every expense and receipt created, edited or deleted in a group, newest first. Written by the database. */
+export async function listExpenseLog(groupId: string): Promise<ExpenseLogEntry[]> {
+    const data = check(await supabase.from('expense_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
+    return data.map((r: any) => ({ ...r, total: Number(r.total), changes: r.changes ?? [] }));
+}
+
+/** Save a receipt's details and its items together, atomically, as one edit. Items without an id are new. */
+export async function saveReceipt(
+    sessionId: string,
+    patch: { name?: string; session_date?: string; tax?: number; tip?: number; category?: string; paid_by?: string | null },
+    items: { id?: string; name: string; price: number; assigned_users: string[] }[]
+) {
+    const { error } = await supabase.rpc('save_receipt', { p_session: sessionId, p_patch: patch, p_items: items.map(i => ({ ...i, id: i.id ?? null })) });
+    if (error) throw new Error(error.message);
+}
+
 export async function listSettlementLog(groupId: string): Promise<SettlementLogEntry[]> {
     const data = check(await supabase.from('settlement_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
     return data.map((r: any) => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));

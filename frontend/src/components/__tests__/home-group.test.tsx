@@ -207,14 +207,14 @@ describe('Group detail', () => {
         await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     });
 
-    it('"Split a total" creates a draft expense shared evenly among everyone, to be refined in the editor', async () => {
+    it('"Split a total" creates a draft expense with nobody selected, to be filled in the editor', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Split a total'));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
             groupId: 'g1', kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
-            splitMethod: 'exact', splitData: { [ME]: 0, 'u-amy': 0, 'u-bo': 0 },
+            splitMethod: 'exact', splitData: {},
         }));
         await waitFor(() => expect(props.onOpenRecord).toHaveBeenCalledWith('s9', 'expense', true));
     });
@@ -412,6 +412,30 @@ describe('Group detail', () => {
         expect(screen.getByText('deleted a transfer', { exact: false })).toBeInTheDocument();
         expect(screen.getByText('Amy → Daven $50.00 became Amy → Daven $65.50')).toBeInTheDocument();
         expect(api.listSettlementLog).toHaveBeenCalledWith('g1');
+    });
+
+    it('the Activity tab lists expenses, receipts and transfers together: who created, edited (with what changed) or deleted', async () => {
+        const u = userEvent.setup();
+        const e = (over: any) => ({ group_id: 'g1', session_id: 's', changes: [], kind: 'expense', ...over });
+        api.listExpenseLog.mockResolvedValue([
+            e({ id: 'x3', action: 'deleted', actor: 'u-bo', name: 'Old pizza', total: 30, created_at: '2026-10-05T15:00:00Z' }),
+            e({ id: 'x2', action: 'edited', actor: 'u-amy', name: 'October rent', total: 2500, created_at: '2026-10-05T13:00:00Z', changes: [{ field: 'amount', from: 2400, to: 2500 }, { field: 'paid_by', from: 'Daven', to: 'Amy' }] }),
+            e({ id: 'x1', action: 'created', actor: ME, kind: 'receipt', name: 'Costco', total: 40.1, created_at: '2026-10-05T11:00:00Z' }),
+        ]);
+        api.listSettlementLog.mockResolvedValue([
+            { id: 'l1', group_id: 'g1', settlement_id: 'p1', action: 'created', actor: 'u-amy', from_user: 'u-amy', to_user: ME, amount: 50, prev_from_user: null, prev_to_user: null, prev_amount: null, created_at: '2026-10-05T12:00:00Z' },
+        ]);
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('tab', { name: 'Activity' }));
+        expect(await screen.findByText(/deleted an expense/)).toBeInTheDocument();
+        expect(screen.getByText('Old pizza')).toBeInTheDocument();
+        expect(screen.getByText(/edited an expense/)).toBeInTheDocument();
+        expect(screen.getByText('Amount: $2,400.00 → $2,500.00')).toBeInTheDocument();
+        expect(screen.getByText('Paid by: Daven → Amy')).toBeInTheDocument();
+        expect(screen.getByText(/created a receipt/)).toBeInTheDocument();
+        expect(screen.getByText(/recorded a transfer/)).toBeInTheDocument();
+        const order = screen.getAllByText(/(created|edited|deleted|recorded) an? (expense|receipt|transfer)/).map(x => x.textContent!.match(/created|edited|deleted|recorded/)![0]);
+        expect(order).toEqual(['deleted', 'edited', 'recorded', 'created']); // newest first
     });
 
     it('shows the group total cost, not counting drafts', async () => {

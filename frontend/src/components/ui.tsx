@@ -106,6 +106,23 @@ export function DraftBar({ what, canSave, problem, saving, onSave, onDiscard }: 
     );
 }
 
+/** Shown while an existing record has edits that are not saved yet. Nothing is written until Save; Cancel puts it back. */
+export function ChangesBar({ canSave, problem, saving, onSave, onCancel }: { canSave: boolean; problem?: string | null; saving: boolean; onSave: () => void; onCancel: () => void }) {
+    return (
+        <div role="region" aria-label="Unsaved changes" className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-[14px] bg-surface border border-edge">
+            <Icon name="edit_note" size={20} className="text-body" />
+            <div className="flex-[1_1_200px] flex flex-col gap-0.5">
+                <span className="text-sm font-semibold">Unsaved changes</span>
+                <span className={`text-[13px] ${problem ? 'text-coral' : 'text-muted'}`}>{problem || 'Nobody else sees them until you save.'}</span>
+            </div>
+            <div className="flex gap-2">
+                <Button variant="secondary" height={38} onClick={onCancel} disabled={saving}>Cancel</Button>
+                <Button height={38} onClick={onSave} disabled={!canSave || saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+            </div>
+        </div>
+    );
+}
+
 /** How one total is shared out (older expenses saved as equal/percent open as amounts). */
 export function SplitByTabs({ value, onChange, disabled = false }: { value: SplitMethod; onChange: (v: SplitMethod) => void; disabled?: boolean }) {
     return (

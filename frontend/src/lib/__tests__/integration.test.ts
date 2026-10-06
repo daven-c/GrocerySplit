@@ -16,26 +16,28 @@ const email = (u: 'a' | 'b' | 'c') => `gs-test-${u}@mailinator.com`;
 
 // Sign in once per user and then just swap sessions: Supabase rate-limits password sign-ins.
 const sessions: Record<string, { access_token: string; refresh_token: string }> = {};
+let current: 'a' | 'b' | 'c' | null = null;
 async function as(u: 'a' | 'b' | 'c') {
     const cached = sessions[u];
     if (cached) {
         const { error } = await supabase.auth.setSession(cached);
-        if (!error) return;
+        if (!error) { current = u; return; }
     }
     await supabase.auth.signOut({ scope: 'local' });
     const { data, error } = await supabase.auth.signInWithPassword({ email: email(u), password });
     expect(error, `sign-in as ${u} failed - is the test user confirmed?`).toBeNull();
     sessions[u] = { access_token: data.session!.access_token, refresh_token: data.session!.refresh_token };
+    current = u;
 }
 
-/** Usernames are what invites go by; look one up without changing who is signed in. */
+/** Usernames are what invites go by; look one up and go back to being whoever was signed in. */
 const handles: Record<string, string> = {};
 async function handle(u: 'a' | 'b' | 'c') {
     if (!handles[u]) {
-        const cur = (await supabase.auth.getSession()).data.session;
+        const was = current;
         await as(u);
         handles[u] = await api.getMyUsername();
-        if (cur) await supabase.auth.setSession({ access_token: cur.access_token, refresh_token: cur.refresh_token });
+        if (was && was !== u) await as(was);
     }
     return handles[u];
 }
@@ -180,11 +182,10 @@ run('shared groups integration', () => {
         bal = computeBalances(a, [g], await api.listSessions(groupId), await api.listSettlements());
         expect(bal.friends[b].net).toBeCloseTo(owedBefore - 10, 2);
 
-        await api.deleteSettlement(st.id); // A is not the creator: silently affects 0 rows
-        expect(await api.listSettlements()).toHaveLength(1);
-        await as('b');
-        await api.deleteSettlement(st.id);
+        await api.deleteSettlement(st.id); // any member can delete a transfer (it is logged in Activity)
         expect(await api.listSettlements()).toEqual([]);
+        const log = await api.listSettlementLog(groupId);
+        expect(log.map(l => l.action).sort()).toEqual(['created', 'deleted']);
         await as('a');
         await api.deleteSession(rec);
     });
@@ -255,7 +256,8 @@ run('shared groups integration', () => {
         const id = ok.data!.id;
 
         // kind and group cannot change; unrelated edits are never blocked by the split
-        expect((await supabase.from('sessions').update({ kind: 'receipt' }).eq('id', id)).error?.message).toMatch(/cannot change between/i);
+        expect((await supabase.from('sessions').update({ kind: 'receipt' }).eq('id', id)).error).toBeNull(); // one editor: it can switch to itemized
+        expect((await supabase.from('sessions').update({ kind: 'expense' }).eq('id', id)).error).toBeNull();
         const other = await api.createGroup('Elsewhere');
         expect((await supabase.from('sessions').update({ group_id: other }).eq('id', id)).error?.message).toMatch(/cannot move/i);
         await api.deleteGroup(other);
@@ -301,16 +303,16 @@ run('shared groups integration', () => {
         const [pb] = (await api.listSettlements()).filter(x => x.from_user === a && x.to_user === c);
         expect(pb).toMatchObject({ group_id: groupId, amount: 12.5, created_by: b });
 
-        await as('a'); // everyone in the group can see it, but only B can undo it
+        await as('a'); // everyone in the group can see it, edit it, and delete it
         expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
-        await api.deleteSettlement(pb.id);
-        expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(true);
-
+        await api.updateSettlement(pb.id, a, c, 20);
+        expect((await api.listSettlements()).find(x => x.id === pb.id)?.amount).toBe(20);
         await expect(api.recordSettlement(groupId, a, a, 5)).rejects.toThrow(); // can't pay yourself
 
-        await as('b');
         await api.deleteSettlement(pb.id);
         expect((await api.listSettlements()).some(x => x.id === pb.id)).toBe(false);
+        const actions = (await api.listSettlementLog(groupId)).filter(l => l.settlement_id === pb.id).map(l => l.action).sort();
+        expect(actions).toEqual(['created', 'deleted', 'edited']); // all three are in the ledger
 
         await as('a'); // put C back outside the group for the tests that follow
         await api.removeMember(groupId, c);

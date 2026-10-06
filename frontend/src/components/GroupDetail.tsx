@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, SettlementLogEntry, PendingInvite, Session, Settlement } from '../lib/api';
+import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
+import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
@@ -52,7 +53,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [settling, setSettling] = useState(false);
     const [pbOpen, setPbOpen] = useState(false);
     const [pbEditId, setPbEditId] = useState<string | null>(null);
-    const [log, setLog] = useState<SettlementLogEntry[] | null>(null);
+    const [log, setLog] = useState<ActivityItem[] | null>(null);
     const [pbFrom, setPbFrom] = useState('');
     const [pbTo, setPbTo] = useState('');
     const [pbAmount, setPbAmount] = useState('');
@@ -72,9 +73,11 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     useEffect(() => {
         if (tab !== 'activity') return;
         let cancelled = false;
-        listSettlementLog(groupId).then(l => !cancelled && setLog(l)).catch(() => !cancelled && setLog([]));
+        Promise.all([listExpenseLog(groupId), listSettlementLog(groupId)])
+            .then(([e, t]) => !cancelled && setLog(mergeActivity(e, t)))
+            .catch(() => !cancelled && setLog([]));
         return () => { cancelled = true; };
-    }, [tab, groupId, settlements]);
+    }, [tab, groupId, settlements, sessions]);
 
     const records = useMemo(
         () => sessions.filter(s => s.group_id === groupId).sort((a, b) => b.session_date.localeCompare(a.session_date) || b.updated_at.localeCompare(a.updated_at)),
@@ -155,7 +158,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         try {
             const id = await createSession({
                 groupId, kind: 'expense', draft: true, name: 'New expense', category: 'other', amount: 0,
-                splitMethod: 'exact', splitData: Object.fromEntries(group.members.map(m => [m.user_id, 0])),
+                splitMethod: 'exact', splitData: {}, // nobody is selected until you choose
             });
             await refresh();
             onOpenRecord(id, 'expense', true);
@@ -522,22 +525,32 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
                 {tab === 'activity' && (
                     <div className="flex flex-col gap-2">
-                        <span className="text-[13px] text-muted">Every transfer that was recorded, changed or deleted, by whom, and when.</span>
+                        <span className="text-[13px] text-muted">Every expense, receipt and transfer that was added, changed or deleted, by whom, and when.</span>
                         {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (
-                            <Card className="p-5 text-sm text-muted">No transfer activity yet.</Card>
+                            <Card className="p-5 text-sm text-muted">No activity yet.</Card>
                         ) : (
                             <Card className="overflow-hidden">
-                                {log.map((l, i) => {
+                                {log.map((a, i) => {
                                     const nm = (id: string | null) => (id ? who(id) : 'Someone');
-                                    const move = (f: string, t: string, a: number) => `${nm(f)} → ${nm(t)} ${fmt(a)}`;
-                                    const verb = l.action === 'created' ? 'recorded' : l.action === 'edited' ? 'edited' : 'deleted';
+                                    const when = new Date(a.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                                    let line: React.ReactNode;
+                                    let details: string[] = [];
+                                    if (a.type === 'transfer') {
+                                        const l = a.entry;
+                                        const move = (f: string, t: string, amt: number) => `${nm(f)} → ${nm(t)} ${fmt(amt)}`;
+                                        line = <><span className="font-semibold">{nm(l.actor)}</span> {l.action === 'created' ? 'recorded' : l.action} a transfer</>;
+                                        details = [l.action === 'edited' && l.prev_amount != null ? `${move(l.prev_from_user!, l.prev_to_user!, l.prev_amount)} became ${move(l.from_user, l.to_user, l.amount)}` : move(l.from_user, l.to_user, l.amount)];
+                                    } else {
+                                        const l = a.entry;
+                                        const what = l.kind === 'receipt' ? 'receipt' : 'expense';
+                                        line = <><span className="font-semibold">{nm(l.actor)}</span> {l.action} {what === 'receipt' ? 'a receipt' : 'an expense'}: <span className="font-semibold">{l.name}</span> · {fmt(l.total)}</>;
+                                        details = l.action === 'edited' ? l.changes.map(describeChange) : [];
+                                    }
                                     return (
-                                        <div key={l.id} className={`px-[18px] py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
-                                            <span className="text-[14px]"><span className="font-semibold">{l.actor ? who(l.actor) : 'Someone'}</span> {verb} a transfer</span>
-                                            <span className="text-[13px] text-muted">
-                                                {l.action === 'edited' && l.prev_amount != null ? `${move(l.prev_from_user!, l.prev_to_user!, l.prev_amount)} became ${move(l.from_user, l.to_user, l.amount)}` : move(l.from_user, l.to_user, l.amount)}
-                                            </span>
-                                            <span className="text-xs text-faint">{new Date(l.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                        <div key={a.id} className={`px-[18px] py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
+                                            <span className="text-[14px]">{line}</span>
+                                            {details.map((d, j) => <span key={j} className="text-[13px] text-muted">{d}</span>)}
+                                            <span className="text-xs text-faint">{when}</span>
                                         </div>
                                     );
                                 })}
