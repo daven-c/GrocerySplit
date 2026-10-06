@@ -33,7 +33,7 @@ describe('Home', () => {
         const u = userEvent.setup();
         renderWithData(<Dashboard {...props} />);
         const row = (await screen.findByText('Roomies')).closest('button')!;
-        expect(within(row).getByText('3 people · 3 expenses')).toBeInTheDocument();
+        expect(within(row).getByText('3 people · 3 expenses · $2,500.10 total')).toBeInTheDocument();
         expect(within(row).getByText("you're owed")).toBeInTheDocument();
         const ski = screen.getByText('Ski Trip').closest('button')!;
         expect(within(ski).getByText('all square')).toBeInTheDocument();
@@ -243,7 +243,7 @@ describe('Group detail', () => {
 
     const payback = { id: 'p1', group_id: 'g1', from_user: 'u-amy', to_user: ME, amount: 50, created_by: ME, created_at: '2026-10-04T12:00:00' };
 
-    it('shows paybacks in the list with the expenses, newest first, with an undo for your own', async () => {
+    it('shows paybacks in the list with the expenses, newest first, each with Edit and Delete for anyone', async () => {
         const u = userEvent.setup();
         api.listSettlements.mockResolvedValue([payback, { ...payback, id: 'p2', from_user: ME, to_user: 'u-bo', amount: 12.5, created_by: 'u-bo', created_at: '2026-10-02T12:00:00' }]);
         renderWithData(<GroupDetail {...props} />);
@@ -252,9 +252,46 @@ describe('Group detail', () => {
         expect(screen.getAllByText('Payback')).toHaveLength(2);
         expect(screen.getByText('$50.00')).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Expenses · 3' })).toBeInTheDocument(); // paybacks are not expenses
-        expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1); // only the one you recorded
-        await u.click(screen.getByRole('button', { name: 'Undo' }));
+        expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2); // including the one Bo recorded
+        expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2);
+        await u.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
         await waitFor(() => expect(api.deleteSettlement).toHaveBeenCalledWith('p1'));
+    });
+
+    it('editing a payback opens it prefilled and saves the change in place', async () => {
+        const u = userEvent.setup();
+        api.listSettlements.mockResolvedValue([{ ...payback, created_by: 'u-bo' }]); // recorded by someone else
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('button', { name: 'Edit' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText('Edit payback')).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('Payback amount')).toHaveValue('50');
+        await u.clear(within(dialog).getByLabelText('Payback amount'));
+        await u.type(within(dialog).getByLabelText('Payback amount'), '65.5');
+        await u.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.updateSettlement).toHaveBeenCalledWith('p1', 'u-amy', ME, 65.5));
+        expect(api.recordSettlement).not.toHaveBeenCalled();
+    });
+
+    it('the Activity tab shows the change ledger: who did what, with before and after', async () => {
+        const u = userEvent.setup();
+        api.listSettlementLog.mockResolvedValue([
+            { id: 'l3', group_id: 'g1', settlement_id: 'p1', action: 'deleted', actor: 'u-bo', from_user: 'u-amy', to_user: ME, amount: 65.5, prev_from_user: null, prev_to_user: null, prev_amount: null, created_at: '2026-10-05T12:00:00' },
+            { id: 'l2', group_id: 'g1', settlement_id: 'p1', action: 'edited', actor: 'u-amy', from_user: 'u-amy', to_user: ME, amount: 65.5, prev_from_user: 'u-amy', prev_to_user: ME, prev_amount: 50, created_at: '2026-10-04T12:00:00' },
+            { id: 'l1', group_id: 'g1', settlement_id: 'p1', action: 'created', actor: ME, from_user: 'u-amy', to_user: ME, amount: 50, prev_from_user: null, prev_to_user: null, prev_amount: null, created_at: '2026-10-03T12:00:00' },
+        ]);
+        renderWithData(<GroupDetail {...props} />);
+        await u.click(await screen.findByRole('tab', { name: 'Activity' }));
+        expect(await screen.findByText(/Bo/, { selector: 'span.font-semibold' })).toBeInTheDocument();
+        expect(screen.getByText('deleted a payback', { exact: false })).toBeInTheDocument();
+        expect(screen.getByText('Amy → You $50.00 became Amy → You $65.50')).toBeInTheDocument();
+        expect(api.listSettlementLog).toHaveBeenCalledWith('g1');
+    });
+
+    it('shows the group total cost, not counting drafts', async () => {
+        renderWithData(<GroupDetail {...props} />);
+        expect(await screen.findByText('$2,500.10')).toBeInTheDocument();
+        expect(screen.getByText(/across 3 expenses/)).toBeInTheDocument();
     });
 
     it('on the same day, a payback added after an expense is listed above it (and one added before, below)', async () => {

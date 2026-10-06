@@ -4,6 +4,7 @@ import { useAppData } from '../lib/appData';
 import { createGroup, respondToInvite } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import { firstName, fmt, greeting, memberTones } from '../lib/people';
+import { totalOf } from '../lib/expenses';
 import { Avatar, Button, Card, Icon } from './ui';
 
 interface DashboardProps {
@@ -139,7 +140,9 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                             const tones = memberTones(g.members, me);
                             const net = balances.byGroup[g.id] ?? 0;
                             const settled = Math.abs(net) < 0.005;
-                            const count = sessions.filter(s => s.group_id === g.id).length;
+                            const recs = sessions.filter(s => s.group_id === g.id && !s.draft);
+                            const count = recs.length;
+                            const spent = recs.reduce((a, r) => a + totalOf(r), 0);
                             return (
                                 <motion.div key={g.id} {...listItem(i)}>
                                     <motion.button
@@ -152,7 +155,7 @@ export default function Dashboard({ user, newGroupTick, onOpenGroup, onGoFriends
                                         </span>
                                         <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                             <span className="text-[15px] font-semibold truncate">{g.name}</span>
-                                            <span className="text-[13px] text-faint">{g.members.length} {g.members.length === 1 ? 'person' : 'people'} · {count} {count === 1 ? 'expense' : 'expenses'}</span>
+                                            <span className="text-[13px] text-faint">{g.members.length} {g.members.length === 1 ? 'person' : 'people'} · {count} {count === 1 ? 'expense' : 'expenses'} · {fmt(spent)} total</span>
                                         </span>
                                         <span className="shrink-0 flex flex-col items-end gap-0.5">
                                             <span className={`text-[15px] font-semibold ${settled ? 'text-faint' : net > 0 ? 'text-green' : 'text-coral'}`}>{settled ? 'Settled' : fmt(net)}</span>

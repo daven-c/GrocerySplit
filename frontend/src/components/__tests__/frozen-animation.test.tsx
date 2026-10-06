@@ -39,7 +39,7 @@ describe('with animation frames frozen', () => {
 
     it('home content is visible, not stuck at opacity 0', async () => {
         render(<App />);
-        const row = await screen.findByText('3 people · 3 expenses');
+        const row = await screen.findByText('3 people · 3 expenses · $2,500.10 total');
         expect(effectiveOpacity(row)).toBeGreaterThanOrEqual(MIN);
         expect(effectiveOpacity(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/))).toBeGreaterThanOrEqual(MIN);
     });
@@ -95,7 +95,7 @@ describe('with animation frames frozen', () => {
         document.dispatchEvent(new Event('visibilitychange'));
         try {
             render(<App />);
-            const row = await screen.findByText('3 people · 3 expenses');
+            const row = await screen.findByText('3 people · 3 expenses · $2,500.10 total');
             await waitFor(() => expect(effectiveOpacity(row)).toBe(1));
         } finally {
             Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });

@@ -2,14 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, deleteSettlement, PendingInvite, Session, Settlement } from '../lib/api';
+import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, updateSettlement, deleteSettlement, listSettlementLog, SettlementLogEntry, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, AvatarStack, Button, Card, Icon, inputCls } from './ui';
 
-export type GroupTab = 'expenses' | 'balances' | 'members';
+export type GroupTab = 'expenses' | 'balances' | 'activity' | 'members';
 
 interface GroupDetailProps {
     groupId: string;
@@ -49,6 +49,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [settling, setSettling] = useState(false);
     const [pbOpen, setPbOpen] = useState(false);
+    const [pbEditId, setPbEditId] = useState<string | null>(null);
+    const [log, setLog] = useState<SettlementLogEntry[] | null>(null);
     const [pbFrom, setPbFrom] = useState('');
     const [pbTo, setPbTo] = useState('');
     const [pbAmount, setPbAmount] = useState('');
@@ -64,6 +66,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     useDismiss(addRef, addOpen, closeAdd);
 
     const isOwner = !!group && group.owner_id === me;
+    // The payback change log: reloaded whenever the paybacks change or the tab is opened.
+    useEffect(() => {
+        if (tab !== 'activity') return;
+        let cancelled = false;
+        listSettlementLog(groupId).then(l => !cancelled && setLog(l)).catch(() => !cancelled && setLog([]));
+        return () => { cancelled = true; };
+    }, [tab, groupId, settlements]);
+
     const records = useMemo(
         () => sessions.filter(s => s.group_id === groupId).sort((a, b) => b.session_date.localeCompare(a.session_date) || b.updated_at.localeCompare(a.updated_at)),
         [sessions, groupId]
@@ -76,6 +86,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     const tones = useMemo(() => memberTones(group?.members ?? [], me), [group, me]);
     const nameOf = (id: string | null) => (id === me ? 'you' : group?.members.find(m => m.user_id === id)?.name ?? 'someone');
+    const totalCost = useMemo(() => records.filter(r => !r.draft).reduce((a, r) => a + totalOf(r), 0), [records]);
     const net = useMemo(() => computeBalances(me, groups, sessions, settlements).byGroup[groupId] ?? 0, [me, groups, sessions, settlements, groupId]);
     const meMember = group?.members.find(m => m.user_id === me);
 
@@ -148,6 +159,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         setPbFrom(t?.from ?? me);
         setPbTo(t?.to ?? other.user_id);
         setPbAmount(t ? String(t.amount) : '');
+        setPbEditId(null);
+        setPbOpen(true);
+    };
+    const editPayback = (p: Settlement) => {
+        setPbFrom(p.from_user);
+        setPbTo(p.to_user);
+        setPbAmount(String(p.amount));
+        setPbEditId(p.id);
         setPbOpen(true);
     };
     const changePayback = (from: string, to: string) => {
@@ -163,19 +182,20 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         setSettling(true);
         setError('');
         try {
-            await recordSettlement(groupId, pbFrom, pbTo, pbAmountNum);
+            if (pbEditId) await updateSettlement(pbEditId, pbFrom, pbTo, pbAmountNum);
+            else await recordSettlement(groupId, pbFrom, pbTo, pbAmountNum);
             setPbOpen(false);
             await refresh();
         } catch (err: any) {
-            setError(err.message || 'Could not record that payback');
+            setError(err.message || (pbEditId ? 'Could not save that payback' : 'Could not record that payback'));
         } finally {
             setSettling(false);
         }
     };
-    const undoPayback = async (id: string) => {
+    const removePayback = async (id: string) => {
         setError('');
         try { await deleteSettlement(id); await refresh(); }
-        catch (err: any) { setError(err.message || 'Could not undo that payback'); }
+        catch (err: any) { setError(err.message || 'Could not delete that payback'); }
     };
 
     const handleInvite = async () => {
@@ -242,8 +262,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             </Modal>
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
-                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">Record a payback</h3>
-                <p className="m-0 mb-4 text-sm text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.</p>
+                <h3 className="m-0 mb-1 text-xl font-semibold text-ink">{pbEditId ? 'Edit payback' : 'Record a payback'}</h3>
+                <p className="m-0 mb-4 text-sm text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.{pbEditId && ' Changes are logged under Activity.'}</p>
                 <div className="flex flex-col gap-3">
                     <label className="flex flex-col gap-1.5 text-[13px] font-medium text-body">Who paid
                         <select value={pbFrom} onChange={e => changePayback(e.target.value, pbTo)} className="h-[42px] px-3 border border-line rounded-[10px] bg-white text-[15px] text-ink">
@@ -265,7 +285,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                 </div>
                 <div className="flex gap-3 mt-5">
                     <Button variant="secondary" wide height={42} onClick={() => setPbOpen(false)}>Cancel</Button>
-                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>Save payback</Button>
+                    <Button wide height={42} disabled={settling || !pbValid} onClick={savePayback}>{pbEditId ? 'Save changes' : 'Save payback'}</Button>
                 </div>
             </Modal>
 
@@ -278,6 +298,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     <div className="flex items-center gap-3">
                         <AvatarStack size={28} people={group.members.map(m => ({ name: m.name, tone: tones[m.user_id] }))} />
                         <span className="text-sm text-body">{balanceLine}</span>
+                    </div>
+                    <div className="text-sm text-muted">
+                        Total cost <span className="font-semibold text-ink">{fmt(totalCost)}</span> across {records.filter(r => !r.draft).length} {records.filter(r => !r.draft).length === 1 ? 'expense' : 'expenses'}
                     </div>
                 </div>
                 <div className="relative" ref={addRef}>
@@ -309,6 +332,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             <UnderlineTabs id="group" value={tab} onChange={setTab} tabs={[
                 { value: 'expenses', label: `Expenses · ${records.length}` },
                 { value: 'balances', label: 'Balances' },
+                { value: 'activity', label: 'Activity' },
                 { value: 'members', label: `Members · ${group.members.length}` },
             ]} />
 
@@ -359,7 +383,10 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                     </span>
                                                     <span className="shrink-0 flex flex-col items-end gap-0.5">
                                                         <span className="text-[15px] font-semibold text-green">{fmt(p.amount)}</span>
-                                                        {p.created_by === me && <button type="button" onClick={() => undoPayback(p.id)} className="text-xs font-semibold text-ink underline underline-offset-2">Undo</button>}
+                                                        <span className="flex gap-2.5">
+                                                            <button type="button" onClick={() => editPayback(p)} className="text-xs font-semibold text-ink underline underline-offset-2">Edit</button>
+                                                            <button type="button" onClick={() => removePayback(p.id)} className="text-xs font-semibold text-ink underline underline-offset-2">Delete</button>
+                                                        </span>
                                                     </span>
                                                 </motion.div>
                                             );
@@ -452,6 +479,32 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             )}
                             <span className="text-xs leading-normal text-faint">The fewest payments that settle everyone. Recording one doesn't move money; it just updates the balances.</span>
                         </div>
+                    </div>
+                )}
+
+                {tab === 'activity' && (
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[13px] text-muted">Every payback that was recorded, changed or deleted, by whom, and when.</span>
+                        {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (
+                            <Card className="p-5 text-sm text-muted">No payback activity yet.</Card>
+                        ) : (
+                            <Card className="overflow-hidden">
+                                {log.map((l, i) => {
+                                    const nm = (id: string | null) => (id ? who(id) : 'Someone');
+                                    const move = (f: string, t: string, a: number) => `${nm(f)} → ${nm(t)} ${fmt(a)}`;
+                                    const verb = l.action === 'created' ? 'recorded' : l.action === 'edited' ? 'edited' : 'deleted';
+                                    return (
+                                        <div key={l.id} className={`px-[18px] py-3 flex flex-col gap-0.5 ${i ? 'border-t border-rule' : ''}`}>
+                                            <span className="text-[14px]"><span className="font-semibold">{l.actor ? who(l.actor) : 'Someone'}</span> {verb} a payback</span>
+                                            <span className="text-[13px] text-muted">
+                                                {l.action === 'edited' && l.prev_amount != null ? `${move(l.prev_from_user!, l.prev_to_user!, l.prev_amount)} became ${move(l.from_user, l.to_user, l.amount)}` : move(l.from_user, l.to_user, l.amount)}
+                                            </span>
+                                            <span className="text-xs text-faint">{new Date(l.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                        </div>
+                                    );
+                                })}
+                            </Card>
+                        )}
                     </div>
                 )}
 

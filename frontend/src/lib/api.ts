@@ -317,6 +317,31 @@ export async function recordSettlement(groupId: string, fromUser: string, toUser
     check(await supabase.from('settlements').insert({ group_id: groupId, from_user: fromUser, to_user: toUser, amount }));
 }
 
+export async function updateSettlement(id: string, fromUser: string, toUser: string, amount: number) {
+    check(await supabase.from('settlements').update({ from_user: fromUser, to_user: toUser, amount }).eq('id', id));
+}
+
+export interface SettlementLogEntry {
+    id: string;
+    group_id: string;
+    settlement_id: string;
+    action: 'created' | 'edited' | 'deleted';
+    actor: string | null;
+    from_user: string;
+    to_user: string;
+    amount: number;
+    prev_from_user: string | null;
+    prev_to_user: string | null;
+    prev_amount: number | null;
+    created_at: string;
+}
+
+/** The change history of a group's paybacks, newest first. Written by the database, never by the app. */
+export async function listSettlementLog(groupId: string): Promise<SettlementLogEntry[]> {
+    const data = check(await supabase.from('settlement_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
+    return data.map((r: any) => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));
+}
+
 export async function deleteSettlement(id: string) {
     check(await supabase.from('settlements').delete().eq('id', id));
 }
