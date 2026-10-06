@@ -41,6 +41,75 @@ describe('Home', () => {
         expect(props.onOpenGroup).toHaveBeenCalledWith('g1');
     });
 
+    const order = () => screen.getAllByRole('button', { name: /^(Roomies|Ski Trip)/ }).map(b => b.textContent!.match(/Roomies|Ski Trip/)![0]);
+
+    it('groups can be searched by group or person name', async () => {
+        const u = userEvent.setup();
+        renderWithData(<Dashboard {...props} />);
+        const box = await screen.findByLabelText('Search groups');
+        await u.type(box, 'bo');
+        await waitFor(() => expect(screen.queryByText('Ski Trip')).not.toBeInTheDocument()); // only Roomies has Bo
+        expect(screen.getByText('Roomies')).toBeInTheDocument();
+        await u.clear(box);
+        await u.type(box, 'ski');
+        await waitFor(() => expect(screen.queryByText('Roomies')).not.toBeInTheDocument());
+        await u.clear(box);
+        await u.type(box, 'zzzz');
+        expect(await screen.findByText('No groups match "zzzz".')).toBeInTheDocument();
+    });
+
+    it('groups sort by recent activity, name, balance or spend, and the choice is remembered', async () => {
+        const u = userEvent.setup();
+        localStorage.removeItem('splitpot:groupSort');
+        renderWithData(<Dashboard {...props} />);
+        await screen.findByText('Roomies');
+        expect(order()).toEqual(['Roomies', 'Ski Trip']); // Roomies has the recent expenses
+        await u.selectOptions(screen.getByLabelText('Sort groups'), 'Name');
+        expect(order()).toEqual(['Roomies', 'Ski Trip']);
+        await u.selectOptions(screen.getByLabelText('Sort groups'), 'Most spent');
+        expect(order()).toEqual(['Roomies', 'Ski Trip']);
+        expect(localStorage.getItem('splitpot:groupSort')).toBe('spent');
+    });
+
+    it('pinning floats a group to the top for you, and unpinning puts it back', async () => {
+        const u = userEvent.setup();
+        renderWithData(<Dashboard {...props} />);
+        await screen.findByText('Ski Trip');
+        expect(order()).toEqual(['Roomies', 'Ski Trip']);
+        await u.click(screen.getByRole('button', { name: 'Pin Ski Trip' }));
+        await waitFor(() => expect(api.setGroupPinned).toHaveBeenCalledWith('g2', true));
+        // the data layer reloads from the server: now it says Ski Trip is pinned
+        const { group, otherGroup } = await import('../../test/apiMock');
+        api.listGroups.mockResolvedValue([group, { ...otherGroup, members: otherGroup.members.map(m => (m.user_id === ME ? { ...m, pinned: true } : m)) }]);
+        await u.click(screen.getByRole('button', { name: 'Pin Roomies' })); // any change triggers a reload
+        await waitFor(() => expect(order()[0]).toBe('Ski Trip'));
+        expect(screen.getByRole('button', { name: 'Unpin Ski Trip' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('the Personal card creates your private group the first time and opens it', async () => {
+        const u = userEvent.setup();
+        const onOpenGroup = vi.fn();
+        api.ensurePersonalGroup.mockResolvedValue('gp');
+        renderWithData(<Dashboard {...props} onOpenGroup={onOpenGroup} />);
+        await u.click(await screen.findByRole('button', { name: /^Personal/ }));
+        await waitFor(() => expect(api.ensurePersonalGroup).toHaveBeenCalled());
+        await waitFor(() => expect(onOpenGroup).toHaveBeenCalledWith('gp'));
+    });
+
+    it('Personal is not listed among the shared groups and opens directly once it exists', async () => {
+        const u = userEvent.setup();
+        const onOpenGroup = vi.fn();
+        const { group } = await import('../../test/apiMock');
+        api.listGroups.mockResolvedValue([group, { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0]] }]);
+        renderWithData(<Dashboard {...props} onOpenGroup={onOpenGroup} />);
+        await screen.findByText('Roomies');
+        expect(screen.getAllByText('Personal')).toHaveLength(1); // only the pinned card, not also a row
+        expect(screen.queryByLabelText('Search groups')).not.toBeInTheDocument(); // one shared group: nothing to search
+        await u.click(screen.getByRole('button', { name: /^Personal/ }));
+        expect(api.ensurePersonalGroup).not.toHaveBeenCalled();
+        expect(onOpenGroup).toHaveBeenCalledWith('gp');
+    });
+
     it('Settle up goes to Friends', async () => {
         const u = userEvent.setup();
         renderWithData(<Dashboard {...props} />);
@@ -201,10 +270,10 @@ describe('Group detail', () => {
         expect(screen.getByText('Daven')).toBeInTheDocument();
         expect(screen.getByText('Owner')).toBeInTheDocument();
 
-        const email = screen.getByLabelText('Invite by email');
-        await u.type(email, 'nope');
+        const email = screen.getByLabelText('Invite by email or username');
+        await u.type(email, 'no');
         await u.click(screen.getByRole('button', { name: 'Send invite' }));
-        expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
+        expect(await screen.findByText('Enter a valid email address or @username.')).toBeInTheDocument();
         await u.clear(email);
         await u.type(email, 'amy@x.com');
         await u.click(screen.getByRole('button', { name: 'Send invite' }));
@@ -235,10 +304,81 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} initialTab="members" />);
         expect(await screen.findByText('Cam')).toBeInTheDocument();
         expect(screen.getByText('Invited')).toBeInTheDocument();
-        expect(screen.queryByLabelText('Remove Cam')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Remove Cam')).toBeInTheDocument(); // the owner can remove a person (if unused)
         expect(screen.getByLabelText('Remove Amy')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Balances' }));
         expect(await screen.findByText('Cam', { selector: 'span.truncate' })).toBeInTheDocument(); // part of the ledger
+    });
+
+    it('invites by @username as well as by email, and a username that is already a member is refused', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ ...g1, members: g1.members.map(m => (m.user_id === 'u-amy' ? { ...m, username: 'amy_s' } : m)) }]);
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        const box = await screen.findByLabelText('Invite by email or username');
+        await u.type(box, '@amy_s');
+        await u.click(screen.getByRole('button', { name: 'Send invite' }));
+        expect(await screen.findByText('That person is already in this group.')).toBeInTheDocument();
+        await u.clear(box);
+        await u.type(box, '@cam_99');
+        await u.click(screen.getByRole('button', { name: 'Send invite' }));
+        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', '@cam_99', ''));
+        expect(await screen.findByText('amy_s', { exact: false, selector: 'span' })).toBeInTheDocument(); // members show @username
+    });
+
+    it('adds a person by name only; owners can rename, merge, invite and remove name-only people', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        const bo = { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member' as const, pending: true };
+        const cy = { user_id: 'g-cy', joined_at: '2026-10-05T00:00:00Z', name: 'Cy', email: '', role: 'member' as const, pending: true };
+        api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, bo, cy] }]);
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        await u.type(await screen.findByLabelText("Person's name"), 'Dee');
+        await u.click(screen.getByRole('button', { name: 'Add' }));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('g1', 'Dee'));
+        expect(screen.getAllByText('Name only · not on Splitpot')).toHaveLength(2);
+
+        await u.click(within(screen.getByLabelText('Remove Bobby').parentElement!).getByRole('button', { name: 'Rename' }));
+        const nm = screen.getByLabelText('New name for Bobby');
+        await u.clear(nm);
+        await u.type(nm, 'Robert');
+        await u.click(within(nm.parentElement!).getByRole('button', { name: 'Rename' }));
+        await waitFor(() => expect(api.renameGuest).toHaveBeenCalledWith('g-bo', 'Robert'));
+
+        await u.click(within(screen.getByLabelText('Remove Bobby').parentElement!).getByRole('button', { name: 'Merge' }));
+        const into = screen.getByLabelText('Merge Bobby into');
+        await u.selectOptions(into, 'Cy');
+        await u.click(within(into.parentElement!).getByRole('button', { name: 'Merge' }));
+        await waitFor(() => expect(api.mergeGuest).toHaveBeenCalledWith('g-bo', 'g-cy'));
+
+        await u.click(within(screen.getByLabelText('Remove Cy').parentElement!).getByRole('button', { name: 'Invite' }));
+        const inviteBox = screen.getByLabelText('Invite Cy by email or username');
+        await u.type(inviteBox, 'cy@x.com');
+        await u.click(within(inviteBox.parentElement!).getByRole('button', { name: 'Send invite' }));
+        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', 'cy@x.com', undefined, 'g-cy'));
+
+        await u.click(screen.getByLabelText('Remove Cy'));
+        await waitFor(() => expect(api.removeGuest).toHaveBeenCalledWith('g-cy'));
+    });
+
+    it('a failed removal (person is in expenses) shows the reason', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member' as const, pending: true }] }]);
+        api.removeGuest.mockRejectedValueOnce(new Error('Bobby is already in expenses. Merge them into someone else, or delete those first.'));
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        await u.click(await screen.findByLabelText('Remove Bobby'));
+        expect(await screen.findByText(/Bobby is already in expenses/)).toBeInTheDocument();
+    });
+
+    it('the Personal group is private: no invites, no delete, just people by name', async () => {
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }]);
+        renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
+        expect(await screen.findByText(/private Personal group/)).toBeInTheDocument();
+        expect(screen.queryByLabelText('Invite by email or username')).not.toBeInTheDocument();
+        expect(screen.getByLabelText("Person's name")).toBeInTheDocument();
+        expect(screen.queryByText('Delete group')).not.toBeInTheDocument();
     });
 
     it('shows and revokes pending invites; delete group asks first and Escape dismisses', async () => {

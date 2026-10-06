@@ -109,13 +109,30 @@ describe('Account', () => {
         expect(screen.getByText("Currently me@x.com. Invites sent to your old address won't follow you after a change.")).toBeInTheDocument();
     });
 
+    it('shows and saves the username (lowercased), and says when it is taken', async () => {
+        const u = userEvent.setup();
+        renderWithData(<Account {...props} />);
+        const box = await screen.findByLabelText('Username');
+        await waitFor(() => expect(box).toHaveValue('daven'));
+        await u.clear(box);
+        await u.type(box, 'Dave_C');
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[1]);
+        await waitFor(() => expect(api.updateUsername).toHaveBeenCalledWith('Dave_C'));
+        expect(await screen.findByText('Username updated.')).toBeInTheDocument();
+        api.updateUsername.mockRejectedValueOnce(new Error('That username is taken.'));
+        await u.clear(box);
+        await u.type(box, 'taken_one');
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[1]);
+        expect(await screen.findByText('That username is taken.')).toBeInTheDocument();
+    });
+
     it('saves a new display name', async () => {
         const u = userEvent.setup();
         renderWithData(<Account {...props} />);
         const input = await screen.findByLabelText('Display name');
         await u.clear(input);
         await u.type(input, 'Dave');
-        await u.click(screen.getByRole('button', { name: 'Save' }));
+        await u.click(screen.getAllByRole('button', { name: 'Save' })[0]);
         await waitFor(() => expect(api.updateDisplayName).toHaveBeenCalledWith('Dave'));
         expect(await screen.findByText('Name updated.')).toBeInTheDocument();
     });

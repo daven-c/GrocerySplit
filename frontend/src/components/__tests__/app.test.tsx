@@ -73,14 +73,33 @@ describe('Auth', () => {
         expect(await screen.findByText('Invalid login credentials')).toBeInTheDocument();
     });
 
-    it('sign up sends the name and shows the confirm-email notice; rate limits get friendly copy', async () => {
+    it('sign up refuses a taken or malformed username before creating anything', async () => {
         const u = userEvent.setup();
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
         await u.type(screen.getByLabelText('Your name'), 'Sam');
         await u.type(screen.getByLabelText('Email'), 'sam@x.com');
         await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.type(screen.getByLabelText('Username'), 'no spaces!');
         await u.click(screen.getByRole('button', { name: 'Create account' }));
-        await waitFor(() => expect(authMock.signUp).toHaveBeenCalledWith({ email: 'sam@x.com', password: 'secret12', options: { data: { name: 'Sam' } } }));
+        expect(await screen.findByText('Usernames are 3 to 20 letters, numbers or underscores.')).toBeInTheDocument();
+        await u.clear(screen.getByLabelText('Username'));
+        await u.type(screen.getByLabelText('Username'), 'taken_name');
+        api.usernameAvailable.mockResolvedValueOnce(false);
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        expect(await screen.findByText('That username is taken. Try another.')).toBeInTheDocument();
+        expect(authMock.signUp).not.toHaveBeenCalled();
+    });
+
+    it('sign up sends the name and shows the confirm-email notice; rate limits get friendly copy', async () => {
+        const u = userEvent.setup();
+        render(<Auth initialMode="signup" onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Your name'), 'Sam');
+        await u.type(screen.getByLabelText('Username'), 'Sam_99');
+        await u.type(screen.getByLabelText('Email'), 'sam@x.com');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        await waitFor(() => expect(authMock.signUp).toHaveBeenCalledWith({ email: 'sam@x.com', password: 'secret12', options: { data: { name: 'Sam', username: 'sam_99' } } }));
+        expect(api.usernameAvailable).toHaveBeenCalledWith('sam_99');
         expect(await screen.findByText('Account created! Check your email for a confirmation link, then sign in.')).toBeInTheDocument();
 
         authMock.signUp.mockResolvedValueOnce({ data: { session: null }, error: { message: 'email rate limit exceeded' } } as any);
@@ -201,7 +220,7 @@ describe('App shell', () => {
         narrowScreen();
         signIn();
         render(<App />);
-        await u.click(await screen.findByRole('button', { name: /Roomies/ }));
+        await u.click(await screen.findByRole('button', { name: /^Roomies/ }));
         const header = await screen.findByRole('banner');
         await waitFor(() => expect(header).toHaveTextContent('Roomies'));
         await u.click(within(header).getByRole('button', { name: 'Back' }));
