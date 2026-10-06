@@ -37,8 +37,19 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
         setLoading(true);
         try {
             if (isLogin) {
-                const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-                if (error) throw error;
+                const who = email.trim();
+                if (/^[^@\s]+@[^@\s]+$/.test(who)) {
+                    const { error } = await supabase.auth.signInWithPassword({ email: who, password });
+                    if (error) throw error;
+                } else {
+                    const { data, error } = await supabase.functions.invoke('username-login', { body: { username: who, password } });
+                    if (error || !data?.session) {
+                        const body = await (error as any)?.context?.json?.().catch(() => null);
+                        throw new Error(body?.error || data?.error || 'Invalid login credentials');
+                    }
+                    const { error: setErr } = await supabase.auth.setSession(data.session);
+                    if (setErr) throw setErr;
+                }
                 onLogin();
             } else {
                 const handle = username.trim().toLowerCase().replace(/^@/, '');
@@ -119,18 +130,18 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                             </label>
                         </Collapse>
                         <label className={`flex flex-col gap-[7px] ${labelCls}`}>
-                            Email
-                            <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
+                            {isLogin ? 'Email or username' : 'Email'}
+                            <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder={isLogin ? 'you@example.com or username' : 'you@example.com'} type={isLogin ? 'text' : 'email'} autoComplete={isLogin ? 'username' : 'email'} autoCapitalize="none" required />
                         </label>
-                        <label className={`flex flex-col gap-[7px] ${labelCls}`}>
-                            Password
+                        <div className={`flex flex-col gap-[7px] ${labelCls}`}>
+                            <label htmlFor="auth-password">Password</label>
                             <span className="relative">
-                                <input className={`${fieldCls} pr-12`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
-                                <motion.button {...tapFlat} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3.5 flex items-center text-faint hover:text-ink">
+                                <input id="auth-password" className={`${fieldCls} pr-12`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
+                                <motion.button {...tapFlat} type="button" onMouseDown={e => e.preventDefault()} onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 w-12 flex items-center justify-center touch-manipulation text-faint hover:text-ink">
                                     <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={20} />
                                 </motion.button>
                             </span>
-                        </label>
+                        </div>
 
                         <Pop show={!!error} className="text-[13.5px] font-bold text-coral-strong">{error}</Pop>
                         <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>

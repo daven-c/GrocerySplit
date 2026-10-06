@@ -391,7 +391,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         {addOpen && (
                             <motion.div
                                 role="menu"
-                                className="absolute right-0 top-[54px] z-10 w-[300px] max-w-[calc(100vw-32px)] bg-white border border-edge rounded-[22px] shadow-popover p-2 flex flex-col gap-0.5 origin-top-right"
+                                className="absolute left-0 sm:left-auto sm:right-0 top-[54px] z-10 w-[300px] max-w-[calc(100vw-32px)] bg-white border border-edge rounded-[22px] shadow-popover p-2 flex flex-col gap-0.5 origin-top-left sm:origin-top-right"
                                 initial={{ opacity: 0.8, scale: 0.94, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: -4 }} transition={spring}
                             >
                                 {[

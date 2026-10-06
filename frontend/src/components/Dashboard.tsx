@@ -133,7 +133,7 @@ export default function Dashboard({ narrow, newGroupTick, onOpenGroup, onGoFrien
             <div className="flex-[999_1_420px] min-w-0 bg-white rounded-[24px] shadow-hero pt-5 px-2.5 pb-2.5 flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
                     <h2 className="m-0 text-xl font-black tracking-[-0.02em]">Your groups</h2>
-                    <div className="ml-auto flex gap-1.5" role="group" aria-label="Sort groups">
+                    <div className="basis-full min-[560px]:basis-auto min-[560px]:ml-auto flex flex-wrap gap-1.5" role="group" aria-label="Sort groups">
                         {SORTS.map(o => (
                             <motion.button
                                 key={o.value}

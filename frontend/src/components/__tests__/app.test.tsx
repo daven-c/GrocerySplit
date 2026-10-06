@@ -59,11 +59,33 @@ describe('Auth', () => {
         expect(screen.getByText('Sign in to see who owes what.')).toBeInTheDocument();
     });
 
+    it('signs in with a username through the username-login function', async () => {
+        const u = userEvent.setup();
+        const onLogin = vi.fn();
+        render(<Auth onLogin={onLogin} />);
+        await u.type(screen.getByLabelText('Email or username'), '@Daven_c');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Sign in' }));
+        await waitFor(() => expect(onLogin).toHaveBeenCalled());
+        expect(authMock.invoke).toHaveBeenCalledWith('username-login', { body: { username: '@Daven_c', password: 'secret12' } });
+        expect(authMock.signInWithPassword).not.toHaveBeenCalled();
+        expect(authMock.setSession).toHaveBeenCalledWith({ access_token: 'a', refresh_token: 'r' });
+    });
+
+    it('toggles password visibility', async () => {
+        const u = userEvent.setup();
+        render(<Auth onLogin={vi.fn()} />);
+        const pw = screen.getByLabelText('Password');
+        expect(pw).toHaveAttribute('type', 'password');
+        await u.click(screen.getByRole('button', { name: 'Show password' }));
+        expect(pw).toHaveAttribute('type', 'text');
+    });
+
     it('signs in and calls onLogin; shows errors in coral', async () => {
         const u = userEvent.setup();
         const onLogin = vi.fn();
         render(<Auth onLogin={onLogin} />);
-        await u.type(screen.getByLabelText('Email'), ' me@x.com ');
+        await u.type(screen.getByLabelText('Email or username'), ' me@x.com ');
         await u.type(screen.getByLabelText('Password'), 'secret12');
         await u.click(screen.getByRole('button', { name: 'Sign in' }));
         await waitFor(() => expect(authMock.signInWithPassword).toHaveBeenCalledWith({ email: 'me@x.com', password: 'secret12' }));

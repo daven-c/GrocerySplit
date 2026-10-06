@@ -50,6 +50,8 @@ export const authMock = {
     signInWithPassword: vi.fn(async (_a?: any) => ({ error: null as any })),
     signUp: vi.fn(async (_a?: any) => ({ data: { session: null as any }, error: null as any })),
     signOut: vi.fn(async () => ({ error: null })),
+    setSession: vi.fn(async (_s?: any) => ({ error: null as any })),
+    invoke: vi.fn(async (_n?: string, _o?: any) => ({ data: { session: { access_token: 'a', refresh_token: 'r' } } as any, error: null as any })),
 };
 export const supabaseModule = {
     supabase: {
@@ -60,7 +62,9 @@ export const supabaseModule = {
             signInWithPassword: (a: any) => authMock.signInWithPassword(a),
             signUp: (a: any) => authMock.signUp(a),
             signOut: () => authMock.signOut(),
+            setSession: (x: any) => authMock.setSession(x),
         },
+        functions: { invoke: (n: string, o: any) => authMock.invoke(n, o) },
     },
 };
 
