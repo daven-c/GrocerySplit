@@ -21,7 +21,7 @@ interface ShellProps {
 }
 
 /** Home highlights for every group-ish screen (the Personal section highlights itself). */
-const navFor = (view: ShellView, personal: boolean): NavView => (['home', 'group', 'import', 'split', 'expense'].includes(view) ? (personal ? 'personal' : 'home') : (view as NavView));
+const navFor = (view: ShellView, personal: boolean): NavView => (['group', 'import', 'split', 'expense'].includes(view) ? (personal ? 'personal' : 'home') : (view as NavView));
 
 export default function Shell({ view, narrow, user, groupId, recordId, onNav, onOpenGroup, onNewGroup, onBack, children }: ShellProps) {
     const { groups, sessions, invites, isAdmin, refresh } = useAppData();

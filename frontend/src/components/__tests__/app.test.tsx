@@ -183,6 +183,12 @@ describe('App shell', () => {
         expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
         expect(within(sidebar).getByRole('button', { name: 'Personal', current: 'page' })).toBeInTheDocument();
         expect(within(sidebar).queryAllByRole('button', { name: /^Personal$/ })).toHaveLength(1); // not duplicated in the group list
+
+        // Home is Home again, even though the last group opened was Personal
+        await u.click(within(sidebar).getByRole('button', { name: 'Home' }));
+        expect(await screen.findByText(/^(Morning|Afternoon|Evening), Daven$/)).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Home', current: 'page' })).toBeInTheDocument();
+        expect(within(sidebar).getByRole('button', { name: 'Personal' })).not.toHaveAttribute('aria-current');
     });
 
     it('scrolls to the top on every view change', async () => {
