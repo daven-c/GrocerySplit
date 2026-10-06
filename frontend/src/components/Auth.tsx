@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { usernameAvailable } from '../lib/api';
 import { motion, Pop, Collapse, SegmentedTabs, enter, tapFlat } from '../lib/motion';
-import { Icon, Logo, Button, inputCls, labelCls } from './ui';
+import { Icon, Logo, Button, labelCls } from './ui';
 import { fmt, toneFor, HUES } from '../lib/people';
 
 interface AuthProps {
@@ -63,15 +63,41 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
 
     const total = PREVIEW.reduce((a, p) => a + p.amt, 0);
 
+    const fieldCls = 'w-full h-[50px] px-4 border-[1.5px] border-line rounded-2xl bg-field text-[15.5px] font-semibold text-ink';
+
     return (
         <div className="min-h-screen flex flex-wrap bg-white">
-            <div className="flex-[1_1_420px] flex items-center justify-center px-6 py-14">
-                <motion.div {...enter(0)} className="w-full max-w-[360px] flex flex-col gap-7">
-                    <button type="button" onClick={onBack} aria-label="Back to the home page" className="self-start"><Logo size={22} word={19} /></button>
+            <div className="hidden min-[760px]:flex flex-[1_1_440px] bg-band text-white flex-col justify-between gap-10 pt-10 px-14 pb-14">
+                <Logo size={24} word={21} onBand />
+                <div className="flex flex-col gap-7">
+                    <motion.p {...enter(1)} className="m-0 text-[38px] leading-[1.1] font-black tracking-[-0.03em] max-w-[460px]" style={{ textWrap: 'balance' } as React.CSSProperties}>
+                        Tap an item, pick who had it. Tax and tip land where they belong.
+                    </motion.p>
+                    <motion.div {...enter(2)} className="bg-white text-ink rounded-[24px] p-5 max-w-[400px] flex flex-col gap-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
+                        <div className="flex justify-between text-[13.5px] font-bold text-faint"><span>Corner Market · Oct 3</span><span>12 items</span></div>
+                        {PREVIEW.map((p, i) => {
+                            const t = toneFor(HUES[i % HUES.length]);
+                            return (
+                                <div key={p.name} className="flex items-center gap-3">
+                                    <span className="w-8 h-8 rounded-full grid place-items-center text-[13px] font-black" style={{ background: t.bg, color: t.fg }}>{p.name[0]}</span>
+                                    <span className="flex-1 text-[15px] font-extrabold">{p.name}</span>
+                                    <span className="text-[15px] font-extrabold">{fmt(p.amt)}</span>
+                                </div>
+                            );
+                        })}
+                        <div className="border-t-[1.5px] border-dashed border-line pt-3 flex justify-between font-black text-[15px]"><span>Total</span><span>{fmt(total)}</span></div>
+                    </motion.div>
+                </div>
+            </div>
+
+            <div className="flex-[1_1_420px] flex items-center justify-center px-6 py-12">
+                <motion.div {...enter(0)} className="w-full max-w-[380px] flex flex-col gap-[26px]">
+                    <button type="button" onClick={onBack} aria-label="Back to the home page" className="self-start min-[760px]:hidden"><Logo size={24} word={21} /></button>
+                    <button type="button" onClick={onBack} className="hidden min-[760px]:flex self-start items-center gap-1 h-[34px] pl-2 pr-3.5 rounded-full bg-soft text-[13.5px] font-extrabold text-body"><Icon name="arrow_back" size={17} />Back</button>
 
                     <div className="flex flex-col gap-2">
-                        <h1 className="m-0 text-[30px] leading-[1.15] font-semibold tracking-title">{isLogin ? 'Welcome back' : 'Start a pot'}</h1>
-                        <p className="m-0 text-[15px] leading-normal text-muted">
+                        <h1 className="m-0 text-[32px] leading-[1.1] font-black tracking-title">{isLogin ? 'Welcome back' : 'Start your first pot'}</h1>
+                        <p className="m-0 text-base font-semibold leading-[1.45] text-muted">
                             {isLogin ? 'Sign in to see who owes what.' : 'Split groceries, rent and trips with the people you share them with.'}
                         </p>
                     </div>
@@ -80,60 +106,40 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
 
                     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                         <Collapse open={!isLogin}>
-                            <label className={`flex flex-col gap-1.5 ${labelCls} px-1 pb-1 -mx-1`}>
+                            <label className={`flex flex-col gap-[7px] ${labelCls} px-1 pb-1 -mx-1`}>
                                 Your name
-                                <input className={`${inputCls} h-11 px-3.5`} value={name} onChange={e => setName(e.target.value)} placeholder="What your friends call you" type="text" autoComplete="name" required={!isLogin} />
+                                <input className={fieldCls} value={name} onChange={e => setName(e.target.value)} placeholder="What your friends call you" type="text" autoComplete="name" required={!isLogin} />
                             </label>
                         </Collapse>
                         <Collapse open={!isLogin}>
-                            <label className={`flex flex-col gap-1.5 ${labelCls} px-1 pb-1 -mx-1`}>
+                            <label className={`flex flex-col gap-[7px] ${labelCls} px-1 pb-1 -mx-1`}>
                                 Username
-                                <input className={`${inputCls} h-11 px-3.5`} value={username} onChange={e => setUsername(e.target.value)} placeholder="People invite you by this" type="text" autoComplete="username" maxLength={21} required={!isLogin} />
+                                <input className={fieldCls} value={username} onChange={e => setUsername(e.target.value)} placeholder="People invite you by this" type="text" autoComplete="username" maxLength={21} required={!isLogin} />
                             </label>
                         </Collapse>
-                        <label className={`flex flex-col gap-1.5 ${labelCls}`}>
+                        <label className={`flex flex-col gap-[7px] ${labelCls}`}>
                             Email
-                            <input className={`${inputCls} h-11 px-3.5`} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
+                            <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
                         </label>
-                        <label className={`flex flex-col gap-1.5 ${labelCls}`}>
+                        <label className={`flex flex-col gap-[7px] ${labelCls}`}>
                             Password
                             <span className="relative">
-                                <input className={`${inputCls} h-11 px-3.5 pr-11`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
-                                <motion.button {...tapFlat} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3 flex items-center text-faint hover:text-ink">
+                                <input className={`${fieldCls} pr-12`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
+                                <motion.button {...tapFlat} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3.5 flex items-center text-faint hover:text-ink">
                                     <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={20} />
                                 </motion.button>
                             </span>
                         </label>
 
-                        <Pop show={!!error} className="text-[13px] text-coral-strong">{error}</Pop>
-                        <Pop show={!!notice} className="px-3 py-2.5 rounded-[10px] bg-green-tint text-green-on text-[13px]">{notice}</Pop>
+                        <Pop show={!!error} className="text-[13.5px] font-bold text-coral-strong">{error}</Pop>
+                        <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>
 
-                        <Button type="submit" height={46} wide disabled={loading} className="mt-1 text-[15px]">
+                        <Button type="submit" height={52} wide disabled={loading} className="mt-1.5 text-base">
                             {loading ? 'Just a moment...' : isLogin ? 'Sign in' : 'Create account'}
                         </Button>
                     </form>
 
-                    <p className="m-0 text-[13px] leading-normal text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>
-                </motion.div>
-            </div>
-
-            <div className="hidden min-[760px]:flex flex-[1_1_420px] bg-ink text-white flex-col justify-center gap-9 p-14">
-                <motion.p {...enter(1)} className="m-0 text-[28px] leading-[1.25] font-medium tracking-[-0.02em] max-w-[420px] text-[#FDFDFC]" style={{ textWrap: 'pretty' } as React.CSSProperties}>
-                    Tap an item, pick who had it. Tax and tip land where they belong.
-                </motion.p>
-                <motion.div {...enter(2)} className="bg-white text-ink rounded-[14px] p-5 max-w-[380px] flex flex-col gap-3.5">
-                    <div className="flex justify-between text-[13px] text-muted"><span>Corner Market · Oct 3</span><span>12 items</span></div>
-                    {PREVIEW.map((p, i) => {
-                        const t = toneFor(HUES[i % HUES.length]);
-                        return (
-                            <div key={p.name} className="flex items-center gap-2.5">
-                                <span className="w-[26px] h-[26px] rounded-full grid place-items-center text-xs font-semibold" style={{ background: t.bg, color: t.fg }}>{p.name[0]}</span>
-                                <span className="flex-1 text-sm font-medium">{p.name}</span>
-                                <span className="font-mono text-sm">{fmt(p.amt)}</span>
-                            </div>
-                        );
-                    })}
-                    <div className="border-t border-dashed border-dash pt-3 flex justify-between font-semibold text-sm"><span>Total</span><span className="font-mono">{fmt(total)}</span></div>
+                    <p className="m-0 text-[13.5px] font-semibold leading-[1.5] text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>
                 </motion.div>
             </div>
         </div>

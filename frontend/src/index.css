@@ -7,8 +7,8 @@
 	body {
 		margin: 0;
 		background: #ffffff;
-		font-family: "Schibsted Grotesk", system-ui, sans-serif;
-		color: #1b1a17;
+		font-family: "Nunito", system-ui, sans-serif;
+		color: #26221e;
 		-webkit-font-smoothing: antialiased;
 	}
 	input,
@@ -17,21 +17,22 @@
 	button {
 		font-family: inherit;
 	}
-	/* Fields darken their border on focus; buttons keep a visible keyboard ring. */
+	/* Fields turn brand green and white on focus; buttons keep a visible keyboard ring. */
 	input:focus,
 	select:focus,
 	textarea:focus {
 		outline: none;
-		border-color: #1b1a17 !important;
+		border-color: oklch(0.55 0.1 158) !important;
+		background-color: #fff !important;
 	}
 	button:focus-visible,
 	a:focus-visible {
-		outline: 2px solid #1b1a17;
+		outline: 2px solid oklch(0.55 0.1 158);
 		outline-offset: 2px;
 	}
 	input::placeholder,
 	textarea::placeholder {
-		color: #b3afa6;
+		color: #b5aba0;
 	}
 }
 

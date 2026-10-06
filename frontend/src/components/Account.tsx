@@ -14,7 +14,7 @@ type Msg = { type: 'ok' | 'err'; text: string } | null;
 
 function Banner({ msg }: { msg: Msg }) {
     return (
-        <Pop show={!!msg} className={`text-[13px] ${msg?.type === 'err' ? 'text-coral-strong' : 'px-3 py-2.5 rounded-[10px] bg-green-tint text-green-on'}`}>
+        <Pop show={!!msg} className={`text-[13.5px] font-bold ${msg?.type === 'err' ? 'text-coral-strong' : 'px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on font-extrabold'}`}>
             {msg?.text}
         </Pop>
     );
@@ -24,8 +24,8 @@ function PasswordField({ placeholder, label, value, onChange, autoComplete, clas
     const [show, setShow] = useState(false);
     return (
         <span className={`relative ${className}`}>
-            <input aria-label={label} placeholder={placeholder} className={`${inputCls} pr-11`} type={show ? 'text' : 'password'} value={value} onChange={e => onChange(e.target.value)} autoComplete={autoComplete} required />
-            <motion.button {...tapFlat} type="button" onClick={() => setShow(v => !v)} aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} className="absolute inset-y-0 right-0 px-3 flex items-center text-faint hover:text-ink">
+            <input aria-label={label} placeholder={placeholder} className={`${inputCls} pr-12`} type={show ? 'text' : 'password'} value={value} onChange={e => onChange(e.target.value)} autoComplete={autoComplete} required />
+            <motion.button {...tapFlat} type="button" onClick={() => setShow(v => !v)} aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} className="absolute inset-y-0 right-0 px-3.5 flex items-center text-faint hover:text-ink">
                 <Icon name={show ? 'visibility_off' : 'visibility'} size={20} />
             </motion.button>
         </span>
@@ -126,68 +126,71 @@ export default function Account({ user, onLogout }: AccountProps) {
     };
 
     const tone = toneFor(HUES[0]);
+    const section = 'p-5 flex flex-col gap-2.5';
+    const titleCls = 'text-base font-black';
+    const hintCls = 'text-[13.5px] font-semibold leading-[1.5] text-faint';
     return (
-        <div className="max-w-[620px] mx-auto flex flex-col gap-7">
+        <div className="max-w-[640px] mx-auto flex flex-col gap-[22px]">
             <motion.div {...enter(0)} className="flex items-center gap-4">
-                <Avatar name={user?.name || 'U'} tone={tone} size={56} />
+                <Avatar name={user?.name || 'U'} tone={tone} size={68} />
                 <div className="flex flex-col gap-0.5 min-w-0">
-                    <h1 className="m-0 text-2xl font-semibold tracking-[-0.02em] truncate">{user?.name || 'You'}</h1>
-                    <span className="text-sm text-muted truncate">{user?.email} · {groups.length} {groups.length === 1 ? 'group' : 'groups'}</span>
+                    <h1 className="m-0 text-[28px] font-black tracking-[-0.02em] truncate">{user?.name || 'You'}</h1>
+                    <span className="text-[15px] font-semibold text-muted truncate">{user?.email} · {groups.length} {groups.length === 1 ? 'group' : 'groups'}</span>
                 </div>
             </motion.div>
 
             <motion.div {...enter(1)}>
                 <Card>
-                    <form className="p-5 flex flex-col gap-2.5" onSubmit={saveName}>
-                        <label htmlFor="display-name" className="text-[15px] font-semibold">Display name</label>
+                    <form className={section} onSubmit={saveName}>
+                        <label htmlFor="display-name" className={titleCls}>Display name</label>
                         <div className="flex gap-2">
                             <input id="display-name" className={`${inputCls} flex-1 min-w-0`} value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
-                            <Button variant="secondary" type="submit" height={42} disabled={nameBusy || !name.trim() || name.trim() === user?.name}>{nameBusy ? 'Saving…' : 'Save'}</Button>
+                            <Button variant="secondary" type="submit" height={46} className="px-5 text-[14.5px]" disabled={nameBusy || !name.trim() || name.trim() === user?.name}>{nameBusy ? 'Saving…' : 'Save'}</Button>
                         </div>
-                        <span className="text-[13px] text-faint">This is how you appear on receipts and in your groups.</span>
+                        <span className={hintCls}>This is how you appear on receipts and in your groups.</span>
                         <Banner msg={nameMsg} />
                     </form>
 
-                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={saveUsername}>
-                        <label htmlFor="username" className="text-[15px] font-semibold">Username</label>
+                    <form className={`${section} border-t border-rule`} onSubmit={saveUsername}>
+                        <label htmlFor="username" className={titleCls}>Username</label>
                         <div className="flex gap-2">
-                            <span className="flex-1 min-w-0 flex items-center gap-1 h-[42px] px-3 border border-line rounded-[10px] bg-white focus-within:border-ink">
-                                <span className="text-faint">@</span>
-                                <input id="username" className="flex-1 min-w-0 border-0 bg-transparent text-[15px]" value={username} onChange={e => setUsername(e.target.value)} maxLength={20} autoCapitalize="none" required />
+                            <span className="flex-1 min-w-0 flex items-center gap-1 h-[46px] px-4 border-[1.5px] border-line rounded-full bg-field focus-within:border-[oklch(0.55_0.1_158)] focus-within:bg-white">
+                                <span className="font-bold text-faint">@</span>
+                                <input id="username" className="flex-1 min-w-0 border-0 bg-transparent text-[15px] font-bold" value={username} onChange={e => setUsername(e.target.value)} maxLength={20} autoCapitalize="none" required />
                             </span>
-                            <Button variant="secondary" type="submit" height={42} disabled={unameBusy || !username.trim() || username.trim().toLowerCase() === savedUsername}>{unameBusy ? 'Saving…' : 'Save'}</Button>
+                            <Button variant="secondary" type="submit" height={46} className="px-5 text-[14.5px]" disabled={unameBusy || !username.trim() || username.trim().toLowerCase() === savedUsername}>{unameBusy ? 'Saving…' : 'Save'}</Button>
                         </div>
-                        <span className="text-[13px] leading-normal text-faint">People invite you to a group with @{savedUsername || 'username'}, so your email stays private. Letters, numbers and underscores, unique to you.</span>
+                        <span className={hintCls}>People invite you to a group with @{savedUsername || 'username'}, so your email stays private. Letters, numbers and underscores, unique to you.</span>
                         <Banner msg={unameMsg} />
                     </form>
 
-                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={saveEmail}>
-                        <label htmlFor="new-email" className="text-[15px] font-semibold">Email</label>
+                    <form className={`${section} border-t border-rule`} onSubmit={saveEmail}>
+                        <label htmlFor="new-email" className={titleCls}>Email</label>
                         <div className="flex gap-2">
                             <input id="new-email" className={`${inputCls} flex-1 min-w-0`} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="new@example.com" autoComplete="email" required />
-                            <Button variant="secondary" type="submit" height={42} disabled={emailBusy || !email.trim() || email.trim().toLowerCase() === user?.email?.toLowerCase()}>{emailBusy ? 'Sending…' : 'Change'}</Button>
+                            <Button variant="secondary" type="submit" height={46} className="px-5 text-[14.5px]" disabled={emailBusy || !email.trim() || email.trim().toLowerCase() === user?.email?.toLowerCase()}>{emailBusy ? 'Sending…' : 'Change'}</Button>
                         </div>
-                        <span className="text-[13px] leading-normal text-faint">Currently {user?.email}. Invites sent to your old address won't follow you after a change.</span>
+                        <span className={hintCls}>Currently {user?.email}. Invites sent to your old address won't follow you after a change.</span>
                         <Banner msg={emailMsg} />
                     </form>
 
-                    <form className="p-5 border-t border-rule flex flex-col gap-2.5" onSubmit={savePassword}>
-                        <span className="text-[15px] font-semibold">Password</span>
+                    <form className={`${section} border-t border-rule`} onSubmit={savePassword}>
+                        <span className={titleCls}>Password</span>
                         <PasswordField label="Current password" placeholder="Current password" value={cur} onChange={setCur} autoComplete="current-password" />
                         <div className="flex flex-wrap gap-2">
                             <PasswordField label="New password" placeholder="New password" value={next} onChange={setNext} autoComplete="new-password" className="flex-[1_1_180px] min-w-0" />
                             <PasswordField label="Confirm new password" placeholder="Confirm new password" value={confirm} onChange={setConfirm} autoComplete="new-password" className="flex-[1_1_180px] min-w-0" />
                         </div>
                         <Banner msg={pwMsg} />
-                        <Button type="submit" height={40} className="self-start" disabled={pwBusy || !cur || !next || !confirm}>{pwBusy ? 'Updating…' : 'Update password'}</Button>
+                        <Button type="submit" height={44} className="self-start px-5 text-[14.5px]" disabled={pwBusy || !cur || !next || !confirm}>{pwBusy ? 'Updating…' : 'Update password'}</Button>
                     </form>
                 </Card>
             </motion.div>
 
-            <motion.div {...enter(2)}>
-                <Button variant="secondary" height={40} className="self-start text-coral-strong px-3.5" onClick={onLogout}>
-                    <Icon name="logout" size={18} />Sign out
-                </Button>
+            <motion.div {...enter(2)} className="flex">
+                <motion.button {...tapFlat} onClick={onLogout} className="h-11 pl-3.5 pr-[18px] flex items-center gap-2 rounded-full bg-[oklch(0.96_0.03_35)] text-[oklch(0.5_0.17_32)] text-[14.5px] font-extrabold">
+                    <Icon name="logout" size={19} />Sign out
+                </motion.button>
             </motion.div>
         </div>
     );

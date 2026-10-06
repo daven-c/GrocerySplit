@@ -18,14 +18,15 @@ const ROWS = [
     { name: 'Cold brew concentrate', price: '$9.99', who: 'L', note: 'Just Leo' },
 ];
 const STEPS = [
-    { n: '01', title: 'Add the cost', body: 'Import a grocery receipt with any AI chat, or enter any bill by hand: rent, utilities, dinner, a trip.' },
-    { n: '02', title: 'Say who shares it', body: 'Tap who had what on a receipt, or pick who is in on a bill and split it by amount or shares.' },
-    { n: '03', title: 'Settle up', body: 'Splitpot tracks who paid and who owes, across every group. Mark payments as you make them.' },
+    { icon: 'photo_camera', title: 'Read the receipt', body: 'Copy our prompt into any AI chat with a photo of the receipt. Paste back what it returns and every line item appears.', bg: 'oklch(0.965 0.03 158)', fg: 'oklch(0.42 0.11 158)' },
+    { icon: 'touch_app', title: 'Tap who had what', body: 'Pick a person and tap their items, or split one item between a few people. Shared staples take one tap.', bg: 'oklch(0.97 0.03 250)', fg: 'oklch(0.45 0.13 250)' },
+    { icon: 'handshake', title: 'Settle up', body: 'Splitpot tracks who paid and who owes, across every group. Mark payments as you make them.', bg: 'oklch(0.97 0.03 40)', fg: 'oklch(0.5 0.15 35)' },
 ];
 const POINTS = [
-    { title: 'Exact, every time', body: 'All the math runs in whole cents. Tax and tip are shared by what each person bought, and the totals always match.' },
-    { title: 'Groups for everything', body: 'A household, a weekend away, a book club. Invite people by email and everyone sees the same expenses.' },
-    { title: 'One balance per friend', body: 'See what you owe each person across all the groups you share, in one place.' },
+    { title: 'Exact, every time', body: 'All the math runs in whole cents. Tax and tip are shared by what each person bought, and the totals always match the receipt.' },
+    { title: 'Rent and bills too', body: 'Not everything has items. Split one total by amounts, or by shares for the bigger room.' },
+    { title: 'Groups for everything', body: 'A household, a weekend away, a book club. Invite people by username and everyone sees the same expenses.' },
+    { title: 'Quick splits, no account', body: 'One dinner, one link. Friends open it, add their name and tap what they had.' },
 ];
 
 /** Sections fade up as they scroll in; they start at 0.8 opacity so they are never invisible. */
@@ -42,97 +43,97 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
     const quick = () => { setStarting(true); startQuickSplit().catch(() => setStarting(false)); };
     return (
         <div className="bg-white text-ink font-sans">
-            <header className="max-w-[1160px] mx-auto px-6 py-[22px] flex items-center gap-6">
-                <Logo size={22} word={19} />
-                <nav className="ml-auto flex items-center gap-2">
-                    <a href="#how" className="px-3 py-2 text-sm font-medium text-body hover:text-green">How it works</a>
-                    <motion.button {...tapFlat} onClick={onSignIn} className="px-3 py-2 text-sm font-medium text-body hover:text-green">Sign in</motion.button>
-                    <motion.button {...tapFlat} onClick={onGetStarted} className="h-[38px] px-4 rounded-[10px] bg-ink text-white text-sm font-semibold hover:bg-ink-hover">Get started</motion.button>
-                </nav>
-            </header>
+            <div className="bg-band text-white">
+                <header className="max-w-[1160px] mx-auto px-6 py-[18px] flex items-center gap-2">
+                    <Logo size={24} word={21} onBand />
+                    <nav className="ml-auto flex items-center gap-1.5">
+                        <a href="#how" className="h-10 px-3.5 flex items-center text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">How it works</a>
+                        <motion.button {...tapFlat} onClick={onSignIn} className="h-10 px-3.5 text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">Sign in</motion.button>
+                        <motion.button {...tapFlat} onClick={onGetStarted} className="h-[42px] px-5 rounded-full bg-white text-band-deep text-[15px] font-black">Get started</motion.button>
+                    </nav>
+                </header>
 
-            <section className="max-w-[1160px] mx-auto px-6 pt-[72px] pb-24 flex flex-wrap gap-14 items-center">
-                <div className="flex-[1_1_440px] flex flex-col gap-6">
-                    <motion.h1 {...enter(0)} className="m-0 font-semibold leading-[1.02] tracking-tightest text-[clamp(40px,6vw,68px)]" style={{ textWrap: 'balance' } as React.CSSProperties}>
-                        Split any cost, down to the penny.
-                    </motion.h1>
-                    <motion.p {...enter(1)} className="m-0 text-[19px] leading-normal text-body max-w-[500px]" style={{ textWrap: 'pretty' } as React.CSSProperties}>
-                        Groceries, rent, bills and trips. Add what was spent, say who shares it, and Splitpot works out who owes whom, tax and tip included. Balances carry across every group you're in.
-                    </motion.p>
-                    <motion.div {...enter(2)} className="flex flex-wrap gap-3 items-center">
-                        <motion.button {...tapFlat} onClick={onGetStarted} className="h-12 px-[22px] rounded-xl bg-ink text-white text-base font-semibold hover:bg-ink-hover">Start a group, free</motion.button>
-                        {isEnabled('quickSplit') && <motion.button {...tapFlat} disabled={starting} onClick={quick} className="h-12 px-[18px] rounded-xl border border-line text-base font-semibold text-ink hover:bg-wash disabled:opacity-60">Split one bill, no account</motion.button>}
-                        <a href="#how" className="h-12 px-[18px] flex items-center text-base font-semibold text-ink hover:text-green">See how it works</a>
-                    </motion.div>
-                </div>
+                <section className="max-w-[1160px] mx-auto px-6 pt-14 flex flex-wrap gap-12 items-end">
+                    <div className="flex-[1_1_440px] flex flex-col gap-6 pb-20">
+                        <motion.h1 {...enter(0)} className="m-0 font-black leading-[1.02] tracking-tightest text-[clamp(42px,6vw,70px)]" style={{ textWrap: 'balance' } as React.CSSProperties}>
+                            Split the groceries down to the penny.
+                        </motion.h1>
+                        <motion.p {...enter(1)} className="m-0 text-[19px] leading-normal font-semibold text-[oklch(0.88_0.05_155)] max-w-[480px]" style={{ textWrap: 'pretty' } as React.CSSProperties}>
+                            Snap the receipt, tap who had what, and Splitpot works out everyone's share with tax and tip included. Rent and bills too, and balances carry across every group you're in.
+                        </motion.p>
+                        <motion.div {...enter(2)} className="flex flex-wrap gap-2.5 items-center">
+                            <motion.button {...tapFlat} onClick={onGetStarted} className="h-[52px] px-6 rounded-full bg-white text-band-deep text-base font-black">Start a group, free</motion.button>
+                            {isEnabled('quickSplit') && (
+                                <motion.button {...tapFlat} disabled={starting} onClick={quick} className="h-[52px] px-[22px] rounded-full bg-band-btn text-white text-base font-extrabold flex items-center gap-1.5 hover:bg-band-btn-hover disabled:opacity-60">
+                                    <Icon name="bolt" size={20} />Quick split, no account
+                                </motion.button>
+                            )}
+                        </motion.div>
+                    </div>
 
-                <div className="flex-[1_1_380px] flex justify-center">
-                    <motion.div {...enter(2)} className="w-full max-w-[420px] relative">
-                        <div className="bg-white border border-edge rounded-[18px] shadow-landing overflow-hidden">
-                            <div className="px-5 py-[18px] flex justify-between items-baseline border-b border-rule">
-                                <div className="flex flex-col gap-0.5"><span className="text-[17px] font-semibold">Corner Market</span><span className="text-[13px] text-faint">Maple St. House · Oct 3</span></div>
-                                <span className="text-[22px] font-semibold tracking-[-0.02em]">$96.27</span>
+                    <div className="flex-[1_1_380px] flex justify-center -mb-[120px]">
+                        <motion.div {...enter(2)} className="w-full max-w-[420px] bg-white text-ink rounded-[28px] shadow-landing overflow-hidden">
+                            <div className="px-[22px] py-5 flex justify-between items-center">
+                                <span className="flex items-center gap-3">
+                                    <span className="w-[42px] h-[42px] rounded-full grid place-items-center bg-[oklch(0.95_0.05_155)] text-[oklch(0.45_0.13_155)]"><Icon name="shopping_basket" size={21} /></span>
+                                    <span className="flex flex-col"><span className="text-[17px] font-black">Corner Market</span><span className="text-[13px] font-bold text-faint">Maple St. House · Oct 3</span></span>
+                                </span>
+                                <span className="text-[22px] font-black tracking-[-0.02em]">$96.27</span>
                             </div>
-                            {ROWS.map((r, i) => (
-                                <div key={r.name} className={`px-5 py-3.5 flex flex-col gap-2.5 ${i ? 'border-t border-rule' : ''}`}>
-                                    <div className="flex justify-between"><span className="text-[15px] font-medium">{r.name}</span><span className="font-mono text-sm">{r.price}</span></div>
+                            {ROWS.map(r => (
+                                <div key={r.name} className="px-[22px] py-3.5 flex flex-col gap-2.5 border-t border-rule">
+                                    <div className="flex justify-between"><span className="text-[15.5px] font-extrabold">{r.name}</span><span className="text-[15px] font-extrabold">{r.price}</span></div>
                                     <div className="flex gap-1.5 items-center">
                                         {'SPJL'.split('').map(c => {
                                             const on = r.who.includes(c);
                                             const t = toneFor(H[c]);
                                             return (
-                                                <span key={c} className="w-7 h-7 rounded-full grid place-items-center text-xs font-semibold" style={{ background: on ? t.bg : 'transparent', color: on ? t.fg : '#B3AFA6', border: `1px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#CFCBC2'}` }}>{c}</span>
+                                                <span key={c} className="w-8 h-8 rounded-full grid place-items-center text-[13px] font-black" style={{ background: on ? t.bg : '#fff', color: on ? t.fg : '#C2B8AC', border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#E3DBD0'}` }}>{c}</span>
                                             );
                                         })}
-                                        <span className="ml-auto text-xs text-faint">{r.note}</span>
+                                        <span className="ml-auto text-[13px] font-bold text-faint">{r.note}</span>
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                        <motion.div {...enter(4)} className="hidden min-[520px]:flex absolute -bottom-[62px] -left-8 bg-white border border-edge rounded-[14px] shadow-popover px-4 py-3 items-center gap-3">
-                            <span className="w-9 h-9 rounded-full grid place-items-center bg-green-tint text-green-on"><Icon name="home" size={20} /></span>
-                            <div className="flex flex-col"><span className="text-sm font-semibold">Rent · Oct 1</span><span className="text-xs text-faint">$2,400.00 · split 4 ways</span></div>
                         </motion.div>
-                    </motion.div>
-                </div>
-            </section>
-
-            <section id="how" className="bg-ink text-white">
-                <div className="max-w-[1160px] mx-auto px-6 py-24 flex flex-col gap-14">
-                    <motion.h2 {...reveal()} className="m-0 font-semibold leading-[1.1] tracking-[-0.03em] max-w-[620px] text-[clamp(30px,4vw,44px)]" style={{ textWrap: 'balance' } as React.CSSProperties}>
-                        Three steps from crumpled receipt to settled up.
-                    </motion.h2>
-                    <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
-                        {STEPS.map((s, i) => (
-                            <motion.div key={s.n} {...reveal(i)} className="flex flex-col gap-3 border-t border-[#3A3833] pt-5">
-                                <span className="font-mono text-[13px] text-green-mint">{s.n}</span>
-                                <span className="text-xl font-semibold tracking-[-0.01em]">{s.title}</span>
-                                <span className="text-[15px] leading-[1.55] text-[#BDB9B0]">{s.body}</span>
-                            </motion.div>
-                        ))}
                     </div>
+                </section>
+            </div>
+
+            <section id="how" className="max-w-[1160px] mx-auto px-6 pt-[180px] pb-24 flex flex-col gap-11">
+                <motion.h2 {...reveal()} className="m-0 font-black leading-[1.08] tracking-[-0.035em] max-w-[640px] text-[clamp(30px,4vw,46px)]" style={{ textWrap: 'balance' } as React.CSSProperties}>
+                    Three steps from crumpled receipt to settled up.
+                </motion.h2>
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
+                    {STEPS.map((st, i) => (
+                        <motion.div key={st.title} {...reveal(i)} className="flex flex-col gap-3.5 p-[26px] rounded-[28px]" style={{ background: st.bg }}>
+                            <span className="w-12 h-12 rounded-full bg-white grid place-items-center" style={{ color: st.fg }}><Icon name={st.icon} size={24} /></span>
+                            <span className="text-[21px] font-black tracking-[-0.02em]">{st.title}</span>
+                            <span className="text-base leading-[1.55] font-semibold text-body">{st.body}</span>
+                        </motion.div>
+                    ))}
                 </div>
             </section>
 
-            <section className="max-w-[1160px] mx-auto px-6 py-24 grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
+            <section className="max-w-[1160px] mx-auto px-6 pb-24 grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
                 {POINTS.map((p, i) => (
-                    <motion.div key={p.title} {...reveal(i)} className="flex flex-col gap-2.5">
-                        <span className="text-lg font-semibold tracking-[-0.01em]">{p.title}</span>
-                        <span className="text-[15px] leading-[1.55] text-body">{p.body}</span>
+                    <motion.div key={p.title} {...reveal(i)} className="flex flex-col gap-2">
+                        <span className="text-lg font-black">{p.title}</span>
+                        <span className="text-[15.5px] leading-[1.55] font-semibold text-[#6E655C]">{p.body}</span>
                     </motion.div>
                 ))}
             </section>
 
             <section className="max-w-[1160px] mx-auto px-6 pb-24">
-                <motion.div {...reveal()} className="bg-green-band rounded-[20px] px-10 py-14 flex flex-wrap gap-6 items-center justify-between">
-                    <h2 className="m-0 font-semibold leading-[1.1] tracking-[-0.03em] text-green-deep max-w-[560px] text-[clamp(26px,3.4vw,38px)]">Your next shared cost is the easy one.</h2>
-                    <motion.button {...tapFlat} onClick={onGetStarted} className="h-12 px-[22px] rounded-xl bg-ink text-white text-base font-semibold hover:bg-ink-hover">Create your first group</motion.button>
+                <motion.div {...reveal()} className="bg-warm rounded-[32px] px-11 py-14 flex flex-wrap gap-6 items-center justify-between">
+                    <h2 className="m-0 font-black leading-[1.1] tracking-[-0.03em] max-w-[560px] text-[clamp(28px,3.4vw,40px)]">Your next shop is the easy one.</h2>
+                    <motion.button {...tapFlat} onClick={onGetStarted} className="h-[52px] px-6 rounded-full bg-ink text-white text-base font-black hover:bg-ink-hover">Create your first group</motion.button>
                 </motion.div>
             </section>
 
-            <footer className="max-w-[1160px] mx-auto px-6 pt-7 pb-10 border-t border-edge flex flex-wrap gap-4 justify-between text-[13px] text-faint">
+            <footer className="max-w-[1160px] mx-auto px-6 pt-7 pb-10 border-t border-rule flex flex-wrap gap-4 justify-between text-sm font-bold text-faint">
                 <span>Splitpot · costsplit.davenc.dev</span>
-                <span>Made for households, trips and anyone who shares a fridge or a lease.</span>
+                <span>Made for households, trips and anyone who shares a fridge.</span>
             </footer>
         </div>
     );

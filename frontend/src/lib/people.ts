@@ -25,11 +25,20 @@ export function memberTones(members: Pick<Member, 'user_id'>[], meId: string): R
 }
 
 const GROUP_HUES = [155, 330, 75, 250, 30];
-/** Color of a group's dot in the sidebar. */
-export function groupDot(groupId: string): string {
+/** A stable hue for a group, from its id. */
+export function groupHue(groupId: string): number {
     let h = 0;
     for (const c of groupId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return `oklch(0.68 0.17 ${GROUP_HUES[h % GROUP_HUES.length]})`;
+    return GROUP_HUES[h % GROUP_HUES.length];
+}
+/** The colored circle behind a group's initial (46px in lists, 64px in the group header). */
+export function groupTile(groupId: string): { bg: string; fg: string } {
+    const hue = groupHue(groupId);
+    return { bg: `oklch(0.93 0.06 ${hue})`, fg: `oklch(0.4 0.14 ${hue})` };
+}
+/** Color of a group's dot. */
+export function groupDot(groupId: string): string {
+    return `oklch(0.68 0.17 ${groupHue(groupId)})`;
 }
 
 export const initialOf = (name: string) => (name.trim()[0] ?? '?').toUpperCase();

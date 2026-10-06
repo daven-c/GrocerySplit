@@ -74,7 +74,7 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
                     <motion.div
                         role="dialog"
                         aria-modal="true"
-                        className="bg-white rounded-[14px] border border-edge p-6 w-full max-w-sm shadow-popover"
+                        className="bg-white rounded-[24px] border border-edge p-6 w-full max-w-sm shadow-popover"
                         initial={{ opacity: FROM, scale: 0.92, y: 14 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -139,7 +139,7 @@ export function AnimatedNumber({ value, prefix = '', decimals = 2, className }: 
     return <motion.span className={className}>{text}</motion.span>;
 }
 
-/** Segmented control (track #ECE9E2, white active pill) whose highlight slides between options. */
+/** Segmented control (soft pill track, white active pill) whose highlight slides between options. */
 export function SegmentedTabs<T extends string>({
     id, tabs, value, onChange, compact = false, className = '',
 }: {
@@ -154,7 +154,7 @@ export function SegmentedTabs<T extends string>({
     className?: string;
 }) {
     return (
-        <div role="tablist" className={`grid p-[3px] bg-track rounded-[10px] ${className}`} style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+        <div role="tablist" className={`grid p-1 bg-soft rounded-full ${className}`} style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
             {tabs.map(t => {
                 const active = value === t.value;
                 return (
@@ -165,9 +165,9 @@ export function SegmentedTabs<T extends string>({
                         aria-selected={active}
                         onClick={() => onChange(t.value)}
                         {...tapFlat}
-                        className={`relative h-[34px] rounded-lg font-semibold text-ink ${compact ? 'text-[13px]' : 'text-sm'}`}
+                        className={`relative rounded-full font-extrabold text-ink ${compact ? 'h-[34px] text-[13.5px]' : 'h-10 text-[14.5px]'}`}
                     >
-                        {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 bg-white rounded-lg shadow-seg" transition={spring} />}
+                        {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 bg-white rounded-full shadow-seg" transition={spring} />}
                         <span className="relative">{t.label}</span>
                     </motion.button>
                 );
@@ -176,17 +176,17 @@ export function SegmentedTabs<T extends string>({
     );
 }
 
-/** Underline tabs (group detail): the 2px ink underline slides between tabs. */
+/** Group tabs: filled pills (active ink on white text, inactive soft), with an optional count at 70% opacity. */
 export function UnderlineTabs<T extends string>({
     id, tabs, value, onChange,
 }: {
     id: string;
-    tabs: { value: T; label: string }[];
+    tabs: { value: T; label: string; count?: number }[];
     value: T;
     onChange: (v: T) => void;
 }) {
     return (
-        <div role="tablist" className="flex gap-6 border-b border-edge">
+        <div role="tablist" className="flex flex-wrap gap-1.5">
             {tabs.map(t => {
                 const active = value === t.value;
                 return (
@@ -196,10 +196,11 @@ export function UnderlineTabs<T extends string>({
                         type="button"
                         aria-selected={active}
                         onClick={() => onChange(t.value)}
-                        className={`relative h-10 text-sm font-semibold transition-colors ${active ? 'text-ink' : 'text-faint hover:text-body'}`}
+                        className={`relative h-10 px-[18px] rounded-full text-[14.5px] font-extrabold flex items-center gap-1.5 transition-colors ${active ? 'bg-ink text-white' : 'bg-soft text-body hover:bg-[#EFEAE3]'}`}
                     >
-                        {t.label}
-                        {active && <motion.span layoutId={`${id}-underline`} className="absolute left-0 right-0 -bottom-px h-0.5 bg-ink" transition={spring} />}
+                        {active && <motion.span layoutId={`${id}-pill`} className="absolute inset-0 rounded-full bg-ink" transition={spring} />}
+                        <span className="relative">{t.label}</span>
+                        {t.count !== undefined && <span className="relative text-[12.5px] opacity-70">{t.count}</span>}
                     </button>
                 );
             })}

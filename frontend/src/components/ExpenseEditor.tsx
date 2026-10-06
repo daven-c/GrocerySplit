@@ -3,9 +3,10 @@ import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '..
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
-import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
+import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, categoryTone, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
-import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
+import { toast } from './Toast';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -22,7 +23,6 @@ const dateMeta = (iso: string) => {
     const d = new Date(iso + 'T00:00');
     return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
 };
-const selectCls = 'h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm font-semibold text-ink max-w-[190px]';
 const UNIT: Record<SplitMethod, string> = { equal: '', exact: '$', percent: '%', shares: '×' };
 
 export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDiscard, onSwitched }: ExpenseEditorProps) {
@@ -130,6 +130,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             savedMeta.current = metaSig;
             savedSplit.current = splitSig;
             await refresh();
+            toast('Changes saved');
         } catch (err: any) {
             setError(err.message || 'Could not save the changes');
         } finally {
@@ -187,6 +188,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                 ...(paidBy ? { paid_by: paidBy } : {}), split_method: method, split_data: data, draft: false,
             });
             await refresh();
+            toast('Expense saved');
             onSaved();
         } catch (err: any) {
             setError(err.message || 'Could not save the expense');
@@ -209,71 +211,89 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
     const hint = METHODS.find(m => m.value === method)?.hint;
 
+    const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
+    // Paid by / date / delete. Beside the totals on wide screens; first on a phone, above the cost.
+    const details = (
+        <div className="bg-wash rounded-[24px] py-4 px-[18px] flex flex-col gap-3">
+            <label className={labelCls2}>Paid by
+                <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
+                    {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
+                    {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                </select>
+            </label>
+            <label className={labelCls2}>Date
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-[14.5px] font-bold text-ink" />
+            </label>
+            {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="self-start text-[13.5px] font-extrabold text-coral pt-1">Delete expense</motion.button>}
+        </div>
+    );
+
     return (
-        <div className="max-w-[1080px] mx-auto flex flex-col gap-6">
+        <div className="max-w-[1080px] mx-auto flex flex-col gap-5">
             <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h3 className="m-0 mb-2 text-xl font-semibold">Delete expense?</h3>
-                <p className="m-0 mb-6 text-muted leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</p>
+                <h3 className="m-0 mb-2 text-xl font-black">Delete expense?</h3>
+                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</p>
                 <div className="flex gap-3">
-                    <Button variant="secondary" wide height={42} onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                    <Button wide height={42} className="!bg-coral-strong hover:opacity-90" onClick={handleDelete}>Delete</Button>
+                    <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleDelete}>Delete</Button>
                 </div>
             </Modal>
 
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div className="flex flex-col gap-2 min-w-0 flex-1">
                     {!narrow && (
-                        <motion.button {...tapFlat} onClick={onBack} className="self-start flex items-center gap-1 text-[13px] text-muted hover:text-ink"><Icon name="arrow_back" size={16} />{group.name}</motion.button>
+                        <motion.button {...tapFlat} onClick={onBack} className="self-start h-[34px] pl-2 pr-3.5 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-body"><Icon name="arrow_back" size={17} />{group.personal ? 'Personal' : group.name}</motion.button>
                     )}
-                    <input value={name} onChange={e => setName(e.target.value)} aria-label="Expense name" className="m-0 p-0 border-0 border-b border-dashed border-transparent hover:border-dash bg-transparent text-[30px] font-semibold tracking-title w-full max-w-[420px]" />
-                    <span className="text-sm text-muted">{dateMeta(date)} · {categoryOf(category).label} · paid by {payerLabel}</span>
+                    <input value={name} onChange={e => setName(e.target.value)} aria-label="Expense name" className="m-0 p-0 border-0 border-b-2 border-dashed border-transparent hover:border-line bg-transparent text-[32px] font-black tracking-title w-full max-w-[440px]" />
+                    <span className="text-[14.5px] font-semibold text-muted">{dateMeta(date)} · {categoryOf(category).label} · paid by {payerLabel}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-[13px] text-faint">Total</span>
-                    <AnimatedNumber value={total} prefix="$" className="text-[34px] font-semibold tracking-[-0.03em]" />
+                    <span className="text-[13.5px] font-bold text-faint">Total</span>
+                    <AnimatedNumber value={total} prefix="$" className="text-4xl font-black tracking-[-0.03em] leading-[1.1]" />
                 </div>
             </div>
 
             {record.draft && <DraftBar what="expense" canSave={split.valid} problem={split.valid ? null : split.problem} saving={saving} onSave={handleSaveDraft} onDiscard={onDiscard} />}
             {dirty && <ChangesBar canSave={split.valid} problem={split.valid ? null : split.problem} saving={saving} onSave={handleSaveChanges} onCancel={() => setReload(r => r + 1)} />}
 
-            {error && <p role="alert" className="m-0 text-[13px] text-coral-strong">{error}</p>}
+            {error && <p role="alert" className="m-0 text-[13.5px] font-bold text-coral-strong">{error}</p>}
 
-            <div className="flex flex-wrap gap-6 items-start">
+            <div className="flex flex-wrap gap-5 items-start">
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
-                    <Card className="px-5 py-4 flex flex-col gap-3">
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Paid by
-                            <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={selectCls}>
-                                {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
-                            </select>
-                        </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Date
-                            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[34px] px-2.5 border border-line rounded-lg bg-white text-sm text-ink" />
-                        </label>
-                        <label className="flex items-center justify-between gap-3 text-sm text-body">Category
-                            <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
-                                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                        </label>
-                        {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="self-start text-[13px] font-semibold text-coral pt-1">Delete expense</motion.button>}
-                    </Card>
-
-                    <Card className="p-5 flex flex-col gap-3">
-                        <label htmlFor="amount" className="text-sm font-semibold">How much was it?</label>
-                        <div className="flex items-center gap-2 h-14 px-4 border border-line rounded-xl bg-white focus-within:border-ink">
-                            <span className="font-mono text-2xl text-faint">$</span>
-                            <input id="amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent font-mono text-[28px] font-medium text-ink" />
-                        </div>
-                    </Card>
+                    {narrow && details}
 
                     <Card className="p-5 flex flex-col gap-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold">Split by</span>
-                            <motion.button {...tapFlat} onClick={toggleEveryone} className="text-[13px] font-semibold text-body hover:text-ink underline underline-offset-[3px]">{everyone ? 'Clear everyone' : 'Select everyone'}</motion.button>
+                        <label htmlFor="amount" className="text-base font-black">How much was it?</label>
+                        <div className="flex items-center gap-1.5 h-[68px] px-[22px] rounded-[22px] bg-wash">
+                            <span className="text-[30px] font-black text-ghost">$</span>
+                            <input id="amount" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="flex-1 min-w-0 border-0 bg-transparent text-[34px] font-black tracking-[-0.02em] text-ink" />
                         </div>
-                        <SplitByTabs value={method} onChange={changeMethod} disabled={saving} />
-                        <span className="text-[13px] text-muted -mt-1">{hint}</span>
+                        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Category">
+                            {CATEGORIES.map(c => {
+                                const on = category === c.id;
+                                const ct = categoryTone(c.id);
+                                return (
+                                    <motion.button
+                                        key={c.id}
+                                        {...tapFlat}
+                                        aria-pressed={on}
+                                        onClick={() => setCategory(c.id)}
+                                        className="h-9 pl-2.5 pr-3.5 flex items-center gap-1.5 rounded-full text-[13.5px] font-extrabold border-[1.5px] transition-colors"
+                                        style={on ? { background: ct.bg, color: ct.pickedFg, borderColor: ct.pickedBorder } : { background: '#fff', color: '#5E564E', borderColor: '#EDE7DF' }}
+                                    >
+                                        <Icon name={c.icon} size={17} />{c.label}
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
+                    </Card>
+
+                    <Card className="p-5 flex flex-col gap-3.5">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <span className="text-base font-black">Split it</span>
+                            <SplitByTabs value={method} onChange={changeMethod} disabled={saving} />
+                        </div>
+                        <span className="text-[13.5px] font-semibold text-muted -mt-1">{hint}</span>
 
                         <div className="flex flex-col">
                             {members.map((m, i) => {
@@ -286,75 +306,73 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                                             aria-pressed={on}
                                             aria-label={`${m.name} is in on this`}
                                             onClick={() => toggleMember(m.user_id)}
-                                            className="w-9 h-9 rounded-full grid place-items-center text-sm font-semibold p-0 shrink-0"
-                                            style={{ background: on ? t.bg : 'transparent', color: on ? t.fg : '#B3AFA6', border: `1px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#CFCBC2'}` }}
+                                            className="w-10 h-10 rounded-full grid place-items-center text-[15px] font-black p-0 shrink-0"
+                                            style={{ background: on ? t.bg : '#fff', color: on ? t.fg : '#C2B8AC', border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#E3DBD0'}` }}
                                         >
                                             {m.name[0].toUpperCase()}
                                         </motion.button>
-                                        <span className={`flex-1 min-w-0 text-[15px] font-medium truncate ${on ? '' : 'text-ghost'}`}>{display(m.user_id, m.name)}</span>
+                                        <span className={`flex-1 min-w-0 text-[15.5px] font-extrabold truncate ${on ? '' : 'text-ghost'}`}>{display(m.user_id, m.name)}</span>
                                         {on && (
-                                            <span className="flex items-center gap-1 font-mono text-sm text-muted">
+                                            <span className="flex items-center gap-1 text-sm font-extrabold text-muted">
                                                 {method === 'exact' && '$'}
                                                 <input
                                                     aria-label={`${m.name} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
                                                     inputMode="decimal"
                                                     value={values[m.user_id] ?? ''}
                                                     onChange={e => { setEven(false); setValues(v => ({ ...v, [m.user_id]: e.target.value })); }}
-                                                    className="w-20 h-9 px-2 border border-line rounded-lg text-right font-mono text-sm text-ink bg-white"
+                                                    className={`w-[84px] !h-[38px] ${cellCls}`}
                                                 />
                                                 {method !== 'exact' && UNIT[method]}
                                             </span>
                                         )}
-                                        <span className={`w-[84px] text-right font-mono text-sm ${on ? 'font-medium' : 'text-ghost'}`}>{on ? fmt(split.shares[m.user_id] ?? 0) : '—'}</span>
+                                        <span className={`w-[84px] text-right text-[15.5px] ${on ? 'font-black' : 'font-bold text-ghost'}`}>{on ? fmt(split.shares[m.user_id] ?? 0) : '—'}</span>
                                     </div>
                                 );
                             })}
                         </div>
 
-                        <AnimatePresence initial={false} mode="popLayout">
-                            <motion.div key={split.valid ? 'ok' : split.problem} layout initial={{ opacity: 0.8, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                                className={`flex items-center gap-2 px-3 py-2.5 rounded-[10px] text-[13px] ${split.valid ? 'bg-green-tint text-green-on' : 'bg-coral-tint text-coral-on'}`} role="status">
-                                <Icon name={split.valid ? 'check_circle' : 'error'} size={18} fill />
-                                {split.valid ? `Adds up to ${fmt(total)}` : split.problem}
-                            </motion.div>
-                        </AnimatePresence>
+                        <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                            <AnimatePresence initial={false} mode="popLayout">
+                                <motion.div key={split.valid ? 'ok' : split.problem} layout initial={{ opacity: 0.8, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-full text-sm font-extrabold ${split.valid ? 'bg-green-tint text-[oklch(0.4_0.12_155)]' : 'bg-coral-tint text-[oklch(0.45_0.15_32)]'}`} role="status">
+                                    <Icon name={split.valid ? 'check_circle' : 'error'} size={18} fill />
+                                    {split.valid ? `Adds up to ${fmt(total)}` : split.problem}
+                                </motion.div>
+                            </AnimatePresence>
+                            <motion.button {...tapFlat} onClick={toggleEveryone} className="text-[13.5px] font-extrabold text-body underline underline-offset-[3px]">{everyone ? 'Clear everyone' : 'Select everyone'}</motion.button>
+                        </div>
                     </Card>
                 </div>
 
                 <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
                     <Card className="p-5 flex flex-col gap-4">
-                        <span className="text-[15px] font-semibold">Who pays what</span>
+                        <span className="text-lg font-black">Who pays what</span>
                         {members.filter(m => active.includes(m.user_id)).map(m => {
                             const amt = split.shares[m.user_id] ?? 0;
                             const t = tones[m.user_id];
                             return (
-                                <div key={m.user_id} className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2.5">
-                                        <Avatar name={m.name} tone={t} size={28} />
-                                        <span className="flex-1 flex flex-col">
-                                            <span className="text-sm font-semibold">{display(m.user_id, m.name)}</span>
-                                            <span className="text-xs text-faint">{m.user_id === paidBy ? 'paid the bill' : `owes ${payerLabel}`}</span>
-                                        </span>
-                                        <AnimatedNumber value={amt} prefix="$" className="font-mono text-sm font-medium" />
-                                    </div>
-                                    <div className="h-[3px] ml-[38px] rounded-sm bg-surface">
-                                        <motion.div className="h-full rounded-sm opacity-55" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} />
-                                    </div>
+                                <div key={m.user_id} className="flex items-center gap-3">
+                                    <Avatar name={m.name} tone={t} size={36} />
+                                    <span className="flex-1 flex flex-col gap-[5px]">
+                                        <span className="flex justify-between"><span className="text-[15px] font-extrabold">{display(m.user_id, m.name)}</span><AnimatedNumber value={amt} prefix="$" className="text-[15.5px] font-black" /></span>
+                                        <span className="h-1.5 rounded-[3px] bg-soft"><motion.span className="block h-full rounded-[3px] opacity-50" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} /></span>
+                                        <span className="text-[12.5px] font-bold text-faint">{m.user_id === paidBy ? 'paid the bill' : `owes ${payerLabel}`}</span>
+                                    </span>
                                 </div>
                             );
                         })}
-                        {active.length === 0 && <span className="text-sm text-faint">Choose who shares this cost.</span>}
-                        <div className="border-t border-rule pt-3.5 flex justify-between font-semibold text-[15px]"><span>Total</span><AnimatedNumber value={total} prefix="$" className="font-mono" /></div>
-                        <p className="m-0 text-xs leading-normal text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
+                        {active.length === 0 && <span className="text-sm font-bold text-faint">Choose who shares this cost.</span>}
+                        <div className="border-t border-rule pt-3.5 flex justify-between text-[17px] font-black"><span>Total</span><AnimatedNumber value={total} prefix="$" /></div>
+                        <p className="m-0 text-[13px] font-semibold leading-[1.5] text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
                     </Card>
 
-                    <Card className="px-5 py-4 flex items-center justify-between gap-4">
-                        <span className="flex flex-col gap-0.5">
-                            <span className="text-sm font-semibold">Have a receipt with items?</span>
-                            <span className="text-[13px] text-muted">Tap who had each item instead of splitting one total. Tax and tip are shared by what each person had.</span>
-                        </span>
-                        <Button variant="secondary" height={38} className="shrink-0 px-3.5" disabled={saving} onClick={switchToItems}>Split by item</Button>
-                    </Card>
+                    {!narrow && details}
+
+                    <div className="border-[1.5px] border-dashed border-line rounded-[24px] py-4 px-[18px] flex flex-col gap-2.5">
+                        <span className="text-[15px] font-black">Have a receipt with items?</span>
+                        <span className="text-[13.5px] font-semibold text-muted leading-[1.45]">Tap who had each item instead of splitting one total. Tax and tip are shared by what each person had.</span>
+                        <Button variant="secondary" height={38} className="self-start px-4 text-sm" disabled={saving} onClick={switchToItems}>Split by item</Button>
+                    </div>
                 </div>
             </div>
         </div>
