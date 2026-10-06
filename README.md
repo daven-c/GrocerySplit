@@ -18,6 +18,7 @@ Both kinds live in the same group, have a category, a payer and a date, and feed
 - **People** (the old Friends page) shows what you and each person owe across your shared groups.
 - **Personal** is its own private section for tracking what you paid for others by name only. Those names are not accounts and never appear under People.
 - **Home** can search groups (by group or person), sort them (recent activity, name, balance, spend), and pin groups to the top for yourself.
+- **Feature flags** (`frontend/src/lib/flags.ts`): the Activity tab is **off** for now (the database still records it), while Quick split and Personal are on. Turn flags on or off per build with `VITE_FEATURES="activity,-personal"`, or per browser with `localStorage['splitpot:flags'] = '{"activity":true}'`. A flag only hides a feature; it never deletes data.
 - **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
 - **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
 - **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline. An invited person (optionally with a name) is usable in expenses right away, marked *Invited*; when they accept, everything they were in (payer, shares, transfers, receipt items) moves to their account. An invite can't be cancelled while they're in expenses.

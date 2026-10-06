@@ -3,11 +3,12 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import QuickSplit from "./components/QuickSplit";
 import { quickToken } from "./lib/quickSplit";
+import { isEnabled } from "./lib/flags";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
 // /s/<token> is a shared quick split: it needs no account, so it skips sign-in entirely.
-const token = quickToken(window.location.pathname);
+const token = isEnabled("quickSplit") ? quickToken(window.location.pathname) : null;
 const root = ReactDOM.createRoot(
 	document.getElementById("root") as HTMLElement
 );

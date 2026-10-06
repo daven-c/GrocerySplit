@@ -5,6 +5,7 @@ import { useDismiss } from '../lib/hooks';
 import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
+import { isEnabled } from '../lib/flags';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, CATEGORIES, everyoneEqual, myShare, totalOf } from '../lib/expenses';
 import { fmt, memberTones } from '../lib/people';
@@ -71,7 +72,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const isOwner = !!group && group.owner_id === me;
     // The transfer change log: reloaded whenever the transfers change or the tab is opened.
     useEffect(() => {
-        if (tab !== 'activity') return;
+        if (tab !== 'activity' || !isEnabled('activity')) return;
         let cancelled = false;
         Promise.all([listExpenseLog(groupId), listSettlementLog(groupId)])
             .then(([e, t]) => !cancelled && setLog(mergeActivity(e, t)))
@@ -373,7 +374,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             <UnderlineTabs id="group" value={tab} onChange={setTab} tabs={[
                 { value: 'expenses', label: `Expenses · ${records.length}` },
                 { value: 'balances', label: 'Balances' },
-                { value: 'activity', label: 'Activity' },
+                ...(isEnabled('activity') ? [{ value: 'activity' as const, label: 'Activity' }] : []),
                 { value: 'members', label: `Members · ${group.members.length}` },
             ]} />
 
@@ -523,7 +524,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                     </div>
                 )}
 
-                {tab === 'activity' && (
+                {tab === 'activity' && isEnabled('activity') && (
                     <div className="flex flex-col gap-2">
                         <span className="text-[13px] text-muted">Every expense, receipt and transfer that was added, changed or deleted, by whom, and when.</span>
                         {log === null ? <p className="text-faint animate-pulse">Loading…</p> : log.length === 0 ? (
