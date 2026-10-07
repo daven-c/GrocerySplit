@@ -122,15 +122,15 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                             Email
                             <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
                         </label>
-                        <label className={`flex flex-col gap-[7px] ${labelCls}`}>
-                            Password
+                        <div className={`flex flex-col gap-[7px] ${labelCls}`}>
+                            <label htmlFor="auth-password">Password</label>
                             <span className="relative">
-                                <input className={`${fieldCls} pr-12`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
-                                <motion.button {...tapFlat} type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute inset-y-0 right-0 px-3.5 flex items-center text-faint hover:text-ink">
+                                <input id="auth-password" className={`${fieldCls} pr-12`} value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={6} required />
+                                <motion.button {...tapFlat} type="button" onMouseDown={e => e.preventDefault()} onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 w-12 flex items-center justify-center touch-manipulation text-faint hover:text-ink">
                                     <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={20} />
                                 </motion.button>
                             </span>
-                        </label>
+                        </div>
 
                         <Pop show={!!error} className="text-[13.5px] font-bold text-coral-strong">{error}</Pop>
                         <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>

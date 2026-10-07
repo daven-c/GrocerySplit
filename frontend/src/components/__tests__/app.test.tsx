@@ -59,6 +59,15 @@ describe('Auth', () => {
         expect(screen.getByText('Sign in to see who owes what.')).toBeInTheDocument();
     });
 
+    it('toggles password visibility', async () => {
+        const u = userEvent.setup();
+        render(<Auth onLogin={vi.fn()} />);
+        const pw = screen.getByLabelText('Password');
+        expect(pw).toHaveAttribute('type', 'password');
+        await u.click(screen.getByRole('button', { name: 'Show password' }));
+        expect(pw).toHaveAttribute('type', 'text');
+    });
+
     it('signs in and calls onLogin; shows errors in coral', async () => {
         const u = userEvent.setup();
         const onLogin = vi.fn();
