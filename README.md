@@ -31,12 +31,12 @@ One shareable page for splitting a single bill, e.g. at dinner.
 - **Start a quick split** from the landing page, Home or the nav. It opens a **draft** at `/s/new`: set it up with items and who had what, and **nothing is saved or created until you press Create**. Leaving throws the draft away.
 - **Create** makes the real split and gives you its link (`/s/<token>`). Anyone with the link can join with a unique name and tap their own items (a private key from joining stops people tapping each other's names; lose your session and tap your own name again for a fresh key, honor system). Anyone who has joined can add an item. Only the owner can edit or delete items, change tax, tip or who paid, remove people, rename or lock it, or save it to a group.
 - A split nobody touches for 30 days is deleted (a daily job removes them). Creating is limited per visitor (10 an hour, 40 a day) on top of a global cap.
-- Signed-out owners are told to sign in to keep and manage it from any device. Splits made while signed in (or claimed with the owner key) are listed on **Home** under **Your quick splits** until they expire. A signed-in owner can import one into a group, matching each name to a member.
+- A draft with something in it asks before the page is left (the browser's own prompt). Signed-out owners are told to sign in to keep and manage it from any device. Splits made while signed in (or claimed with the owner key) are listed on **Home** under **Your quick splits** until they expire. A signed-in owner can import one into a group, matching each name to a member.
 - The long random token in the link is the only credential. The tables are closed: everything goes through the `qs_*` database functions.
 
 ### Home, search and accounts
 - **Home** shows your overall balance, invites, your groups (search by group or person, sort by recent, balance, name or spend, pin to the top) and your quick splits.
-- **Account** lets you change your display name, username, email and password, or sign out. **Forgot password?** on the sign-in screen sends a reset link; the link opens a "Choose a new password" screen. Signing in with an unconfirmed email says so and offers to resend the confirmation link.
+- **Account** lets you change your display name, username, email and password, download your data as a JSON file, delete your account, or sign out. Deleting needs `DELETE` typed to confirm and is refused while you own a group other people are in (delete it first). Your Personal section and groups nobody else is in are deleted with you; in other people's groups you're removed, and expenses you added stay but stop counting toward balances, as if you had left. **Forgot password?** on the sign-in screen sends a reset link; the link opens a "Choose a new password" screen. Signing in with an unconfirmed email says so and offers to resend the confirmation link.
 - The app re-fetches shared data when you return to the tab and once a minute while you're looking at it (but not while you're typing), so other people's changes show up without a reload.
 - **Admin** (admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts and force-confirms stuck signups. It runs through the `admin-users` Edge Function, which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 
@@ -69,7 +69,7 @@ All money is integer cents with largest-remainder allocation, so per-person tota
 
 | Layer    | Technology                                                                           |
 | -------- | ------------------------------------------------------------------------------------ |
-| Frontend | React + TypeScript, Vite, Tailwind (build-time), Framer Motion                       |
+| Frontend | React + TypeScript, Vite (code-split), Tailwind (build-time), Framer Motion          |
 | Auth/DB  | Supabase (Auth, Postgres with row-level security, Storage, Edge Functions, pg_cron)  |
 | Email    | Supabase Auth through custom SMTP (e.g. Resend)                                      |
 | Hosting  | Vercel (static build)                                                                |
@@ -84,11 +84,12 @@ cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
 npm run dev                  # http://localhost:3000
 npm run dev:mock             # same UI with an in-memory fake backend (src/mocks): no Supabase or login needed
-npm test                     # unit + component + accessibility tests
+npm test                     # unit, component, accessibility and whole-app tests
+npm run lint                 # ESLint (also runs in CI)
 npm run build                # type-check and production build
 ```
 
-- `npm test` includes an automated accessibility check (axe) over the main screens and tests for dialog focus. Colour contrast can't be measured without a real browser, so it's covered by the colour tokens in `tailwind.config.js` (secondary text meets 4.5:1).
+- `npm test` includes a whole-app test (`flow.test.tsx`: Home, open a group, add and save an expense) that runs against the in-memory backend, and an automated accessibility check (axe) over the main screens and tests for dialog focus. Colour contrast can't be measured without a real browser, so it's covered by the colour tokens in `tailwind.config.js` (secondary text meets 4.5:1).
 - `npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.
 
 ## Setting up Supabase and deploying
@@ -104,7 +105,7 @@ npm run build                # type-check and production build
   - **Email templates:** paste the files from `supabase/email-templates/` (see its README for which goes where).
   - For instant sign-up without an email step, disable *Confirm email* under Providers, Email; keep it on if you set up SMTP. Consider enabling leaked-password protection.
 - **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` deploys to production and every other branch and PR gets a preview deployment. Add your domain under the project's Domains.
-- **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and every push to `main` or `dev`.
+- **CI:** `.github/workflows/ci.yml` runs lint, the tests and a production build on every PR and every push to `main` or `dev`.
 
 ## More
 
