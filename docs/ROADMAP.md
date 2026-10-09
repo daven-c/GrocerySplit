@@ -46,11 +46,10 @@ first-class, itemized flow inside it. Live at https://settled.davenc.dev (the `d
 - Optional: import by emailing a receipt to a group address.
 - Realtime updates. Today shared data is topped up when you return to the tab and once a minute; Supabase Realtime would make it instant.
 
-### 4. Currency (designed, not built)
-Per-group currency looks small but is not: Home and People add balances across groups, so mixing currencies would silently produce
-wrong totals. Doing it properly means storing a currency per group, showing totals **per currency** (or converting with a stored
-exchange rate per expense), and replacing the hard-coded `$` prefixes and `Intl.NumberFormat('en-US')` formatting in `lib/people.ts`
-and the editors. Build it when someone actually needs a non-USD group.
+### 4. Currency (decided: USD only)
+Everything is in US dollars on purpose, so there is no per-group currency. If that ever changes, note that Home and People add
+balances across groups, so mixing currencies would give wrong totals unless totals are shown per currency (or converted with a
+stored exchange rate). Money is formatted in `lib/people.ts` (`Intl.NumberFormat('en-US')`) and the editors use a hard-coded `$`.
 
 ### 5. Roles and history
 - Roles beyond owner/member (read-only viewers, co-owners), configurable edit permissions, and **ownership hand-over** (today you must delete a group other people are in before you can delete your account).
