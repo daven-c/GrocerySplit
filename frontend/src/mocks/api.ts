@@ -1,6 +1,6 @@
 // In-memory stand-in for lib/api so the whole UI can be exercised in a browser without a backend or
 // credentials: `npm run dev:mock`. Never bundled into production builds.
-import type { Group, Invite, Item, PendingInvite, Session, Settlement, AdminUser, AdminTotals, ExpenseLogEntry, MyQuickSplit, SettlementLogEntry } from '../lib/api';
+import type { Group, Invite, Item, PendingInvite, Session, Settlement, AdminUser, AdminTotals, AdminMetrics, ExpenseLogEntry, MyQuickSplit, SettlementLogEntry } from '../lib/api';
 
 const ME = 'u-me';
 const wait = <T,>(v: T, ms = 60) => new Promise<T>(r => setTimeout(() => r(v), ms));
@@ -83,6 +83,15 @@ const users: AdminUser[] = [
 ];
 export const adminListUsers = () => wait(structuredClone(users));
 export const adminTotals = (): Promise<AdminTotals> => wait({ groups: 2, receipts: 3, items: 9, settlements: 0 });
+export const adminMetrics = (): Promise<AdminMetrics> => wait({
+    users: { total: 2, confirmed: 1, new_24h: 0, new_7d: 2, new_30d: 2, active_24h: 1, active_7d: 1, active_30d: 1, never_signed_in: 1, with_expense: 1 },
+    content: { groups: 2, shared_groups: 1, expenses: 1, receipts: 2, drafts: 0, items: 9, photos: 1, guests: 1, pending_invites: 0 },
+    money: { expense_total: 120, payments: 0, payments_total: 0 },
+    quick: { total: 3, new_7d: 2, live_7d: 2, locked: 0 },
+    activity: { edits_7d: 4, payments_7d: 0 },
+    series: Array.from({ length: 30 }, (_, i) => ({ day: new Date(Date.now() - (29 - i) * 86_400_000).toISOString().slice(0, 10), signups: i % 5 === 0 ? 1 : 0, expenses: i % 3, payments: 0, quick: i % 4 === 0 ? 1 : 0 })),
+    top_groups: [{ name: 'Maple St. House', members: 3, expenses: 2 }],
+});
 export const adminCreateUser = async (i: any) => wait({ id: id('u'), email: i.email, name: i.name });
 export const adminConfirmUser = async () => wait({ ok: true as const });
 
@@ -91,6 +100,8 @@ export const usernameAvailable = async (u: string) => wait(u !== 'taken');
 export const getMyUsername = () => wait('daven');
 export const updateUsername = async () => wait(undefined);
 export const setGroupPinned = async (gid: string, pinned: boolean) => { groups = groups.map(g => g.id === gid ? { ...g, members: g.members.map(m => m.user_id === ME ? { ...m, pinned } : m) } : g); return wait(undefined); };
+export const exportMyData = async () => wait({ exported_at: new Date().toISOString(), account: { name: 'Daven', username: 'daven', email: 'me@example.com' }, groups, expenses: sessions, transfers: [], quick_splits: [] });
+export const deleteAccount = async () => wait(undefined);
 export const ensurePersonalGroup = async () => {
     let p = groups.find(g => g.personal);
     if (!p) {

@@ -236,6 +236,43 @@ export async function updateDisplayName(name: string) {
     check(await supabase.from('profiles').update({ name: trimmed }).eq('id', data.user.id));
 }
 
+/** Everything you can see that is yours, as one plain object to save as a file. Other people's emails are never included. */
+export async function exportMyData() {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) throw new Error('Sign in first.');
+    const [groups, sessions, settlements, quick, username] = await Promise.all([
+        listGroups(), listSessions(), listSettlements(), listMyQuickSplits().catch(() => []), getMyUsername().catch(() => ''),
+    ]);
+    return {
+        exported_at: new Date().toISOString(),
+        account: { name: user.user_metadata?.name ?? '', username, email: user.email ?? '' },
+        groups: groups.map(g => ({
+            id: g.id, name: g.name, personal: !!g.personal, you_own_it: g.owner_id === user.id,
+            members: g.members.map(m => ({ id: m.user_id, name: m.name, username: m.username ?? null, you: m.user_id === user.id, joined: !m.pending })),
+        })),
+        expenses: sessions.map(s => ({
+            id: s.id, group_id: s.group_id, name: s.name, kind: s.kind, category: s.category, date: s.session_date, paid_by: s.paid_by,
+            amount: s.amount, split_method: s.split_method, split_data: s.split_data, tax: s.tax, tip: s.tip, participants: s.participants,
+            items: s.items.map(i => ({ name: i.name, price: i.price, assigned_to: i.assigned_users })),
+        })),
+        transfers: settlements.map(t => ({ group_id: t.group_id, from: t.from_user, to: t.to_user, amount: t.amount, date: t.created_at })),
+        quick_splits: quick,
+    };
+}
+
+/**
+ * Delete the signed-in account. The database refuses while you own a group other people are in. Photo files of groups
+ * you own are removed first (their rows go with the group, but files are not removed with rows).
+ */
+export async function deleteAccount() {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) throw new Error('Sign in first.');
+    await removeStoredPhotos(supabase.from('session_photos').select('path, groups!inner(owner_id)').eq('groups.owner_id', data.user.id));
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) throw new Error(error.message);
+}
+
 export async function usernameAvailable(username: string): Promise<boolean> {
     return !!(await rpc('username_available', { p_username: username }));
 }
@@ -510,6 +547,20 @@ export interface AdminTotals {
     receipts: number;
     items: number;
     settlements: number;
+}
+
+export interface AdminMetrics {
+    users: { total: number; confirmed: number; new_24h: number; new_7d: number; new_30d: number; active_24h: number; active_7d: number; active_30d: number; never_signed_in: number; with_expense: number };
+    content: { groups: number; shared_groups: number; expenses: number; receipts: number; drafts: number; items: number; photos: number; guests: number; pending_invites: number };
+    money: { expense_total: number; payments: number; payments_total: number };
+    quick: { total: number; new_7d: number; live_7d: number; locked: number };
+    activity: { edits_7d: number; payments_7d: number };
+    series: { day: string; signups: number; expenses: number; payments: number; quick: number }[];
+    top_groups: { name: string; members: number; expenses: number }[];
+}
+
+export async function adminMetrics(): Promise<AdminMetrics> {
+    return check(await supabase.rpc('admin_metrics')) as AdminMetrics;
 }
 
 export async function isAdmin(): Promise<boolean> {
