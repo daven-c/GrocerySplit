@@ -1,4 +1,4 @@
-/** Splitpot design tokens (v3 "Corner shop"; see the design handoff). Person colors are computed per member (src/lib/people.ts). */
+/** Settled design tokens (v3 "Corner shop"; see the design handoff). Person colors are computed per member (src/lib/people.ts). */
 module.exports = {
 	content: ["./index.html", "./src/**/*.{ts,tsx}"],
 	theme: {

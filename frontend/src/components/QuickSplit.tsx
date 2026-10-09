@@ -105,7 +105,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
     }, [token, load, draft]);
 
     useEffect(() => {
-        document.title = data ? `${data.title} · Splitpot` : 'Splitpot';
+        document.title = data ? `${data.title} · Settled` : 'Settled';
     }, [data?.title]);
 
     /** Apply a change on screen right away, send it, then take the server's version. */
@@ -218,7 +218,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
                 <Card className="p-8 flex flex-col gap-3 items-center text-center">
                     <h1 className="m-0 text-2xl font-semibold">This split isn't here</h1>
                     <p className="m-0 text-muted max-w-[420px]">The link may be wrong, the owner may have deleted it, or nobody touched it for 30 days and it expired.</p>
-                    <a href="/" className="font-semibold text-ink underline underline-offset-2">Go to Splitpot</a>
+                    <a href="/" className="font-semibold text-ink underline underline-offset-2">Go to Settled</a>
                 </Card>
             </Shell>
         );
@@ -448,7 +448,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
                     <div className="flex flex-wrap items-center gap-3.5 py-[18px] px-5 rounded-[22px] bg-warm">
                         <span className="flex-[1_1_240px] flex flex-col gap-0.5 min-w-0">
                             <span className="text-[15.5px] font-black">Keep this in a group</span>
-                            <span className="text-sm font-semibold text-[#6E655C]">{signedIn ? 'Turn this split into a receipt in one of your Splitpot groups.' : 'Sign in to Splitpot to turn this split into a receipt in one of your groups.'}</span>
+                            <span className="text-sm font-semibold text-[#6E655C]">{signedIn ? 'Turn this split into a receipt in one of your Settled groups.' : 'Sign in to Settled to turn this split into a receipt in one of your groups.'}</span>
                         </span>
                         {signedIn
                             ? <Button height={42} className="px-[18px] text-[14.5px]" onClick={() => setImportOpen(true)}>Import to a group</Button>
@@ -467,7 +467,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <div className="min-h-screen bg-white text-ink font-sans">
                 <header className="max-w-[780px] mx-auto p-5 flex items-center gap-3">
                     <a href="/" className="h-[38px] pl-2 pr-3.5 inline-flex items-center gap-1 rounded-full bg-soft text-sm font-extrabold text-ink no-underline shrink-0"><Icon name="arrow_back" size={19} />Home</a>
-                    <a href="/" aria-label="Splitpot home" className="min-w-0 no-underline text-ink"><Logo size={20} word={18} /></a>
+                    <a href="/" aria-label="Settled home" className="min-w-0 no-underline text-ink"><Logo size={20} word={18} /></a>
                     <span className="ml-auto text-[13px] font-bold text-faint text-right">Quick split · no account needed</span>
                 </header>
                 <main className="max-w-[780px] mx-auto px-5 pt-2 pb-20">{children}</main>

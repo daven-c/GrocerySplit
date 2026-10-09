@@ -13,7 +13,7 @@ export function Icon({ name, fill = false, size = 20, className = '' }: { name: 
     );
 }
 
-/** The splitpot mark: a circle in two halves. On white: ink + green. On the green band: white + mint. */
+/** The Settled mark: a circle in two halves. On white: ink + green. On the green band: white + mint. */
 export function LogoMark({ size = 22, onBand = false }: { size?: number; onBand?: boolean }) {
     const bg = onBand ? 'linear-gradient(90deg,#fff 50%,oklch(0.82 0.17 150) 50%)' : 'linear-gradient(90deg,#26221E 50%,oklch(0.68 0.16 155) 50%)';
     return <span aria-hidden="true" className="rounded-full shrink-0 inline-block" style={{ width: size, height: size, background: bg }} />;
@@ -23,7 +23,7 @@ export function Logo({ size = 22, word = 19, onBand = false }: { size?: number; 
     return (
         <span className="inline-flex items-center gap-[9px]">
             <LogoMark size={size} onBand={onBand} />
-            <span className="font-black tracking-[-0.02em]" style={{ fontSize: word }}>splitpot</span>
+            <span className="font-black tracking-[-0.02em]" style={{ fontSize: word }}>settled</span>
         </span>
     );
 }

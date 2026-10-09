@@ -33,7 +33,7 @@ describe('Landing', () => {
         expect(screen.getByText('Rent and bills too')).toBeInTheDocument();
         expect(screen.getByText('Quick splits, no account')).toBeInTheDocument();
         expect(screen.getByText('Your next shop is the easy one.')).toBeInTheDocument();
-        expect(screen.getByText(/Splitpot · costsplit\.davenc\.dev/)).toBeInTheDocument();
+        expect(screen.getByText(/Settled · costsplit\.davenc\.dev/)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '#how');
     });
 
@@ -149,7 +149,7 @@ describe('App shell', () => {
         signIn();
         render(<App />);
         const nav = await screen.findByRole('navigation', { name: 'Primary' });
-        expect(screen.getByRole('button', { name: 'Splitpot home' })).toHaveTextContent('splitpot');
+        expect(screen.getByRole('button', { name: 'Settled home' })).toHaveTextContent('settled');
         for (const n of ['Home', 'People', 'Personal']) expect(within(nav).getByRole('button', { name: new RegExp(n) })).toBeInTheDocument();
         expect(within(nav).queryByRole('button', { name: /Account|Admin/ })).not.toBeInTheDocument(); // Account is the avatar, not a tab
         expect(screen.getByRole('button', { name: 'Account' })).toHaveTextContent('D');
@@ -265,7 +265,7 @@ describe('App shell', () => {
         const tabs = await screen.findByRole('navigation', { name: 'Primary' });
         expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
         expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['home' + 'Home', 'group' + 'People', 'lock' + 'Personal']);
-        expect(screen.getByText('splitpot')).toBeInTheDocument(); // the green band on Home
+        expect(screen.getByText('settled')).toBeInTheDocument(); // the green band on Home
         expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument(); // the avatar opens Account
         await u.click(within(tabs).getByRole('button', { name: /People/ }));
         expect(await screen.findByRole('heading', { name: 'People' })).toBeInTheDocument();

@@ -1,6 +1,6 @@
 # Roadmap & ideas
 
-The app started as **GrocerySplit** (one receipt, tap items, split between people) and is now **Splitpot**, a
+The app started as **GrocerySplit** (one receipt, tap items, split between people) and is now **Settled** (formerly Splitpot), a
 general **cost-splitting app** for any shared expense: groceries, rent, utilities, trips, dinners, gifts.
 Groceries remain a first-class, itemized flow inside it. Live at https://costsplit.davenc.dev.
 
@@ -58,7 +58,7 @@ Still to do:
 - Spend by category/month per group, CSV/PDF export, shareable read-only summary link.
 
 ## Engineering ideas
-- Rename the GitHub repo from GrocerySplit to Splitpot (UI, README and manifest are already renamed).
+- Rename the GitHub repo from GrocerySplit to Settled (UI, README and manifest are already renamed).
 - Supabase migrations applied automatically from CI on merge to `main` (needs an access token secret).
 - Playwright smoke tests against a preview deployment using a seeded test user.
 - Code-split the bundle; add error reporting.

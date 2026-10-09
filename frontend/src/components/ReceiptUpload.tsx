@@ -80,7 +80,7 @@ export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, 
                     </motion.button>
                 )}
                 <h1 className="m-0 text-[32px] font-black tracking-title">Scan a receipt</h1>
-                <p className="m-0 text-base font-semibold leading-[1.45] text-muted max-w-[560px]">Your AI chat of choice reads the photo; Splitpot does the splitting. Nothing is uploaded here.</p>
+                <p className="m-0 text-base font-semibold leading-[1.45] text-muted max-w-[560px]">Your AI chat of choice reads the photo; Settled does the splitting. Nothing is uploaded here.</p>
             </div>
 
             <div className="flex flex-wrap gap-5 items-start">

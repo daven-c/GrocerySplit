@@ -314,7 +314,7 @@ describe('Quick split page (no account)', () => {
         fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
         localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER' }));
         view();
-        expect(await screen.findByText(/Sign in to Splitpot to turn this split/)).toBeInTheDocument();
+        expect(await screen.findByText(/Sign in to Settled to turn this split/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Import to a group' })).not.toBeInTheDocument();
     });
 
