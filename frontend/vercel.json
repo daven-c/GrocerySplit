@@ -6,7 +6,7 @@
 	"rewrites": [
 		{
 			"source": "/s/:path*",
-			"destination": "/index.html"
+			"destination": "/"
 		}
 	],
 	"redirects": [
