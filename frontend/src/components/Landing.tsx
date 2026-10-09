@@ -131,7 +131,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
             </section>
 
             <footer className="max-w-[1160px] mx-auto px-6 pt-7 pb-10 border-t border-rule flex flex-wrap gap-4 justify-between text-sm font-bold text-faint">
-                <span>Settled · costsplit.davenc.dev</span>
+                <span>Settled · settled.davenc.dev</span>
                 <span>Made for households, trips and anyone who shares a fridge.</span>
             </footer>
         </div>

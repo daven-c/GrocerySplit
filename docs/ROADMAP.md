@@ -2,7 +2,7 @@
 
 The app started as **GrocerySplit** (one receipt, tap items, split between people) and is now **Settled** (formerly Splitpot), a
 general **cost-splitting app** for any shared expense: groceries, rent, utilities, trips, dinners, gifts.
-Groceries remain a first-class, itemized flow inside it. Live at https://costsplit.davenc.dev.
+Groceries remain a first-class, itemized flow inside it. Live at https://settled.davenc.dev.
 
 ## Where it is today
 - Groups at the top level, expenses inside, members invited by email.

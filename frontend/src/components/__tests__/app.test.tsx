@@ -33,7 +33,7 @@ describe('Landing', () => {
         expect(screen.getByText('Rent and bills too')).toBeInTheDocument();
         expect(screen.getByText('Quick splits, no account')).toBeInTheDocument();
         expect(screen.getByText('Your next shop is the easy one.')).toBeInTheDocument();
-        expect(screen.getByText(/Settled · costsplit\.davenc\.dev/)).toBeInTheDocument();
+        expect(screen.getByText(/Settled · settled\.davenc\.dev/)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '#how');
     });
 
