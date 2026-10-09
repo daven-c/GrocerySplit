@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../lib/motion';
 import { Group, createSession, listGroups } from '../lib/api';
 import { QuickSplit } from '../lib/quickSplit';

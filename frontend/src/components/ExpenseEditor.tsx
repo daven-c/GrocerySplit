@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
@@ -49,7 +49,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const [reload, setReload] = useState(0); // bumped by Cancel to put the saved version back
 
     const group = groups.find(g => g.id === record?.group_id);
-    const members = group?.members ?? [];
+    const members = useMemo(() => group?.members ?? [], [group]); // a stable array, so hooks below don't re-run every render
     const tones = useMemo(() => memberTones(members, me), [members, me]);
     const labels = useMemo(() => labelMap(members), [members]);
 

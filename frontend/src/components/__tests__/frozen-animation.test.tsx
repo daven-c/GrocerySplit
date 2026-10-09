@@ -2,7 +2,6 @@
 // Regression: browsers pause requestAnimationFrame in hidden/occluded/throttled tabs. Framer then never
 // finishes an animation, which used to leave pages at opacity 0 (elements present, but all white) and
 // block navigation. Frames are frozen BEFORE framer loads, as in a real tab.
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.hoisted(() => {
@@ -73,7 +72,7 @@ describe('with animation frames frozen', () => {
 
     it('tabs, menus and dialogs are visible and dismissable without frames', async () => {
         render(<App />);
-        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        await screen.findByRole('navigation', { name: 'Primary' });
         fireEvent.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         fireEvent.click(await screen.findByRole('button', { name: /Add expense/ }));
         const menu = await screen.findByRole('menu');

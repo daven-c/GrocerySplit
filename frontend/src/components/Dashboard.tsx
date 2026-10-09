@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Collapse, Pop, AnimatedNumber, listItem, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { createGroup, respondToInvite, setGroupPinned } from '../lib/api';

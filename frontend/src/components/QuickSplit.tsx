@@ -104,9 +104,10 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         return () => { alive.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
     }, [token, load, draft]);
 
+    const pageTitle = data?.title;
     useEffect(() => {
-        document.title = data ? `${data.title} · Settled` : 'Settled';
-    }, [data?.title]);
+        document.title = pageTitle ? `${pageTitle} · Settled` : 'Settled';
+    }, [pageTitle]);
 
     // A draft that has something in it is thrown away if the page is left, so ask first (the browser shows its own prompt).
     const created = useRef(false);

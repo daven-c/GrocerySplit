@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence, Collapse, Pop, AnimatedNumber, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { computeBalances } from '../lib/balances';

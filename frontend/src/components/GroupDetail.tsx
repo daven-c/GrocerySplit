@@ -8,9 +8,9 @@ import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { isEnabled } from '../lib/flags';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
-import { fmt, fmtSigned, groupTile, labelMap, memberTones } from '../lib/people';
+import { fmt, groupTile, labelMap, memberTones } from '../lib/people';
 import { toast } from './Toast';
-import { Avatar, AvatarStack, Button, Card, Icon, cellCls, inputCls, selectPillCls } from './ui';
+import { Avatar, AvatarStack, Button, Card, Icon } from './ui';
 
 export type GroupTab = 'expenses' | 'balances' | 'activity' | 'members';
 
@@ -38,7 +38,7 @@ const monthLabel = (iso: string) => {
     return d.toLocaleDateString('en-US', sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' });
 };
 
-export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, onBack, onOpenRecord }: GroupDetailProps) {
+export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, onOpenRecord }: GroupDetailProps) {
     const { me, groups, sessions, settlements, refresh, loading } = useAppData();
     const group = groups.find(g => g.id === groupId);
     const [tab, setTab] = useState<GroupTab>(initialTab);
@@ -128,7 +128,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         ];
         // Newest first: by date, and within a day by when it was added or last saved.
         return entries.sort((a, b) => b.date.localeCompare(a.date) || Date.parse(b.at) - Date.parse(a.at));
-    }, [records, groupPaybacks, search, category, group, me]);
+    }, [records, groupPaybacks, search, category, group]);
 
     const months = useMemo(() => {
         const out: { label: string; rows: Entry[] }[] = [];

@@ -63,7 +63,7 @@ run('what users do: expenses, paying back, and more expenses', () => {
 
     it('after B pays back, later expenses still count (both directions, both kinds)', async () => {
         await as('a');
-        let s = await seen(groupId);
+        const s = await seen(groupId);
         await api.recordSettlement(groupId, b, a, s.friend(b)); // "Mark received": B paid A 50
         expect((await seen(groupId)).friend(b)).toBe(0);
 

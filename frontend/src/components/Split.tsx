@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, Modal, AnimatedNumber, spring, tapFlat, tap } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, saveReceipt, addItem, updateItem, deleteItem, deleteSession, Item, Session } from '../lib/api';
@@ -53,7 +53,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const group = groups.find(g => g.id === record?.group_id);
-    const members = group?.members ?? [];
+    const members = useMemo(() => group?.members ?? [], [group]); // a stable array, so hooks below don't re-run every render
     // Receipts name people by id, never by display name, so two people called the same stay apart.
     const ids = useMemo(() => members.map(m => m.user_id), [members]);
     const tones = useMemo(() => memberTones(members, me), [members, me]);
