@@ -10,11 +10,12 @@ import { Icon } from './ui';
 export default function QuickSplitList() {
     const [splits, setSplits] = useState<MyQuickSplit[]>([]);
     const [loaded, setLoaded] = useState(false);
+    const [failed, setFailed] = useState(false);
 
     useEffect(() => {
         if (!isEnabled('quickSplit')) return;
         let cancelled = false;
-        listMyQuickSplits().then(l => !cancelled && setSplits(l)).catch(() => {}).finally(() => !cancelled && setLoaded(true));
+        listMyQuickSplits().then(l => !cancelled && setSplits(l)).catch(() => !cancelled && setFailed(true)).finally(() => !cancelled && setLoaded(true));
         return () => { cancelled = true; };
     }, []);
 
@@ -31,7 +32,8 @@ export default function QuickSplitList() {
                     <span className="text-[12.5px] font-bold text-[#5E6A60]">{q.people} {q.people === 1 ? 'person' : 'people'} · {q.items} {q.items === 1 ? 'item' : 'items'} · expires {new Date(q.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </a>
             ))}
-            {loaded && splits.length === 0 && <span className="px-1.5 text-[13.5px] font-semibold text-muted">None yet. Start one for a single bill, no account needed for the people you share it with.</span>}
+            {failed && <span role="alert" className="px-1.5 text-[13.5px] font-bold text-coral-strong">Couldn't load your quick splits. Reload to try again.</span>}
+            {loaded && !failed && splits.length === 0 && <span className="px-1.5 text-[13.5px] font-semibold text-muted">None yet. Start one for a single bill, no account needed for the people you share it with.</span>}
             <span className="text-[12.5px] font-semibold text-faint leading-[1.5] px-1.5">Quick splits are shareable pages for one bill. Anyone with the link can join. They stay here until they expire after 30 days without activity.</span>
         </div>
     );

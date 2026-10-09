@@ -18,6 +18,8 @@ import Account from "./components/Account";
 const Admin = lazy(() => import("./components/Admin")); // admins only, so everyone else never downloads it
 import ResetPassword from "./components/ResetPassword";
 import PageLoading from "./components/PageLoading";
+import { toastError } from "./components/Toast";
+import { messageOf } from "./lib/errors";
 
 type View = 'landing' | 'auth' | 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
 
@@ -108,7 +110,7 @@ const App: React.FC = () => {
     const handleNav = (v: NavView) => {
         if (v !== 'personal') return setView(v);
         // Personal is its own section: a private group created the first time it is opened.
-        ensurePersonalGroup().then(id => openGroup(id)).catch(err => console.error('Could not open Personal', err));
+        ensurePersonalGroup().then(id => openGroup(id)).catch(err => { console.error('Could not open Personal', err); toastError(messageOf(err, 'Could not open Personal. Try again.')); });
     };
     const handleLogout = async () => {
         await supabase.auth.signOut();

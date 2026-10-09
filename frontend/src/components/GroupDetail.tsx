@@ -10,6 +10,7 @@ import { computeBalances } from '../lib/balances';
 import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
 import { fmt, groupTile, labelMap, memberTones } from '../lib/people';
 import { toast } from './Toast';
+import ConfirmDialog from './ConfirmDialog';
 import { Avatar, AvatarStack, Button, Card, Icon } from './ui';
 import { messageOf } from '../lib/errors';
 
@@ -308,18 +309,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
 
     const modals = (
         <>
-            <Modal open={!!confirm} onClose={() => setConfirm(null)}>
-                {shownConfirm && (
-                    <>
-                        <h2 className="m-0 mb-2 text-xl font-black text-ink">{confirmText[shownConfirm.kind].title}</h2>
-                        <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">{confirmText[shownConfirm.kind].body}</p>
-                        <div className="flex gap-3">
-                            <Button variant="secondary" wide height={44} onClick={() => setConfirm(null)}>Cancel</Button>
-                            <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleConfirm}>{confirmText[shownConfirm.kind].action}</Button>
-                        </div>
-                    </>
-                )}
-            </Modal>
+            <ConfirmDialog open={!!confirm} title={shownConfirm ? confirmText[shownConfirm.kind].title : ''} body={shownConfirm ? confirmText[shownConfirm.kind].body : ''} confirmLabel={shownConfirm ? confirmText[shownConfirm.kind].action : ''} onConfirm={handleConfirm} onClose={() => setConfirm(null)} />
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
                 <h2 className="m-0 mb-1 text-xl font-black text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h2>

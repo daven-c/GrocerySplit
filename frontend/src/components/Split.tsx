@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, Modal, AnimatedNumber, spring, tapFlat, tap } from '../lib/motion';
+import { motion, AnimatePresence, AnimatedNumber, spring, tapFlat, tap } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, saveReceipt, addItem, updateItem, deleteItem, deleteSession, Item, Session } from '../lib/api';
 import { ParsedReceipt } from '../lib/receiptImport';
@@ -7,9 +7,10 @@ import ReceiptUpload from './ReceiptUpload';
 import { computeSplit } from '../lib/calc';
 import { CATEGORIES, SplitMethod, categoryOf, convertSplit, everyoneEqual } from '../lib/expenses';
 import { fmt, labelMap, memberTones } from '../lib/people';
-import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, selectPillCls } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, rowLabelCls, selectPillCls } from './ui';
 import { toast as notify } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
+import ConfirmDialog from './ConfirmDialog';
 import { messageOf } from '../lib/errors';
 
 interface SplitProps {
@@ -245,7 +246,6 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
     const maxShare = Math.max(...split.totals.map(([, v]) => v), 0.01);
     const paintTone = paint ? tones[paint] : null;
-    const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
 
     return (
         <div className="max-w-[1080px] mx-auto flex flex-col gap-5">
@@ -258,22 +258,8 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 )}
             </AnimatePresence>
 
-            <Modal open={!!itemToDelete} onClose={() => setItemToDelete(null)}>
-                <h2 className="m-0 mb-2 text-xl font-black">Delete item?</h2>
-                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">Remove this item from the receipt? Everyone's totals update.</p>
-                <div className="flex gap-3">
-                    <Button variant="secondary" wide height={44} onClick={() => setItemToDelete(null)}>Cancel</Button>
-                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={confirmDeleteItem}>Delete</Button>
-                </div>
-            </Modal>
-            <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h2 className="m-0 mb-2 text-xl font-black">Delete expense?</h2>
-                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
-                <div className="flex gap-3">
-                    <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleDeleteReceipt}>Delete</Button>
-                </div>
-            </Modal>
+            <ConfirmDialog open={!!itemToDelete} title="Delete item?" body="Remove this item from the receipt? Everyone's totals update." confirmLabel="Delete" onConfirm={confirmDeleteItem} onClose={() => setItemToDelete(null)} />
+            <ConfirmDialog open={confirmDelete} title="Delete expense?" body={<>This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</>} confirmLabel="Delete" onConfirm={handleDeleteReceipt} onClose={() => setConfirmDelete(false)} />
 
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div className="flex flex-col gap-2 min-w-0 flex-1">
@@ -423,16 +409,16 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                     </Card>
 
                     <div className="bg-wash rounded-[24px] py-4 px-[18px] flex flex-col gap-3">
-                        <label className={labelCls2}>Paid by
+                        <label className={rowLabelCls}>Paid by
                             <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
                                 {members.map(m => <option key={m.user_id} value={m.user_id}>{labels[m.user_id]}</option>)}
                             </select>
                         </label>
-                        <label className={labelCls2}>Date
+                        <label className={rowLabelCls}>Date
                             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-[14.5px] font-bold text-ink" />
                         </label>
-                        <label className={labelCls2}>Category
+                        <label className={rowLabelCls}>Category
                             <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                             </select>
