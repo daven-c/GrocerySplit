@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, FROM, enter, tapFlat, spring } from '../lib/motion';
 import { Icon, Logo } from './ui';
 import { toneFor } from '../lib/people';
-import { useQuickSplitStart } from './QuickSplitStart';
+import { startQuickSplit } from '../lib/quickSplit';
 import { isEnabled } from '../lib/flags';
 
 interface LandingProps {
@@ -39,11 +39,9 @@ const reveal = (i = 0) => {
 };
 
 export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
-    const quickStart = useQuickSplitStart();
-    const quick = quickStart.ask;
+    const quick = startQuickSplit;
     return (
         <div className="bg-white text-ink font-sans">
-            {quickStart.dialog}
             <div className="bg-band text-white">
                 <header className="max-w-[1160px] mx-auto px-6 py-[18px] flex items-center gap-2">
                     <Logo size={24} word={21} onBand />
@@ -65,7 +63,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
                         <motion.div {...enter(2)} className="flex flex-wrap gap-2.5 items-center">
                             <motion.button {...tapFlat} onClick={onGetStarted} className="h-[52px] px-6 rounded-full bg-white text-band-deep text-base font-black">Start a group, free</motion.button>
                             {isEnabled('quickSplit') && (
-                                <motion.button {...tapFlat} disabled={quickStart.starting} onClick={quick} className="h-[52px] px-[22px] rounded-full bg-band-btn text-white text-base font-extrabold flex items-center gap-1.5 hover:bg-band-btn-hover disabled:opacity-60">
+                                <motion.button {...tapFlat} onClick={quick} className="h-[52px] px-[22px] rounded-full bg-band-btn text-white text-base font-extrabold flex items-center gap-1.5 hover:bg-band-btn-hover">
                                     <Icon name="bolt" size={20} />Quick split, no account
                                 </motion.button>
                             )}

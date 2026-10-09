@@ -77,9 +77,33 @@ export function remember(token: string, patch: Remembered) {
 export const quickPath = (token: string) => `/s/${token}`;
 export const quickToken = (pathname: string) => pathname.match(/^\/s\/([A-Za-z0-9]{16,64})\/?$/)?.[1] ?? null;
 
-/** Make a new split, remember this browser as its owner, and open it. */
-export async function startQuickSplit() {
-    const { token, ownerKey } = await createQuickSplit();
-    remember(token, { ownerKey });
-    window.location.assign(quickPath(token));
+/** The page for a split nobody has created yet: you set it up here, and nothing exists until you press Create. */
+export const quickDraftPath = '/s/new';
+export const isQuickDraft = (pathname: string) => /^\/s\/new\/?$/.test(pathname);
+
+/** Open the quick split page. Nothing is created (or saved) until the person presses Create there. */
+export function startQuickSplit() {
+    window.location.assign(quickDraftPath);
+}
+
+/** Create the real split from a draft: same title, people, items, who had what, tax, tip and payer. Returns its token. */
+export async function createFromDraft(d: QuickSplit, me?: string): Promise<string> {
+    const { token, ownerKey } = await createQuickSplit(d.title.trim() || 'Dinner');
+    try {
+        remember(token, { ownerKey, ...(me ? { me } : {}) });
+        for (const name of d.people) await joinQuickSplit(token, name);
+        if (d.items.length) await addQuickItems(token, d.items.map(i => ({ name: i.name, price: i.price })), ownerKey);
+        const patch = { ...(d.tax > 0 ? { tax: d.tax } : {}), ...(d.tip > 0 ? { tip: d.tip } : {}), ...(d.paid_by ? { paid_by: d.paid_by } : {}) };
+        if (Object.keys(patch).length) await setQuickSplit(token, patch, ownerKey);
+        if (d.items.some(i => i.assigned.length)) {
+            const saved = await getQuickSplit(token);
+            for (const [n, it] of d.items.entries()) {
+                if (it.assigned.length && saved?.items[n]) await setQuickAssigned(token, saved.items[n].id, it.assigned, ownerKey);
+            }
+        }
+    } catch (err) {
+        await deleteQuickSplit(token, ownerKey).catch(() => {});
+        throw err;
+    }
+    return token;
 }

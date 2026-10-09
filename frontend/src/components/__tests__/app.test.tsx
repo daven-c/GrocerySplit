@@ -250,18 +250,11 @@ describe('App shell', () => {
         expect(screen.getByRole('button', { name: 'Quick split, no account' })).toBeInTheDocument();
     });
 
-    it('Quick split asks before it creates anything', async () => {
+    it('Quick split opens the page without creating anything', async () => {
         const u = userEvent.setup();
         render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
         await u.click(screen.getByRole('button', { name: 'Quick split, no account' }));
-        expect(await screen.findByRole('dialog')).toHaveTextContent('Start a quick split?');
-        expect(startQuickSplit).not.toHaveBeenCalled();
-        await u.click(screen.getByRole('button', { name: 'Cancel' }));
-        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-        expect(startQuickSplit).not.toHaveBeenCalled();
-        await u.click(screen.getByRole('button', { name: 'Quick split, no account' }));
-        await u.click(await screen.findByRole('button', { name: 'Start quick split' }));
-        await waitFor(() => expect(startQuickSplit).toHaveBeenCalledTimes(1));
+        expect(startQuickSplit).toHaveBeenCalledTimes(1); // just navigates to /s/new; the split is created on the page
     });
 
     it('narrow screens get a header with the logo and a bottom tab bar instead of the sidebar', async () => {
