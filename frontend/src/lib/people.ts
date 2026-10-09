@@ -67,3 +67,9 @@ export function labelMap(members: { user_id: string; name: string; username?: st
         (count.get(m.name.trim().toLowerCase()) ?? 0) > 1 && m.username ? `${m.name} (@${m.username})` : m.name,
     ]));
 }
+
+/** Today's date where the person is (YYYY-MM-DD). The database's own "today" is UTC, which is already tomorrow on a US evening. */
+export function localToday(now: Date = new Date()): string {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}

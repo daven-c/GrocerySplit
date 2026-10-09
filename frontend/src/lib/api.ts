@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { SplitData, SplitMethod } from './expenses';
+import { localToday } from './people';
 
 export interface Item {
     id: string;
@@ -106,7 +107,7 @@ export async function createSession(input: {
                 ...(input.draft ? { draft: true } : {}),
                 ...(input.category ? { category: input.category } : {}),
                 ...(input.kind === 'expense' ? { amount: input.amount ?? 0, split_method: input.splitMethod ?? 'equal', split_data: input.splitData ?? {} } : {}),
-                ...(input.date ? { session_date: input.date } : {}),
+                session_date: input.date ?? localToday(),
                 tax: input.tax ?? 0,
                 tip: input.tip ?? 0,
                 participants: input.participants ?? [],
