@@ -7,6 +7,7 @@ import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, 
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
 import { toast } from './Toast';
+import ReceiptPhotos from './ReceiptPhotos';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -363,6 +364,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                         <div className="border-t border-rule pt-3.5 flex justify-between text-[17px] font-black"><span>Total</span><AnimatedNumber value={total} prefix="$" /></div>
                         <p className="m-0 text-[13px] font-semibold leading-[1.5] text-faint">Pennies always add up: any leftover cent goes to one person rather than disappearing.</p>
                     </Card>
+
+                    {record && <Card className="p-5"><ReceiptPhotos sessionId={sessionId} groupId={record.group_id} /></Card>}
 
                     <div className="border-[1.5px] border-dashed border-line rounded-[24px] py-4 px-[18px] flex flex-col gap-2.5">
                         <span className="text-[15px] font-black">Have a receipt with items?</span>

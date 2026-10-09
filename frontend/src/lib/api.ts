@@ -28,6 +28,8 @@ export interface Session {
     participants: string[];
     updated_at: string;
     items: Item[];
+    /** How many reference photos are attached (lists only). */
+    photo_count?: number;
 }
 
 const check = <T>(res: { data: T; error: { message: string } | null }): NonNullable<T> => {
@@ -44,6 +46,7 @@ const mapItem = (r: any): Item => ({
 
 const mapSession = (r: any): Session => ({
     id: r.id,
+    photo_count: r.session_photos?.[0]?.count ?? 0,
     group_id: r.group_id,
     user_id: r.user_id ?? null,
     paid_by: r.paid_by ?? null,
@@ -67,7 +70,7 @@ const touch = (sessionId: string) =>
 
 // ---- Sessions (receipts) ----
 export async function listSessions(groupId?: string): Promise<Session[]> {
-    let q = supabase.from('sessions').select('*, items(*)').order('updated_at', { ascending: false });
+    let q = supabase.from('sessions').select('*, items(*), session_photos(count)').order('updated_at', { ascending: false });
     if (groupId) q = q.eq('group_id', groupId);
     const data = check(await q);
     return data.map(mapSession);
@@ -158,7 +161,43 @@ export async function deleteStaleDrafts() {
 }
 
 export async function deleteSession(id: string) {
+    await removeStoredPhotos(supabase.from('session_photos').select('path').eq('session_id', id));
     check(await supabase.from('sessions').delete().eq('id', id));
+}
+
+// ---- Reference photos (up to 3 per expense; private bucket, visible to the group) ----
+export interface Photo { id: string; path: string; url: string }
+
+/** Storage files are not removed with their rows, so delete them first. Failures here must not block deleting. */
+async function removeStoredPhotos(query: PromiseLike<{ data: { path: string }[] | null }>) {
+    try {
+        const { data } = await query;
+        if (data?.length) await supabase.storage.from('receipt-photos').remove(data.map(r => r.path));
+    } catch { /* orphaned files are harmless */ }
+}
+
+export async function listPhotos(sessionId: string): Promise<Photo[]> {
+    const rows = check(await supabase.from('session_photos').select('id, path').eq('session_id', sessionId).order('created_at'));
+    if (!rows.length) return [];
+    const { data } = await supabase.storage.from('receipt-photos').createSignedUrls(rows.map(r => r.path), 3600);
+    const urls = new Map((data ?? []).map(d => [d.path, d.signedUrl]));
+    return rows.filter(r => urls.get(r.path)).map(r => ({ id: r.id, path: r.path, url: urls.get(r.path)! }));
+}
+
+export async function addPhoto(sessionId: string, groupId: string, file: Blob, ext = 'jpg'): Promise<void> {
+    const path = `${groupId}/${sessionId}/${crypto.randomUUID()}.${ext}`;
+    const up = await supabase.storage.from('receipt-photos').upload(path, file, { contentType: file.type || 'image/jpeg' });
+    if (up.error) throw new Error(up.error.message);
+    const { error } = await supabase.from('session_photos').insert({ session_id: sessionId, group_id: groupId, path });
+    if (error) {
+        await supabase.storage.from('receipt-photos').remove([path]);
+        throw new Error(error.message);
+    }
+}
+
+export async function removePhoto(photo: Photo): Promise<void> {
+    check(await supabase.from('session_photos').delete().eq('id', photo.id));
+    await supabase.storage.from('receipt-photos').remove([photo.path]);
 }
 
 // ---- Items ----
@@ -302,6 +341,7 @@ export async function createGroup(name: string): Promise<string> {
 }
 
 export async function deleteGroup(id: string) {
+    await removeStoredPhotos(supabase.from('session_photos').select('path').eq('group_id', id));
     check(await supabase.from('groups').delete().eq('id', id));
 }
 

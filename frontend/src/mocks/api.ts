@@ -113,3 +113,7 @@ export const saveReceipt = async (sid: string, patch: any, items: any[]) => {
     sessions = sessions.map(s => s.id === sid ? { ...s, ...patch, items: items.map(i => ({ id: i.id ?? id('i'), name: i.name, price: i.price, assigned_users: i.assigned_users })) } : s);
     return wait(undefined);
 };
+
+export const listPhotos = async (_sid: string) => wait([] as { id: string; path: string; url: string }[]);
+export const addPhoto = async (_sid: string, _gid: string, _file: Blob, _ext?: string) => wait(undefined);
+export const removePhoto = async (_p: unknown) => wait(undefined);

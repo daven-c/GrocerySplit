@@ -9,6 +9,7 @@ import { CATEGORIES, SplitMethod, categoryOf, convertSplit, everyoneEqual } from
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, selectPillCls } from './ui';
 import { toast as notify } from './Toast';
+import ReceiptPhotos from './ReceiptPhotos';
 
 interface SplitProps {
     sessionId: string;
@@ -438,6 +439,8 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                             {!record.draft && <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-[13.5px] font-extrabold text-coral">Delete expense</motion.button>}
                         </div>
                     </div>
+
+                    <Card className="p-5"><ReceiptPhotos sessionId={sessionId} groupId={record.group_id} /></Card>
 
                     <div className="border-[1.5px] border-dashed border-line rounded-[24px] py-4 px-[18px] flex flex-col gap-2.5">
                         <span className="text-[15px] font-black">Itemized receipt</span>

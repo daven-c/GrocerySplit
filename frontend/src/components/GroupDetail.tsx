@@ -488,7 +488,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                                         <span aria-hidden="true" className="w-11 h-11 rounded-full grid place-items-center shrink-0" style={{ background: ct.bg, color: ct.fg }}><Icon name={categoryOf(r.category).icon} size={21} /></span>
                                                         <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                                             <span className="text-base font-extrabold truncate">{r.name}</span>
-                                                            <span className="text-[13.5px] font-semibold text-faint">{meta}</span>
+                                                            <span className="text-[13.5px] font-semibold text-faint">{meta}{!!r.photo_count && <><Icon name="attach_file" size={14} className="ml-1.5 align-[-2px]" /><span className="sr-only"> has photos</span></>}</span>
                                                         </span>
                                                         <span className="shrink-0 flex flex-col items-end gap-px">
                                                             <span className="text-base font-black">{fmt(total)}</span>
