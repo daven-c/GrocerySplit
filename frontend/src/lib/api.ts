@@ -95,6 +95,7 @@ export async function createSession(input: {
     tax?: number;
     tip?: number;
     participants?: string[];
+    paidBy?: string;
     items?: { name: string; price: number; assigned_users?: string[] }[];
 }): Promise<string> {
     const s = check(
@@ -111,6 +112,7 @@ export async function createSession(input: {
                 tax: input.tax ?? 0,
                 tip: input.tip ?? 0,
                 participants: input.participants ?? [],
+                ...(input.paidBy ? { paid_by: input.paidBy } : {}),
             })
             .select('id')
             .single()
@@ -136,14 +138,20 @@ export async function importReceiptIntoSession(
     input: { store?: string; date?: string; tax: number; tip: number; items: { name: string; price: number }[] }
 ) {
     const cur = check(await supabase.from('sessions').select('name, tax, tip').eq('id', sessionId).single());
-    check(await supabase.from('items').insert(input.items.map(i => ({ session_id: sessionId, name: i.name, price: i.price }))));
+    const added = check(await supabase.from('items').insert(input.items.map(i => ({ session_id: sessionId, name: i.name, price: i.price }))).select('id'));
     const placeholder = ['Receipt', 'Manual Receipt', 'Grocery Trip'].includes(cur.name);
-    await updateSession(sessionId, {
-        tax: Math.round((Number(cur.tax) + input.tax) * 100) / 100,
-        tip: Math.round((Number(cur.tip) + input.tip) * 100) / 100,
-        ...(input.date ? { session_date: input.date } : {}),
-        ...(placeholder && input.store ? { name: input.store } : {}),
-    });
+    try {
+        await updateSession(sessionId, {
+            tax: Math.round((Number(cur.tax) + input.tax) * 100) / 100,
+            tip: Math.round((Number(cur.tip) + input.tip) * 100) / 100,
+            ...(input.date ? { session_date: input.date } : {}),
+            ...(placeholder && input.store ? { name: input.store } : {}),
+        });
+    } catch (err) {
+        // The items went in but the totals did not: take the items back out so the import is all or nothing.
+        await supabase.from('items').delete().in('id', added.map(r => r.id));
+        throw err;
+    }
 }
 
 export async function updateSession(

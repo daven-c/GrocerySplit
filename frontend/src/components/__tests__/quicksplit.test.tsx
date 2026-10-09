@@ -303,10 +303,10 @@ describe('Quick split page (no account)', () => {
         await u.selectOptions(within(dialog).getByLabelText('Cam is'), 'Amy'); // ...until chosen
         await u.click(within(dialog).getByRole('button', { name: 'Import' }));
         await waitFor(() => expect(api.createSession).toHaveBeenCalledWith(expect.objectContaining({
-            groupId: 'g1', name: 'Dinner out', tax: 2, tip: 0, participants: [ME, 'u-amy', 'u-bo'],
+            groupId: 'g1', name: 'Dinner out', tax: 2, tip: 0, paidBy: ME, participants: [ME, 'u-amy', 'u-bo'],
             items: [{ name: 'Pasta', price: 20, assigned_users: [ME, 'u-amy'] }, { name: 'Wine', price: 10, assigned_users: ['u-amy'] }],
         })));
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('new1', { paid_by: ME }));
+        expect(api.updateSession).not.toHaveBeenCalled(); // the payer goes in with the receipt, in one write
         expect(await within(dialog).findByText('Imported to Roomies')).toBeInTheDocument();
     });
 
