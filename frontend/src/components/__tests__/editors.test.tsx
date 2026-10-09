@@ -369,7 +369,7 @@ describe('Expense editor (general cost splitting)', () => {
         const u = userEvent.setup();
         renderWithData(<ExpenseEditor {...{ ...props, sessionId: 's3' }} />);
         expect(await screen.findByDisplayValue('Pizza night')).toBeInTheDocument();
-        expect(screen.getByText('Starts split evenly. Change any amount to adjust it.')).toBeInTheDocument();
+        expect(screen.getByText('Starts split evenly. Change an amount and the rest share what is left.')).toBeInTheDocument();
         expect(screen.getByText('paid the bill')).toBeInTheDocument(); // Amy paid
         expect(screen.getByText('owes Amy')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Shares' }));
@@ -589,8 +589,16 @@ describe('New records are drafts: nothing is saved until you press Save', () => 
         expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled(); // $0 is a valid split
         await u.type(screen.getByLabelText('How much was it?'), '100');
         await u.clear(screen.getByLabelText('Amy amount'));
-        await u.type(screen.getByLabelText('Amy amount'), '10'); // hand-edited, so no longer even: 33.34 + 10 + 33.33
-        expect(await within(bar).findByText('23.33 still to assign.')).toBeInTheDocument();
+        await u.type(screen.getByLabelText('Amy amount'), '10'); // typed, so fixed: the others share the rest
+        expect(screen.getByLabelText('Daven amount')).toHaveValue('45');
+        expect(screen.getByLabelText('Bo amount')).toHaveValue('45');
+        expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeEnabled();
+        await u.clear(screen.getByLabelText('Daven amount'));
+        await u.type(screen.getByLabelText('Daven amount'), '50');
+        expect(screen.getByLabelText('Bo amount')).toHaveValue('40');
+        await u.clear(screen.getByLabelText('Bo amount'));
+        await u.type(screen.getByLabelText('Bo amount'), '5'); // everyone is fixed now, so nothing absorbs the gap
+        expect(await within(bar).findByText('35.00 still to assign.')).toBeInTheDocument();
         expect(within(bar).getByRole('button', { name: 'Save expense' })).toBeDisabled();
         await idle();
         expect(api.updateSession).not.toHaveBeenCalled(); // never saved by itself

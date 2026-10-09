@@ -34,8 +34,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const [category, setCategory] = useState('other');
     const [paidBy, setPaidBy] = useState('');
     const [method, setMethod] = useState<SplitMethod>('exact');
-    // While true (amounts mode), amounts follow the total and are shared evenly among the people included.
-    const [even, setEven] = useState(true);
+    // Amounts mode: anyone whose amount you typed is fixed; everyone else shares what is left, evenly.
+    const [fixed, setFixed] = useState<string[]>([]);
     const [included, setIncluded] = useState<string[]>([]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -68,7 +68,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             const evenParts = allocate(Math.round((s.amount ?? 0) * 100), ids.map(() => 1));
             legacyRef.current = legacy ? { method: s.split_method!, data } : null;
             setMethod(legacy ? 'exact' : s.split_method ?? 'exact');
-            setEven(s.split_method === 'equal' || (!legacy && (!s.split_method || s.split_method === 'exact') && ids.every((id, i) => Math.round((data[id] ?? 0) * 100) === evenParts[i])));
+            const isEven = s.split_method === 'equal' || (!legacy && (!s.split_method || s.split_method === 'exact') && ids.every((id, i) => Math.round((data[id] ?? 0) * 100) === evenParts[i]));
+            setFixed(isEven ? [] : ids);
             setIncluded(ids);
             setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
             savedMeta.current = JSON.stringify([s.name.trim() || 'Expense', s.session_date, s.category, s.paid_by ?? s.user_id ?? '']);
@@ -103,14 +104,23 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             : '';
     }, [record, members, active, total]);
 
-    // Even amounts follow the total and who is included, until someone types an amount.
+    // Amounts you typed stay put; the rest share what is left evenly, following the total and who is included.
     const activeKey = active.join(',');
+    const fixedKey = fixed.join(',');
+    const fixedTotal = active.reduce((sum, id) => sum + (fixed.includes(id) ? Math.round(num(values[id] ?? '') * 100) : 0), 0);
     useEffect(() => {
-        if (method !== 'exact' || !even) return;
+        if (method !== 'exact') return;
         const ids = activeKey ? activeKey.split(',') : [];
-        const parts = allocate(Math.round(total * 100), ids.map(() => 1));
-        setValues(Object.fromEntries(ids.map((id, i) => [id, String(parts[i] / 100)])));
-    }, [method, even, total, activeKey]);
+        const free = ids.filter(id => !fixedKey.split(',').includes(id));
+        if (!free.length) return;
+        const parts = allocate(Math.max(0, Math.round(total * 100) - fixedTotal), free.map(() => 1));
+        setValues(v => {
+            const next = { ...v };
+            let changed = false;
+            free.forEach((id, i) => { const t = String(parts[i] / 100); if (next[id] !== t) { next[id] = t; changed = true; } });
+            return changed ? next : v;
+        });
+    }, [method, total, activeKey, fixedKey, fixedTotal]);
 
     // Existing expenses are edited in place but written only when you press Save (one entry in Activity per save);
     // Cancel puts the saved version back. A new draft has its own Save / Discard.
@@ -159,13 +169,14 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const changeMethod = (to: SplitMethod) => {
         const next = convertSplit(method, to, data, total);
         setMethod(to);
-        setEven(to === 'exact' && (method !== 'shares' || new Set(Object.values(data)).size <= 1));
+        setFixed(to === 'exact' && (method !== 'shares' || new Set(Object.values(data)).size <= 1) ? [] : Object.keys(next));
         setValues(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])));
     };
 
     const toggleMember = (id: string) => {
         if (active.includes(id)) {
             setIncluded(inc => inc.filter(i => i !== id));
+            setFixed(f => f.filter(i => i !== id));
         } else {
             setIncluded(inc => [...inc, id]);
             setValues(v => ({ ...v, [id]: method === 'exact' || method === 'percent' ? '0' : '1' }));
@@ -306,7 +317,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                                                     aria-label={`${m.name} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
                                                     inputMode="decimal"
                                                     value={values[m.user_id] ?? ''}
-                                                    onChange={e => { setEven(false); setValues(v => ({ ...v, [m.user_id]: e.target.value })); }}
+                                                    onChange={e => { setFixed(f => f.includes(m.user_id) ? f : [...f, m.user_id]); setValues(v => ({ ...v, [m.user_id]: e.target.value })); }}
                                                     className={`w-[84px] !h-[38px] ${cellCls}`}
                                                 />
                                                 {method !== 'exact' && UNIT[method]}
