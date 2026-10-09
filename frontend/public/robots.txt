@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://settled.davenc.dev/sitemap.xml
