@@ -26,6 +26,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [forgot, setForgot] = useState(false); // sign-in mode only: ask for a reset link instead of a password
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [loading, setLoading] = useState(false);
@@ -36,7 +37,12 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
         setNotice('');
         setLoading(true);
         try {
-            if (isLogin) {
+            if (forgot) {
+                // The reply is the same whether or not the address has an account, so this can't be used to find out.
+                const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+                if (error) throw error;
+                setNotice('If that email has an account, a reset link is on its way. Check your inbox and spam folder.');
+            } else if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
                 if (error) throw error;
                 onLogin();
@@ -55,7 +61,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
             }
         } catch (err: any) {
             const msg: string = err.message || 'Authentication failed';
-            setError(/rate limit/i.test(msg) ? 'Too many sign-up emails were sent recently. Please wait about an hour and try again.' : msg);
+            setError(/rate limit/i.test(msg) ? (forgot ? 'Too many emails were sent recently. Please wait a little and try again.' : 'Too many sign-up emails were sent recently. Please wait about an hour and try again.') : msg);
         } finally {
             setLoading(false);
         }
@@ -97,13 +103,13 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                     <button type="button" onClick={onBack} className="hidden min-[760px]:flex self-start items-center gap-1 h-[34px] pl-2 pr-3.5 rounded-full bg-soft text-[13.5px] font-extrabold text-body"><Icon name="arrow_back" size={17} />Back</button>
 
                     <div className="flex flex-col gap-2">
-                        <h1 className="m-0 text-[32px] leading-[1.1] font-black tracking-title">{isLogin ? 'Welcome back' : 'Start your first pot'}</h1>
+                        <h1 className="m-0 text-[32px] leading-[1.1] font-black tracking-title">{forgot ? 'Reset your password' : isLogin ? 'Welcome back' : 'Start your first group'}</h1>
                         <p className="m-0 text-base font-semibold leading-[1.45] text-muted">
-                            {isLogin ? 'Sign in to see who owes what.' : 'Split groceries, rent and trips with the people you share them with.'}
+                            {forgot ? 'Enter your email and we will send you a link to choose a new password.' : isLogin ? 'Sign in to see who owes what.' : 'Split groceries, rent and trips with the people you share them with.'}
                         </p>
                     </div>
 
-                    <SegmentedTabs id="auth" value={mode} onChange={m => { setMode(m); setError(''); setNotice(''); }} tabs={[{ value: 'login', label: 'Sign in' }, { value: 'signup', label: 'Create account' }]} />
+                    {!forgot && <SegmentedTabs id="auth" value={mode} onChange={m => { setMode(m); setError(''); setNotice(''); }} tabs={[{ value: 'login', label: 'Sign in' }, { value: 'signup', label: 'Create account' }]} />}
 
                     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                         <Collapse open={!isLogin}>
@@ -122,6 +128,7 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                             Email
                             <input className={fieldCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" required />
                         </label>
+                        {!forgot && (
                         <div className={`flex flex-col gap-[7px] ${labelCls}`}>
                             <label htmlFor="auth-password">Password</label>
                             <span className="relative">
@@ -130,17 +137,20 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                                     <Icon name={showPassword ? 'visibility_off' : 'visibility'} size={20} />
                                 </motion.button>
                             </span>
+                            {isLogin && <button type="button" onClick={() => { setForgot(true); setError(''); setNotice(''); setPassword(''); }} className="self-end text-[13.5px] font-extrabold text-body underline underline-offset-2">Forgot password?</button>}
                         </div>
+                        )}
 
                         <Pop show={!!error} className="text-[13.5px] font-bold text-coral-strong">{error}</Pop>
                         <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>
 
                         <Button type="submit" height={52} wide disabled={loading} className="mt-1.5 text-base">
-                            {loading ? 'Just a moment...' : isLogin ? 'Sign in' : 'Create account'}
+                            {loading ? 'Just a moment...' : forgot ? 'Send reset link' : isLogin ? 'Sign in' : 'Create account'}
                         </Button>
+                        {forgot && <button type="button" onClick={() => { setForgot(false); setError(''); setNotice(''); }} className="self-center text-[14px] font-extrabold text-body underline underline-offset-2">Back to sign in</button>}
                     </form>
 
-                    <p className="m-0 text-[13.5px] font-semibold leading-[1.5] text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>
+                    {!forgot && <p className="m-0 text-[13.5px] font-semibold leading-[1.5] text-faint">Pick a username: people invite you to groups by it, and your email stays private.</p>}
                 </motion.div>
             </div>
         </div>
