@@ -11,6 +11,7 @@ import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/e
 import { fmt, groupTile, labelMap, memberTones } from '../lib/people';
 import { toast } from './Toast';
 import { Avatar, AvatarStack, Button, Card, Icon } from './ui';
+import { messageOf } from '../lib/errors';
 
 export type GroupTab = 'expenses' | 'balances' | 'activity' | 'members';
 
@@ -91,7 +92,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
 
     useEffect(() => {
         if (!isOwner) { setPending([]); return; }
-        listPendingInvites(groupId).then(setPending).catch(err => setError(err.message));
+        listPendingInvites(groupId).then(setPending).catch(err => setError(messageOf(err, 'That did not work')));
     }, [groupId, isOwner]);
 
     const tones = useMemo(() => memberTones(group?.members ?? [], me), [group, me]);
@@ -154,7 +155,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             const id = await createSession({ groupId, name: 'Receipt', participants: memberIds, category: 'groceries', draft: true });
             await refresh();
             onOpenRecord(id, 'receipt', true);
-        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }
+        } catch (err) { creating.current = false; setError(messageOf(err, 'Could not create the receipt')); }
     };
 
     const addExpense = async () => {
@@ -168,7 +169,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             });
             await refresh();
             onOpenRecord(id, 'expense', true);
-        } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the expense'); }
+        } catch (err) { creating.current = false; setError(messageOf(err, 'Could not create the expense')); }
     };
 
     // The form opens on the first suggested transfer; changing who paid / who received refills the amount when
@@ -208,8 +209,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             else await recordSettlement(groupId, pbFrom, pbTo, pbAmountNum);
             setPbOpen(false);
             await refresh();
-        } catch (err: any) {
-            setError(err.message || (pbEditId ? 'Could not save that transfer' : 'Could not record that transfer'));
+        } catch (err) {
+            setError(messageOf(err, pbEditId ? 'Could not save that transfer' : 'Could not record that transfer'));
         } finally {
             setSettling(false);
         }
@@ -217,7 +218,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
     const removePayback = async (id: string) => {
         setError('');
         try { await deleteSettlement(id); await refresh(); }
-        catch (err: any) { setError(err.message || 'Could not delete that transfer'); }
+        catch (err) { setError(messageOf(err, 'Could not delete that transfer')); }
     };
 
     const handleInvite = async () => {
@@ -232,7 +233,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             toast('Invite sent');
             await refresh();
             setPending(await listPendingInvites(groupId));
-        } catch (err: any) { setError(err.message); }
+        } catch (err) { setError(messageOf(err, 'That did not work')); }
     };
 
     const reloadPeople = async () => { await refresh(); setPending(await listPendingInvites(groupId)); };
@@ -242,7 +243,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
         if (!n && !u) return;
         setError(''); setNotice('');
         try { await addGuest(groupId, n, u || undefined); setPersonName(''); setPersonUser(''); await reloadPeople(); }
-        catch (err: any) { setError(err.message || 'Could not add that person'); }
+        catch (err) { setError(messageOf(err, 'Could not add that person')); }
     };
     const runGuestOp = async () => {
         if (!guestOp || !guestOp.value.trim()) return;
@@ -254,12 +255,12 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             } else await renameGuest(guestOp.id, guestOp.value);
             setGuestOp(null);
             await reloadPeople();
-        } catch (err: any) { setError(err.message || 'That did not work'); }
+        } catch (err) { setError(messageOf(err, 'That did not work')); }
     };
     const dropGuest = async (id: string) => {
         setError('');
         try { await removeGuest(id); await reloadPeople(); }
-        catch (err: any) { setError(err.message || 'Could not remove that person'); }
+        catch (err) { setError(messageOf(err, 'Could not remove that person')); }
     };
 
     const handleConfirm = async () => {
@@ -271,7 +272,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             if (c.kind === 'leave') { await removeMember(groupId, me); await refresh(); return onBack(); }
             await removeMember(groupId, c.userId!);
             await refresh();
-        } catch (err: any) { setError(err.message || 'Action failed'); }
+        } catch (err) { setError(messageOf(err, 'Action failed')); }
     };
 
     const settle = async (from: string, to: string, amount: number) => {
@@ -282,8 +283,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
             await recordSettlement(groupId, from, to, amount);
             await refresh();
             toast('Transfer recorded');
-        } catch (err: any) {
-            setError(err.message || 'Could not record that payment');
+        } catch (err) {
+            setError(messageOf(err, 'Could not record that payment'));
         } finally {
             setSettling(false);
         }
@@ -576,7 +577,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
                                     <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
                                     {isPersonal
                                         ? (m.linked_user
-                                            ? <button type="button" onClick={async () => { setError(''); try { await linkPersonalPerson(m.user_id, ''); await reloadPeople(); } catch (er: any) { setError(er.message || 'Could not unlink'); } }} className="underline underline-offset-2">Unlink</button>
+                                            ? <button type="button" onClick={async () => { setError(''); try { await linkPersonalPerson(m.user_id, ''); await reloadPeople(); } catch (er) { setError(messageOf(er, 'Could not unlink')); } }} className="underline underline-offset-2">Unlink</button>
                                             : <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>)
                                         : !pending.some(p => p.name === m.name) && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>}
                                     <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
@@ -613,7 +614,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', onBack, 
                                     <motion.div key={p.id} layout initial={{ opacity: 0.8, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white rounded-full">
                                         <Icon name="schedule" size={18} className="text-faint" />
                                         <span className="flex-1 min-w-0 text-sm font-bold truncate">{p.name}</span>
-                                        <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err: any) { setError(err.message || 'Could not cancel that invite'); } }} className="text-[13px] font-extrabold text-coral">Revoke</motion.button>
+                                        <motion.button {...tapFlat} onClick={async () => { setError(''); try { await revokeInvite(p.id); await refresh(); setPending(await listPendingInvites(groupId)); } catch (err) { setError(messageOf(err, 'Could not cancel that invite')); } }} className="text-[13px] font-extrabold text-coral">Revoke</motion.button>
                                     </motion.div>
                                 ))}
                             </AnimatePresence>

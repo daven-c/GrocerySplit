@@ -8,6 +8,7 @@ import { fmt, labelMap, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
 import { toast } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
+import { messageOf } from '../lib/errors';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -76,7 +77,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
             savedMeta.current = JSON.stringify([s.name.trim() || 'Expense', s.session_date, s.category, s.paid_by ?? s.user_id ?? '']);
             savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'exact', s.split_data ?? {}]);
-        }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
+        }).catch(err => !cancelled && setLoadError(messageOf(err, 'Failed to load the expense')));
         return () => { cancelled = true; };
     }, [sessionId, reload]);
 
@@ -143,8 +144,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             savedSplit.current = splitSig;
             await refresh();
             toast('Changes saved');
-        } catch (err: any) {
-            setError(err.message || 'Could not save the changes');
+        } catch (err) {
+            setError(messageOf(err, 'Could not save the changes'));
         } finally {
             setSaving(false);
         }
@@ -162,8 +163,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             });
             await refresh();
             onSwitched('receipt');
-        } catch (err: any) {
-            setError(err.message || 'Could not switch to splitting by item');
+        } catch (err) {
+            setError(messageOf(err, 'Could not switch to splitting by item'));
             setSaving(false);
         }
     };
@@ -203,8 +204,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             await refresh();
             toast('Expense saved');
             onSaved();
-        } catch (err: any) {
-            setError(err.message || 'Could not save the expense');
+        } catch (err) {
+            setError(messageOf(err, 'Could not save the expense'));
             setSaving(false);
         }
     };
@@ -212,7 +213,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const handleDelete = async () => {
         setConfirmDelete(false);
         try { await deleteSession(sessionId); await refresh(); onBack(); }
-        catch (err: any) { setError(err.message || 'Could not delete the expense'); }
+        catch (err) { setError(messageOf(err, 'Could not delete the expense')); }
     };
 
     if (loadError) return <p className="text-center text-coral py-16">{loadError}</p>;

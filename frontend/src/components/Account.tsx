@@ -4,6 +4,7 @@ import { useAppData } from '../lib/appData';
 import { updateDisplayName, requestEmailChange, changePassword, getMyUsername, updateUsername, exportMyData, deleteAccount } from '../lib/api';
 import { HUES, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, inputCls } from './ui';
+import { messageOf } from '../lib/errors';
 
 interface AccountProps {
     user: { id: string; email?: string; name: string } | null;
@@ -74,8 +75,8 @@ export default function Account({ user, onLogout }: AccountProps) {
             a.remove();
             URL.revokeObjectURL(url);
             setDataMsg({ type: 'ok', text: 'Downloaded. The file has your groups, expenses and transfers.' });
-        } catch (err: any) {
-            setDataMsg({ type: 'err', text: err.message || 'Could not make the file.' });
+        } catch (err) {
+            setDataMsg({ type: 'err', text: messageOf(err, 'Could not make the file.') });
         } finally {
             setDataBusy(false);
         }
@@ -87,8 +88,8 @@ export default function Account({ user, onLogout }: AccountProps) {
         try {
             await deleteAccount();
             onLogout(); // the account is gone, so this just signs the browser out
-        } catch (err: any) {
-            setDelErr(err.message || 'Could not delete the account.');
+        } catch (err) {
+            setDelErr(messageOf(err, 'Could not delete the account.'));
             setDelBusy(false);
         }
     };
@@ -101,8 +102,8 @@ export default function Account({ user, onLogout }: AccountProps) {
             await updateDisplayName(name);
             setNameMsg({ type: 'ok', text: 'Name updated.' });
             void refresh();
-        } catch (err: any) {
-            setNameMsg({ type: 'err', text: err.message });
+        } catch (err) {
+            setNameMsg({ type: 'err', text: messageOf(err, 'That did not work') });
         } finally {
             setNameBusy(false);
         }
@@ -125,8 +126,8 @@ export default function Account({ user, onLogout }: AccountProps) {
             setSavedUsername(u);
             setUnameMsg({ type: 'ok', text: 'Username updated.' });
             void refresh();
-        } catch (err: any) {
-            setUnameMsg({ type: 'err', text: err.message });
+        } catch (err) {
+            setUnameMsg({ type: 'err', text: messageOf(err, 'That did not work') });
         } finally {
             setUnameBusy(false);
         }
@@ -140,8 +141,8 @@ export default function Account({ user, onLogout }: AccountProps) {
             await requestEmailChange(email);
             setEmailMsg({ type: 'ok', text: `Confirmation sent. Click the link we emailed to ${email.trim()} to finish the change (you may also need to confirm from your current address). Until then, keep signing in with your current email.` });
             setEmail('');
-        } catch (err: any) {
-            setEmailMsg({ type: 'err', text: err.message });
+        } catch (err) {
+            setEmailMsg({ type: 'err', text: messageOf(err, 'That did not work') });
         } finally {
             setEmailBusy(false);
         }
@@ -158,8 +159,8 @@ export default function Account({ user, onLogout }: AccountProps) {
             await changePassword(cur, next);
             setCur(''); setNext(''); setConfirm('');
             setPwMsg({ type: 'ok', text: 'Password changed.' });
-        } catch (err: any) {
-            setPwMsg({ type: 'err', text: err.message });
+        } catch (err) {
+            setPwMsg({ type: 'err', text: messageOf(err, 'That did not work') });
         } finally {
             setPwBusy(false);
         }

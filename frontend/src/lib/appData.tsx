@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { listGroups, listSessions, listSettlements, myInvites, isAdmin, deleteStaleDrafts, Group, Session, Settlement, Invite } from './api';
+import { messageOf } from './errors';
 
 export interface AppData {
     me: string;
@@ -55,8 +56,8 @@ export function AppDataProvider({ userId, children }: { userId: string; children
             // An unsaved draft is not an expense yet, so it never reaches lists or balances.
             setGroups(g); setSessions(s.filter(x => !x.draft)); setSettlements(st); setInvites(inv); setAdmin(adm);
             setError('');
-        } catch (err: any) {
-            if (!silent && alive.current && ticket === latest.current) setError(err.message || 'Failed to load your data');
+        } catch (err) {
+            if (!silent && alive.current && ticket === latest.current) setError(messageOf(err, 'Failed to load your data'));
         } finally {
             if (alive.current && ticket === latest.current) setLoading(false);
         }

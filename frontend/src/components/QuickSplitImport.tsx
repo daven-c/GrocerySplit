@@ -3,6 +3,7 @@ import { Modal } from '../lib/motion';
 import { Group, createSession, listGroups } from '../lib/api';
 import { QuickSplit } from '../lib/quickSplit';
 import { Button } from './ui';
+import { messageOf } from '../lib/errors';
 
 const selectCls = 'h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-sm font-bold text-ink max-w-[200px]';
 
@@ -52,8 +53,8 @@ export default function QuickSplitImport({ data, onClose }: { data: QuickSplit; 
                 items: data.items.map(i => ({ name: i.name, price: i.price, assigned_users: i.assigned.map(toMember).filter(Boolean) })),
             });
             setDone(group.name);
-        } catch (err: any) {
-            setError(err.message || 'Could not import this split.');
+        } catch (err) {
+            setError(messageOf(err, 'Could not import this split.'));
             setSaving(false);
         }
     };

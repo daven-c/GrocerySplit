@@ -35,7 +35,7 @@ export async function getQuickSplit(token: string): Promise<QuickSplit | null> {
         ...d,
         tax: Number(d.tax),
         tip: Number(d.tip),
-        items: (d.items ?? []).map((i: any) => ({ ...i, price: Number(i.price), assigned: i.assigned ?? [] })),
+        items: (d.items ?? []).map((i: { id: string; name: string; price: number | string; assigned?: string[] | null }) => ({ ...i, price: Number(i.price), assigned: i.assigned ?? [] })),
     };
 }
 

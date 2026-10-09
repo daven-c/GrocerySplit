@@ -10,6 +10,7 @@ import { fmt, labelMap, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, selectPillCls } from './ui';
 import { toast as notify } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
+import { messageOf } from '../lib/errors';
 
 interface SplitProps {
     sessionId: string;
@@ -78,7 +79,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             setPaidBy(s.paid_by ?? s.user_id ?? '');
             setCategory(s.category || 'groceries');
             baseline.current = JSON.stringify([s.name, s.session_date, s.tax || 0, s.tip || 0, s.paid_by ?? s.user_id ?? '', s.category || 'groceries', s.items.map(i => [i.id, i.name, i.price, i.assigned_users])]);
-        }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the receipt'));
+        }).catch(err => !cancelled && setLoadError(messageOf(err, 'Failed to load the receipt')));
         return () => { cancelled = true; };
     }, [sessionId, reload]);
 

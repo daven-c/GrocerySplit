@@ -8,6 +8,7 @@ import { useHomeTotals } from '../lib/totals';
 import { Avatar, Button, Card, Icon } from './ui';
 import { toast } from './Toast';
 import QuickSplitList from './QuickSplitList';
+import { messageOf } from '../lib/errors';
 
 type Sort = 'recent' | 'balance' | 'name' | 'spent';
 const SORTS: { value: Sort; label: string }[] = [
@@ -45,7 +46,7 @@ export default function Dashboard({ narrow, newGroupTick, onOpenGroup, onGoFrien
     const togglePin = async (id: string, pinned: boolean) => {
         setProblem('');
         try { await setGroupPinned(id, pinned); await refresh(); }
-        catch (err: any) { setProblem(err.message || 'Could not pin that group'); }
+        catch (err) { setProblem(messageOf(err, 'Could not pin that group')); }
     };
     const { balances, owed, owe } = useHomeTotals();
     const stats = useMemo(() => Object.fromEntries(sharedGroups.map(g => {
@@ -76,8 +77,8 @@ export default function Dashboard({ narrow, newGroupTick, onOpenGroup, onGoFrien
             await refresh();
             toast('Group created');
             onOpenGroup(id, 'members');
-        } catch (err: any) {
-            setProblem(err.message || 'Could not create the group');
+        } catch (err) {
+            setProblem(messageOf(err, 'Could not create the group'));
         }
     };
 
@@ -87,8 +88,8 @@ export default function Dashboard({ narrow, newGroupTick, onOpenGroup, onGoFrien
             await respondToInvite(id, accept);
             await refresh();
             if (accept) toast('Joined the group');
-        } catch (err: any) {
-            setProblem(err.message || 'Could not answer the invite');
+        } catch (err) {
+            setProblem(messageOf(err, 'Could not answer the invite'));
         }
     };
 
