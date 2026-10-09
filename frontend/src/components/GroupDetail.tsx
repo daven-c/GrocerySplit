@@ -6,11 +6,9 @@ import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInv
 import { groupLedger } from '../lib/ledger';
 import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { isEnabled } from '../lib/flags';
-import { MyQuickSplit, listMyQuickSplits } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
 import { fmt, fmtSigned, groupTile, memberTones } from '../lib/people';
-import { startQuickSplit } from '../lib/quickSplit';
 import { toast } from './Toast';
 import { Avatar, AvatarStack, Button, Card, Icon, cellCls, inputCls, selectPillCls } from './ui';
 
@@ -50,7 +48,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [pending, setPending] = useState<PendingInvite[]>([]);
     const [email, setEmail] = useState('');
     const [personName, setPersonName] = useState('');
-    const [quickSplits, setQuickSplits] = useState<MyQuickSplit[]>([]);
     const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'link'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -84,14 +81,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         return () => { cancelled = true; };
     }, [tab, groupId, settlements, sessions]);
 
-    // Quick splits you made while signed in live in Personal until they expire.
-    const inPersonal = !!group?.personal;
-    useEffect(() => {
-        if (!inPersonal || !isEnabled('quickSplit')) return;
-        let cancelled = false;
-        listMyQuickSplits().then(l => !cancelled && setQuickSplits(l)).catch(() => {});
-        return () => { cancelled = true; };
-    }, [inPersonal, groupId]);
 
     const records = useMemo(
         () => sessions.filter(s => s.group_id === groupId).sort((a, b) => b.session_date.localeCompare(a.session_date) || b.updated_at.localeCompare(a.updated_at)),
@@ -509,21 +498,6 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             )}
                         </div>
 
-                        {isPersonal && isEnabled('quickSplit') && (
-                            <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-2.5" aria-label="Your quick splits">
-                                <div className="flex items-center justify-between px-1.5">
-                                    <span className="text-[17px] font-black">Your quick splits</span>
-                                    <motion.button {...tapFlat} onClick={startQuickSplit} className="h-[34px] pl-2 pr-3 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-ink"><Icon name="bolt" size={17} />New</motion.button>
-                                </div>
-                                {quickSplits.map(q => (
-                                    <a key={q.token} href={`/s/${q.token}`} className="flex flex-col gap-3 p-4 rounded-[22px] bg-mint hover:bg-[oklch(0.95_0.04_158)] transition-colors text-ink no-underline">
-                                        <span className="flex justify-between items-start gap-2.5"><span className="text-base font-black flex items-center gap-1.5">{q.locked && <Icon name="lock" fill size={16} />}{q.title}</span><span className="text-base font-black">{fmt(q.total)}</span></span>
-                                        <span className="text-[12.5px] font-bold text-[#5E6A60]">{q.people} {q.people === 1 ? 'person' : 'people'} · {q.items} {q.items === 1 ? 'item' : 'items'} · expires {new Date(q.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                    </a>
-                                ))}
-                                <span className="text-[12.5px] font-semibold text-faint leading-[1.5] px-1.5">Quick splits are shareable pages for one bill. Anyone with the link can join, no account needed. They stay here until they expire after 30 days without activity.</span>
-                            </div>
-                        )}
                     </div>
                 )}
 
