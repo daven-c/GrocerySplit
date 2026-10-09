@@ -641,25 +641,26 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         const owedToMe = net > 0.004 ? net : 0;
         const iOwe = net < -0.004 ? -net : 0;
         const section = 'm-0 px-1 text-[12.5px] font-extrabold uppercase tracking-[0.08em] text-faint';
-        const tiles: [string, number, string][] = [['Spent in Personal', totalCost, 'bg-wash text-ink'], ['Owed to you', owedToMe, 'bg-green-tint text-green-deep'], ['You owe', iOwe, 'bg-coral-tint text-[oklch(0.4_0.13_32)]']];
+        const tiles: [string, number, string][] = [['Total spent', totalCost, 'bg-wash text-ink'], ['Owed to you', owedToMe, 'bg-green-tint text-green-deep'], ['You owe', iOwe, 'bg-coral-tint text-[oklch(0.4_0.13_32)]']];
         return (
             <div className="max-w-[1040px] mx-auto flex flex-col gap-5">
                 {modals}
-                <div className="rounded-[28px] bg-warm p-5 min-[560px]:p-6 flex flex-wrap items-center gap-4">
-                    <span aria-hidden="true" className="w-14 h-14 rounded-full bg-white grid place-items-center text-[oklch(0.5_0.1_80)] shrink-0"><Icon name="lock" fill size={26} /></span>
+                <div className="rounded-[24px] min-[560px]:rounded-[28px] bg-warm p-4 min-[560px]:p-6 flex flex-wrap items-center gap-3 min-[560px]:gap-4">
+                    <span aria-hidden="true" className="w-11 h-11 min-[560px]:w-14 min-[560px]:h-14 rounded-full bg-white grid place-items-center text-[oklch(0.5_0.1_80)] shrink-0"><Icon name="lock" fill size={24} /></span>
                     <div className="flex-[1_1_240px] min-w-0 flex flex-col gap-0.5">
                         <span className="text-[12.5px] font-extrabold uppercase tracking-[0.08em] text-[#8A6A2C]">Private notebook</span>
-                        <h1 className="m-0 text-[30px] font-black tracking-title leading-[1.05]">Personal</h1>
-                        <p className="m-0 text-[15px] font-semibold text-[#6E655C] max-w-[520px]">Only you can see this. Keep track of what people owe you outside any group.</p>
+                        {/* The phone header already says "Personal", so the big title only shows where there is no header. */}
+                        <h1 className="m-0 text-[30px] font-black tracking-title leading-[1.05] sr-only min-[760px]:not-sr-only">Personal</h1>
+                        <p className="m-0 text-[14.5px] min-[560px]:text-[15px] font-semibold text-[#6E655C] max-w-[520px]">Only you can see this. Keep track of what people owe you outside any group.</p>
                     </div>
                     {addMenu}
                 </div>
 
-                <div className="grid grid-cols-1 min-[560px]:grid-cols-3 gap-3" aria-label="Personal totals">
+                <div className="grid grid-cols-3 gap-2 min-[560px]:gap-3" aria-label="Personal totals">
                     {tiles.map(([label, value, tone]) => (
-                        <div key={label} className={`px-5 py-4 rounded-[22px] flex flex-col gap-0.5 ${tone}`}>
-                            <span className="text-[13.5px] font-extrabold opacity-80">{label}</span>
-                            <AnimatedNumber value={value} prefix="$" className="text-[26px] font-black tracking-[-0.02em]" />
+                        <div key={label} className={`px-3 py-3 min-[560px]:px-5 min-[560px]:py-4 rounded-[18px] min-[560px]:rounded-[22px] flex flex-col gap-0.5 min-w-0 ${tone}`}>
+                            <span className="text-[12px] min-[560px]:text-[13.5px] font-extrabold opacity-80 truncate">{label}</span>
+                            <AnimatedNumber value={value} prefix="$" className="text-[17px] min-[560px]:text-[26px] font-black tracking-[-0.02em] truncate" />
                         </div>
                     ))}
                 </div>
@@ -672,7 +673,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         <h2 className={section}>Ledger</h2>
                         {expensesView}
                     </section>
-                    <aside className="flex-[1_1_340px] min-w-0 flex flex-col gap-3">
+                    <aside className="flex-[1_1_340px] min-w-0 flex flex-col gap-3 order-first min-[840px]:order-none">
                         <SegmentedTabs id="personal-side" value={side} onChange={setSide} tabs={[{ value: 'balances', label: 'Balances' }, { value: 'people', label: `People ${group.members.length}` }]} />
                         {side === 'balances'
                             ? <section aria-label="Personal balances">{balancesView}</section>
