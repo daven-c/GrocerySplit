@@ -91,6 +91,8 @@ export const usernameAvailable = async (u: string) => wait(u !== 'taken');
 export const getMyUsername = () => wait('daven');
 export const updateUsername = async () => wait(undefined);
 export const setGroupPinned = async (gid: string, pinned: boolean) => { groups = groups.map(g => g.id === gid ? { ...g, members: g.members.map(m => m.user_id === ME ? { ...m, pinned } : m) } : g); return wait(undefined); };
+export const exportMyData = async () => wait({ exported_at: new Date().toISOString(), account: { name: 'Daven', username: 'daven', email: 'me@example.com' }, groups, expenses: sessions, transfers: [], quick_splits: [] });
+export const deleteAccount = async () => wait(undefined);
 export const ensurePersonalGroup = async () => {
     let p = groups.find(g => g.personal);
     if (!p) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { motion, Pop, enter, tapFlat } from '../lib/motion';
+import { motion, Pop, Modal, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
-import { updateDisplayName, requestEmailChange, changePassword, getMyUsername, updateUsername } from '../lib/api';
+import { updateDisplayName, requestEmailChange, changePassword, getMyUsername, updateUsername, exportMyData, deleteAccount } from '../lib/api';
 import { HUES, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, inputCls } from './ui';
 
@@ -52,6 +52,46 @@ export default function Account({ user, onLogout }: AccountProps) {
     const [confirm, setConfirm] = useState('');
     const [pwMsg, setPwMsg] = useState<Msg>(null);
     const [pwBusy, setPwBusy] = useState(false);
+
+    const [dataMsg, setDataMsg] = useState<Msg>(null);
+    const [dataBusy, setDataBusy] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [typed, setTyped] = useState('');
+    const [delBusy, setDelBusy] = useState(false);
+    const [delErr, setDelErr] = useState('');
+
+    const downloadData = async () => {
+        setDataBusy(true);
+        setDataMsg(null);
+        try {
+            const data = await exportMyData();
+            const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `settled-data-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            setDataMsg({ type: 'ok', text: 'Downloaded. The file has your groups, expenses and transfers.' });
+        } catch (err: any) {
+            setDataMsg({ type: 'err', text: err.message || 'Could not make the file.' });
+        } finally {
+            setDataBusy(false);
+        }
+    };
+
+    const removeAccount = async () => {
+        setDelBusy(true);
+        setDelErr('');
+        try {
+            await deleteAccount();
+            onLogout(); // the account is gone, so this just signs the browser out
+        } catch (err: any) {
+            setDelErr(err.message || 'Could not delete the account.');
+            setDelBusy(false);
+        }
+    };
 
     const saveName = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -187,7 +227,41 @@ export default function Account({ user, onLogout }: AccountProps) {
                 </Card>
             </motion.div>
 
-            <motion.div {...enter(2)} className="flex">
+            <motion.div {...enter(2)}>
+                <Card>
+                    <div className={section}>
+                        <span className={titleCls}>Your data</span>
+                        <span className={hintCls}>Download everything of yours as one file: your groups, who is in them, your expenses and transfers.</span>
+                        <Banner msg={dataMsg} />
+                        <Button variant="secondary" height={44} className="self-start px-5 text-[14.5px]" disabled={dataBusy} onClick={downloadData}><Icon name="download" size={18} />{dataBusy ? 'Preparing…' : 'Download my data'}</Button>
+                    </div>
+                    <div className={`${section} border-t border-rule`}>
+                        <span className={titleCls}>Delete account</span>
+                        <span className={hintCls}>Permanently removes your account. This can't be undone.</span>
+                        <button type="button" onClick={() => { setDeleting(true); setTyped(''); setDelErr(''); }} className="self-start h-11 px-5 rounded-full bg-coral-tint text-coral-on text-[14.5px] font-extrabold">Delete my account</button>
+                    </div>
+                </Card>
+            </motion.div>
+
+            <Modal open={deleting} onClose={() => !delBusy && setDeleting(false)}>
+                <h2 className="m-0 mb-2 text-xl font-black text-ink">Delete your account?</h2>
+                <ul className="m-0 mb-4 pl-5 flex flex-col gap-1.5 text-[14.5px] font-semibold leading-[1.45] text-muted">
+                    <li>Your Personal section and any group nobody else is in are deleted.</li>
+                    <li>If you own a group other people are in, delete it first. We'll tell you which.</li>
+                    <li>You're removed from other people's groups. Expenses you added stay, but stop counting toward balances, as if you had left.</li>
+                    <li>You can't get the account back. Download your data first if you want a copy.</li>
+                </ul>
+                <label className="flex flex-col gap-1.5 text-[14px] font-extrabold text-body">Type DELETE to confirm
+                    <input className={inputCls} value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" autoCapitalize="characters" />
+                </label>
+                {delErr && <p role="alert" className="m-0 mt-3 text-[13.5px] font-bold text-coral-strong">{delErr}</p>}
+                <div className="flex gap-3 mt-5">
+                    <Button variant="secondary" wide height={44} disabled={delBusy} onClick={() => setDeleting(false)}>Cancel</Button>
+                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" disabled={delBusy || typed.trim() !== 'DELETE'} onClick={removeAccount}>{delBusy ? 'Deleting…' : 'Delete account'}</Button>
+                </div>
+            </Modal>
+
+            <motion.div {...enter(3)} className="flex">
                 <motion.button {...tapFlat} onClick={onLogout} className="h-11 pl-3.5 pr-[18px] flex items-center gap-2 rounded-full bg-[oklch(0.96_0.03_35)] text-[oklch(0.5_0.17_32)] text-[14.5px] font-extrabold">
                     <Icon name="logout" size={19} />Sign out
                 </motion.button>
