@@ -36,7 +36,7 @@ One shareable page for splitting a single bill, e.g. at dinner.
 
 ### Home, search and accounts
 - **Home** shows your overall balance, invites, your groups (search by group or person, sort by recent, balance, name or spend, pin to the top) and your quick splits.
-- **Account** lets you change your display name, username, email and password, or sign out. **Forgot password?** on the sign-in screen sends a reset link; the link opens a "Choose a new password" screen.
+- **Account** lets you change your display name, username, email and password, or sign out. **Forgot password?** on the sign-in screen sends a reset link; the link opens a "Choose a new password" screen. Signing in with an unconfirmed email says so and offers to resend the confirmation link.
 - The app re-fetches shared data when you return to the tab and once a minute while you're looking at it (but not while you're typing), so other people's changes show up without a reload.
 - **Admin** (admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts and force-confirms stuck signups. It runs through the `admin-users` Edge Function, which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 
@@ -97,7 +97,7 @@ npm run build                # type-check and production build
 - **Edge Functions** (not deployed by CI; deploy with the Supabase CLI or dashboard when they change):
   - `admin-users`: admin tools, checks the caller against `admins`.
   - `sweep-photos`: deployed *without* JWT verification (it takes no credentials and throttles itself to one scan every 6 hours). It removes photo files that no photo record points to.
-- **Scheduled jobs** (created by migrations, need `pg_cron`; the photo sweep also needs `pg_net`): `quick-splits-expire` (daily) and `sweep-photos` (weekly).
+- **Scheduled jobs** (created by migrations, need `pg_cron`; the photo sweep also needs `pg_net`): `quick-splits-expire` (daily), `unconfirmed-accounts-expire` (daily; removes accounts that never confirmed their email after 2 days) and `sweep-photos` (weekly).
 - **Auth settings** (Authentication in the Supabase dashboard):
   - **URL Configuration:** set the Site URL to your production domain and add every app address to Redirect URLs (production, `dev.` and `http://localhost:3000`, each with `/**`). Reset-password links only work from addresses on that list.
   - **SMTP:** set up custom SMTP (host, port, username, password, and a sender address on a verified domain). Without it Supabase's built-in mailer allows only a couple of emails an hour, and email templates can't be edited.
