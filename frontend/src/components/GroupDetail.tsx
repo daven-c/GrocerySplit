@@ -472,17 +472,17 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         const square = Math.abs(m.net) < 0.005;
                         const w = `${(Math.abs(m.net) / maxNet) * 100}%`;
                         return (
-                            <motion.div key={m.userId} {...listItem(i)} className={`flex items-center gap-3 ${isPersonal ? 'flex-wrap' : ''}`}>
+                            <motion.div key={m.userId} {...listItem(i)} className="flex items-center gap-3">
                                 <Avatar name={member.name} tone={tones[m.userId]} size={40} />
                                 <span className={isPersonal ? 'flex-1 min-w-0 flex flex-col' : 'w-[84px] shrink-0 flex flex-col'}>
                                     <span className="text-[15px] font-extrabold truncate">{who(m.userId)}</span>
                                     <span className="text-[12.5px] font-bold text-faint">{square ? 'all square' : m.net > 0 ? 'up' : 'down'}</span>
                                 </span>
-                                <span className={`grid grid-cols-[1fr_2px_1fr] items-center h-7 ${isPersonal ? 'order-last basis-full' : 'flex-1 min-w-[60px]'}`} aria-hidden="true">
+                                {!isPersonal && <span className="grid grid-cols-[1fr_2px_1fr] items-center h-7 flex-1 min-w-[60px]" aria-hidden="true">
                                     <span className="flex justify-end"><motion.span className="h-3 rounded-l-md bg-[oklch(0.78_0.12_32)]" initial={false} animate={{ width: m.net < 0 ? w : '0%' }} transition={{ duration: 0.3 }} /></span>
                                     <span className="h-7 bg-line rounded-[1px]" />
                                     <span className="flex"><motion.span className="h-3 rounded-r-md bg-[oklch(0.74_0.14_155)]" initial={false} animate={{ width: m.net > 0 ? w : '0%' }} transition={{ duration: 0.3 }} /></span>
-                                </span>
+                                </span>}
                                 <span className="w-[90px] text-right shrink-0">
                                     {square ? <span className="text-base font-black text-faint">Settled</span> : <AnimatedNumber value={Math.abs(m.net)} prefix={m.net < 0 ? '-$' : '+$'} className={`text-base font-black ${m.net > 0 ? 'text-green' : 'text-coral'}`} />}
                                 </span>
