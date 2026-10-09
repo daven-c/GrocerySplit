@@ -281,6 +281,12 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
                             <motion.button {...tapFlat} onClick={() => setConfirmDelete(true)} className="text-coral">Delete</motion.button>
                         </div>
                     )}
+                    {ownerKey && !signedIn && (
+                        <p className="m-0 flex flex-wrap items-center gap-x-1.5 text-[13.5px] font-bold text-body">
+                            <Icon name="cloud_off" size={16} />Sign in to keep this and manage it from any device.
+                            <a href="/" className="font-extrabold text-ink underline underline-offset-2">Sign in</a>
+                        </p>
+                    )}
                     {confirmDelete && (
                         <div role="alertdialog" aria-label="Delete this split" className="flex flex-wrap items-center gap-3 p-3 pl-4 rounded-[22px] bg-coral-tint text-coral-on text-sm font-bold">
                             <span className="flex-1 min-w-[200px]">Delete this split for everyone? This can't be undone.</span>
