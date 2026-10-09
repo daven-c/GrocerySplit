@@ -2,5 +2,61 @@
 	"framework": "vite",
 	"buildCommand": "npm run build",
 	"outputDirectory": "build",
-	"rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
+	"cleanUrls": true,
+	"rewrites": [
+		{
+			"source": "/s/:path*",
+			"destination": "/"
+		}
+	],
+	"redirects": [
+		{
+			"source": "/login",
+			"destination": "/",
+			"permanent": false
+		},
+		{
+			"source": "/signin",
+			"destination": "/",
+			"permanent": false
+		},
+		{
+			"source": "/signup",
+			"destination": "/",
+			"permanent": false
+		},
+		{
+			"source": "/app",
+			"destination": "/",
+			"permanent": false
+		}
+	],
+	"headers": [
+		{
+			"source": "/(.*)",
+			"headers": [
+				{
+					"key": "X-Content-Type-Options",
+					"value": "nosniff"
+				},
+				{
+					"key": "Referrer-Policy",
+					"value": "strict-origin-when-cross-origin"
+				},
+				{
+					"key": "X-Frame-Options",
+					"value": "SAMEORIGIN"
+				}
+			]
+		},
+		{
+			"source": "/s/:path*",
+			"headers": [
+				{
+					"key": "X-Robots-Tag",
+					"value": "noindex, nofollow"
+				}
+			]
+		}
+	]
 }

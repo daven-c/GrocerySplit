@@ -131,6 +131,12 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
 
             <footer className="max-w-[1160px] mx-auto px-6 pt-7 pb-10 border-t border-rule flex flex-wrap gap-4 justify-between text-sm font-bold text-faint">
                 <span>Settled · settled.davenc.dev</span>
+                <nav aria-label="Guides" className="flex flex-wrap gap-x-5 gap-y-1">
+                    <a href="/guides/split-groceries-with-roommates" className="text-body hover:text-ink">Split groceries with roommates</a>
+                    <a href="/guides/split-rent-fairly" className="text-body hover:text-ink">Split rent fairly</a>
+                    <a href="/guides/split-a-restaurant-bill" className="text-body hover:text-ink">Split a restaurant bill</a>
+                    <a href="/guides" className="text-body hover:text-ink">All guides</a>
+                </nav>
                 <span>Made for households, trips and anyone who shares a fridge.</span>
             </footer>
         </div>

@@ -107,6 +107,12 @@ npm run build                # type-check and production build
 - **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` deploys to production and every other branch and PR gets a preview deployment. Add your domain under the project's Domains.
 - **CI:** `.github/workflows/ci.yml` runs lint, the tests and a production build on every PR and every push to `main` or `dev`.
 
+## Search and sharing (SEO)
+- `frontend/index.html` carries the title, description, canonical link, Open Graph/Twitter tags (`public/og-image.png`, 1200x630) and JSON-LD for the app, plus plain HTML inside `#root` so a crawler that doesn't run scripts still sees the pitch and links. React replaces it on load.
+- `frontend/public/guides/` has static, crawlable guides (groceries, rent, restaurant bills) with their own titles, canonical links and `Article` data. Add a page there, add it to `public/sitemap.xml`, and link to it from the landing footer.
+- `public/robots.txt` allows the site but disallows `/s/` (quick split links are private); those pages also send `X-Robots-Tag: noindex` and a `noindex` meta tag. `vercel.json` only rewrites `/s/*` to the app, so any other unknown address is a real 404 (`public/404.html`), and it adds `Referrer-Policy: strict-origin-when-cross-origin` so a quick split token never leaks to other sites.
+- The dev domain sits behind Vercel login, so it can't be crawled.
+
 ## More
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): where this is heading.

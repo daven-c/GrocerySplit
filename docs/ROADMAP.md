@@ -62,7 +62,12 @@ stored exchange rate). Money is formatted in `lib/people.ts` (`Intl.NumberFormat
 ### 7. Insights and export
 - Spend by category and month per group, CSV/PDF export, a shareable read-only summary link. (A JSON download of your own data already exists under Account.)
 
-### 8. Polish
+### 8. Discovery
+- Search basics are in place (see the README's "Search and sharing"). The next lever is **content**: more guides that match real searches ("split utilities with roommates", "split a trip with friends", "Splitwise alternative"), each with a worked example and links back to the tool.
+- Owner tasks: add the domain to Google Search Console and Bing Webmaster Tools, submit `sitemap.xml`, and check the social preview of the home page and a guide.
+- Later: a short public demo or screenshots on the landing page, and links from places people look (Product Hunt, relevant subreddits, the GitHub repo description).
+
+### 9. Polish
 - Dark mode, more languages, a real-screen-reader pass on phones.
 
 ## Engineering ideas

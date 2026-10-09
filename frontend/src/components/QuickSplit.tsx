@@ -105,6 +105,15 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         return () => { alive.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
     }, [token, load, draft]);
 
+    // A quick split is private (its link is the only key), so ask search engines to leave it out of results.
+    useEffect(() => {
+        const tag = document.createElement('meta');
+        tag.name = 'robots';
+        tag.content = 'noindex, nofollow';
+        document.head.appendChild(tag);
+        return () => tag.remove();
+    }, []);
+
     const pageTitle = data?.title;
     useEffect(() => {
         document.title = pageTitle ? `${pageTitle} · Settled` : 'Settled';

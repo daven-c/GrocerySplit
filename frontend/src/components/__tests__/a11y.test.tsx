@@ -148,3 +148,20 @@ describe('orientation and announcements', () => {
         expect(region).toHaveTextContent('Changes saved');
     });
 });
+
+describe('search engines', () => {
+    it('the landing page links to the guides with real links', () => {
+        render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
+        const nav = screen.getByRole('navigation', { name: 'Guides' });
+        expect(nav.querySelectorAll('a')).toHaveLength(4);
+        expect(screen.getByRole('link', { name: 'Split rent fairly' })).toHaveAttribute('href', '/guides/split-rent-fairly');
+    });
+
+    it('a quick split asks to be left out of search results, and takes the request away when it closes', async () => {
+        const { unmount } = render(<QuickSplit token={null} />);
+        await screen.findByText('Nothing is saved yet');
+        expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
+        unmount();
+        expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+    });
+});
