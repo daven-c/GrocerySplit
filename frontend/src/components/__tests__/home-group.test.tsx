@@ -283,24 +283,45 @@ describe('Group detail', () => {
         api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, guest] }, g2]);
         renderWithData(<GroupDetail {...props} initialTab="members" />);
         expect(await screen.findByText('Cam')).toBeInTheDocument();
-        expect(screen.getByText('Invited')).toBeInTheDocument();
+        expect(screen.getByText('Not joined')).toBeInTheDocument();
         expect(screen.getByLabelText('Remove Cam')).toBeInTheDocument(); // the owner can remove a person (if unused)
         expect(screen.getByLabelText('Remove Amy')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Balances' }));
         expect(await screen.findByText('Cam', { selector: 'span.truncate' })).toBeInTheDocument(); // part of the ledger
     });
 
-    it('shared groups have no add-by-name, and an invited person can be removed while pending', async () => {
+    it('a not-yet-joined person can be renamed or removed in a shared group', async () => {
         const u = userEvent.setup();
         const g1 = (await import('../../test/apiMock')).group;
         const cam = { user_id: 'g-cam', joined_at: '2026-10-05T00:00:00Z', name: 'Cam', email: '', role: 'member' as const, pending: true };
         api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, cam] }]);
         renderWithData(<GroupDetail {...props} initialTab="members" />);
-        expect(await screen.findByText('Invite pending')).toBeInTheDocument();
-        expect(screen.queryByLabelText("Person's name")).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument();
+        expect(await screen.findByText('Not joined yet')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
         await u.click(screen.getByLabelText('Remove Cam'));
         await waitFor(() => expect(api.removeGuest).toHaveBeenCalledWith('g-cam'));
+    });
+
+    it('links a temporary person to a username so their expenses move over', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        const cam = { user_id: 'g-cam', joined_at: '2026-10-05T00:00:00Z', name: 'Cam', email: '', role: 'member' as const, pending: true };
+        api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, cam] }]);
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        await u.click(await screen.findByRole('button', { name: 'Link to account' }));
+        const field = screen.getByLabelText('Username for Cam');
+        await u.type(field, 'cam_99');
+        await u.click(within(field.parentElement!).getByRole('button', { name: 'Send invite' }));
+        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', 'cam_99', 'g-cam'));
+    });
+
+    it('in a shared group, the owner can add a temporary person by name', async () => {
+        const u = userEvent.setup();
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        expect(await screen.findByText('Add a temporary person')).toBeInTheDocument();
+        await u.type(screen.getByLabelText("Person's name"), 'Dee');
+        await u.click(screen.getByRole('button', { name: 'Add' }));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith(props.groupId, 'Dee'));
     });
 
     it('in Personal, add people by name, rename and remove them', async () => {

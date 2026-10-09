@@ -25,7 +25,7 @@ export const categoryTone = (id: string) => {
 export const categoryOf = (id: string) => CATEGORIES.find(c => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
 
 export const METHODS: { value: SplitMethod; label: string; hint: string }[] = [
-    { value: 'exact', label: 'Amounts', hint: 'Starts split evenly. Change any amount to adjust it.' },
+    { value: 'exact', label: 'Amounts', hint: 'Starts split evenly. Change an amount and the rest share what is left.' },
     { value: 'shares', label: 'Shares', hint: 'Split in proportion, e.g. 2 shares for a bigger room.' },
 ];
 

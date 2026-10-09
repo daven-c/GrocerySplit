@@ -42,7 +42,7 @@ export const createGroup = async (name: string) => {
 };
 export const deleteGroup = async (gid: string) => { groups = groups.filter(g => g.id !== gid); sessions = sessions.filter(s => s.group_id !== gid); return wait(undefined); };
 export const removeMember = async (gid: string, uid: string) => { groups = groups.map(g => g.id === gid ? { ...g, members: g.members.filter(m => m.user_id !== uid) } : g); return wait(undefined); };
-export const inviteToGroup = async (gid: string, username: string) => { pending = [...pending, { id: id('p'), group_id: gid, name: username.replace(/^@/, ''), created_at: new Date().toISOString() }]; return wait(undefined); };
+export const inviteToGroup = async (gid: string, username: string, _guestId?: string) => { pending = [...pending, { id: id('p'), group_id: gid, name: username.replace(/^@/, ''), created_at: new Date().toISOString() }]; return wait(undefined); };
 export const listPendingInvites = (gid: string) => wait(pending.filter(p => p.group_id === gid));
 export const revokeInvite = async (pid: string) => { pending = pending.filter(p => p.id !== pid); return wait(undefined); };
 export const myInvites = () => wait(structuredClone(invites));
@@ -113,3 +113,7 @@ export const saveReceipt = async (sid: string, patch: any, items: any[]) => {
     sessions = sessions.map(s => s.id === sid ? { ...s, ...patch, items: items.map(i => ({ id: i.id ?? id('i'), name: i.name, price: i.price, assigned_users: i.assigned_users })) } : s);
     return wait(undefined);
 };
+
+export const listPhotos = async (_sid: string) => wait([] as { id: string; path: string; url: string }[]);
+export const addPhoto = async (_sid: string, _gid: string, _file: Blob, _ext?: string) => wait(undefined);
+export const removePhoto = async (_p: unknown) => wait(undefined);

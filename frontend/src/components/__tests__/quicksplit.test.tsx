@@ -333,3 +333,31 @@ describe('Quick split page (no account)', () => {
         expect(screen.queryByRole('button', { name: 'Import to a group' })).not.toBeInTheDocument();
     });
 });
+
+describe('Quick split draft (nothing exists until Create)', () => {
+    const assign = vi.fn();
+    beforeEach(() => {
+        assign.mockClear();
+        Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign, origin: 'http://localhost', hash: '', pathname: '/s/new' } });
+        fakeQuick.api.createFromDraft.mockClear();
+    });
+
+    it('is editable without creating or saving anything, and Create saves it all and opens the real link', async () => {
+        const u = userEvent.setup();
+        render(<QuickSplit token={null} />);
+        expect(await screen.findByText('Nothing is saved yet')).toBeInTheDocument();
+        await u.type(screen.getByLabelText('Your name'), 'Ann');
+        await u.click(screen.getByRole('button', { name: 'Join' }));
+        await u.type(await screen.findByLabelText('New item name'), 'Pizza');
+        await u.type(screen.getByLabelText('New item price'), '12');
+        await u.click(screen.getByRole('button', { name: 'Add' }));
+        await u.click(await screen.findByRole('button', { name: 'Ann had Pizza' }));
+        expect(fakeQuick.api.createFromDraft).not.toHaveBeenCalled(); // editing alone never creates anything
+        expect(fakeQuick.api.addQuickItems).not.toHaveBeenCalled();
+
+        await u.click(screen.getByRole('button', { name: 'Create quick split' }));
+        await waitFor(() => expect(assign).toHaveBeenCalledWith(`/s/${fakeQuick.state.token}`));
+        expect(fakeQuick.state.people).toEqual(['Ann']);
+        expect(fakeQuick.state.items).toMatchObject([{ name: 'Pizza', price: 12, assigned: ['Ann'] }]);
+    });
+});

@@ -64,7 +64,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     const greet = user ? `${greeting()}, ${firstName(user.name)}.` : greeting();
     const net = totals.net;
     const overall = Math.abs(net) < 0.005 ? "Overall you're all square" : net > 0 ? "Overall you're up" : "Overall you're down";
-    const startQuick = () => { startQuickSplit().catch(err => console.error('Could not start a quick split', err)); };
+    const startQuick = startQuickSplit;
 
     const avatarBtn = (size: number, border = false) => (
         <motion.button

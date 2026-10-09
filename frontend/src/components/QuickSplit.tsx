@@ -3,7 +3,7 @@ import { motion, MotionConfig, Pop, tapFlat } from '../lib/motion';
 import { supabase } from '../lib/supabase';
 import {
     QuickSplit as QuickSplitData, addQuickItems, assignQuickItem, deleteQuickItem, deleteQuickSplit, getQuickSplit, joinQuickSplit,
-    claimQuickSplit, lockQuickSplit, reclaimQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
+    claimQuickSplit, createFromDraft, lockQuickSplit, reclaimQuickSplit, recall, remember, removeQuickPerson, renameQuickSplit, setQuickAssigned, setQuickSplit, updateQuickItem,
 } from '../lib/quickSplit';
 import { computeSplit } from '../lib/calc';
 import { RECEIPT_PROMPT, parseReceiptJson } from '../lib/receiptImport';
@@ -39,14 +39,24 @@ function Field({ value, onCommit, disabled, label, className = '', money: isMone
     );
 }
 
-export default function QuickSplit({ token }: { token: string }) {
-    const [data, setData] = useState<QuickSplitData | null>(null);
+/** What a split looks like before it exists: the same page, held in memory only. */
+const blankDraft = (): QuickSplitData => ({
+    title: 'Dinner', tax: 0, tip: 0, paid_by: null, locked: false, version: 0, is_owner: true,
+    expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), people: [], items: [],
+});
+
+/** `token` null = a draft: you set it up here and nothing is saved, or even created, until you press Create. */
+export default function QuickSplit({ token: tokenProp }: { token: string | null }) {
+    const draft = tokenProp === null;
+    const token = tokenProp ?? '';
+    const [creating, setCreating] = useState(false);
+    const [data, setData] = useState<QuickSplitData | null>(() => (draft ? blankDraft() : null));
     const [missing, setMissing] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
-    const [me, setMe] = useState<string | undefined>(() => recall(token).me);
-    const [ownerKey, setOwnerKey] = useState<string | undefined>(() => recall(token).ownerKey);
-    const [memberKey, setMemberKey] = useState<string | undefined>(() => recall(token).memberKey);
+    const [me, setMe] = useState<string | undefined>(() => (draft ? undefined : recall(token).me));
+    const [ownerKey, setOwnerKey] = useState<string | undefined>(() => (draft ? undefined : recall(token).ownerKey));
+    const [memberKey, setMemberKey] = useState<string | undefined>(() => (draft ? undefined : recall(token).memberKey));
     const [nameInput, setNameInput] = useState('');
     const [newItem, setNewItem] = useState('');
     const [newPrice, setNewPrice] = useState('');
@@ -59,6 +69,7 @@ export default function QuickSplit({ token }: { token: string }) {
     const alive = useRef(true);
 
     const load = useCallback(async () => {
+        if (draft) return;
         try {
             const d = await getQuickSplit(token);
             if (!alive.current) return;
@@ -67,10 +78,11 @@ export default function QuickSplit({ token }: { token: string }) {
         } catch (err: any) {
             if (alive.current && busy.current === 0) setError(err.message || 'Could not load this split.');
         }
-    }, [token]);
+    }, [token, draft]);
 
     useEffect(() => {
         alive.current = true;
+        if (draft) return () => { alive.current = false; };
         // The owner link carries the key in the #fragment, which is never sent to a server.
         const m = window.location.hash.match(/owner=([A-Za-z0-9]+)/);
         if (m) {
@@ -90,7 +102,7 @@ export default function QuickSplit({ token }: { token: string }) {
             if (s.session && key) claimQuickSplit(token, key).then(() => load()).catch(() => {});
         }).catch(() => {});
         return () => { alive.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
-    }, [token, load]);
+    }, [token, load, draft]);
 
     useEffect(() => {
         document.title = data ? `${data.title} · Splitpot` : 'Splitpot';
@@ -99,6 +111,7 @@ export default function QuickSplit({ token }: { token: string }) {
     /** Apply a change on screen right away, send it, then take the server's version. */
     const act = async (optimistic: ((d: QuickSplitData) => QuickSplitData) | null, send: () => Promise<unknown>) => {
         setError('');
+        if (draft) { if (optimistic) setData(d => (d ? optimistic(d) : d)); return; }
         busy.current++;
         if (optimistic) setData(d => (d ? optimistic(d) : d));
         try { await send(); }
@@ -108,7 +121,7 @@ export default function QuickSplit({ token }: { token: string }) {
     };
 
     const locked = !!data?.locked;
-    const isOwner = !!ownerKey || (signedIn && !!data?.is_owner);
+    const isOwner = draft || !!ownerKey || (signedIn && !!data?.is_owner);
     const joined = !!data && !!me && data.people.includes(me);
     const ok = ownerKey ?? null; // what the owner's calls carry (null when signed in as the owning account)
     // The split itself (items, prices, tax, tip, who paid, who is on it) is the owner's. Everyone else can only tap
@@ -130,6 +143,13 @@ export default function QuickSplit({ token }: { token: string }) {
         const n = name.trim();
         if (!n) return;
         setError('');
+        if (draft) {
+            if (!existing && data?.people.some(p => p.toLowerCase() === n.toLowerCase())) { setError('That name is taken.'); return; }
+            if (!existing) setData(d => (d ? { ...d, people: [...d.people, n] } : d));
+            setMe(n);
+            setNameInput('');
+            return;
+        }
         try {
             if (!existing) {
                 const key = await joinQuickSplit(token, n);
@@ -168,6 +188,7 @@ export default function QuickSplit({ token }: { token: string }) {
         const price = money(newPrice);
         setNewItem('');
         setNewPrice('');
+        if (draft) { setData(d => (d ? { ...d, items: [...d.items, { id: `draft-${Date.now()}-${d.items.length}`, name, price, assigned: [] }] } : d)); return; }
         void act(null, () => addQuickItems(token, [{ name, price }], ok, memberKey));
     };
 
@@ -176,6 +197,14 @@ export default function QuickSplit({ token }: { token: string }) {
             const r = parseReceiptJson(json);
             setJson('');
             setShowJson(false);
+            if (draft) {
+                setData(d => (d ? {
+                    ...d,
+                    items: [...d.items, ...r.items.map((it, n) => ({ id: `draft-${Date.now()}-${d.items.length + n}`, name: it.name, price: it.price, assigned: [] as string[] }))],
+                    tax: r.tax > 0 ? r.tax : d.tax, tip: r.tip > 0 ? r.tip : d.tip,
+                } : d));
+                return;
+            }
             void act(null, async () => {
                 await addQuickItems(token, r.items, ok);
                 if (r.tax > 0 || r.tip > 0) await setQuickSplit(token, { ...(r.tax > 0 ? { tax: r.tax } : {}), ...(r.tip > 0 ? { tip: r.tip } : {}) }, ok);
@@ -196,6 +225,18 @@ export default function QuickSplit({ token }: { token: string }) {
     }
     if (!data || !result) return <Shell><p className="text-center text-faint py-16 animate-pulse">{error || 'Loading split…'}</p></Shell>;
 
+    const create = async () => {
+        setCreating(true);
+        setError('');
+        try {
+            const t = await createFromDraft(data, me);
+            window.location.assign(`/s/${t}`);
+        } catch (err: any) {
+            setError(err.message || 'Could not create the split.');
+            setCreating(false);
+        }
+    };
+
     const link = `${window.location.origin}/s/${token}`;
     const ownerLink = `${link}#owner=${ownerKey}`;
     const dueNote = (n: number, only: string | null, price: number) => (n === 0 ? 'Nobody yet' : n === 1 ? `Just ${only}` : `${fmt(price / n)} each`);
@@ -209,7 +250,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         <Field label="Split title" value={data.title} disabled={!isOwner} placeholder="Name this split" onCommit={v => act(d => ({ ...d, title: v.trim() || d.title }), () => renameQuickSplit(token, ownerKey ?? null, v))}
                             className="m-0 p-0 border-0 border-b-2 border-dashed border-line enabled:focus:border-[oklch(0.55_0.1_158)] bg-transparent text-[32px] font-black tracking-title w-full max-w-[440px] disabled:border-transparent" />
                         {isOwner && <span className="text-xs font-bold text-faint">Tap the title to rename it</span>}
-                        <span className="text-sm font-semibold text-muted">Anyone with this link can edit it · expires {new Date(data.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} if unused</span>
+                        {draft ? <span className="text-sm font-semibold text-muted">Not saved yet. Set it up, then create it to get a link.</span> : <span className="text-sm font-semibold text-muted">Anyone with this link can edit it · expires {new Date(data.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} if unused</span>}
                     </div>
                     <div className="flex flex-col items-end">
                         <span className="text-[13.5px] font-bold text-faint">Total</span>
@@ -217,7 +258,16 @@ export default function QuickSplit({ token }: { token: string }) {
                     </div>
                 </div>
 
-                <div className="bg-mint rounded-[22px] p-4 flex flex-col gap-3">
+                {draft && (
+                    <div className="bg-mint rounded-[22px] p-4 flex flex-wrap items-center gap-3">
+                        <span className="flex-[1_1_240px] flex flex-col gap-0.5 min-w-0">
+                            <span className="text-[15.5px] font-black">Nothing is saved yet</span>
+                            <span className="text-sm font-semibold text-body">Add the items and who had what here. The link only exists once you create it, and leaving this page throws the draft away.</span>
+                        </span>
+                        <Button variant="band" height={46} className="px-5 text-[15px]" disabled={creating} onClick={create}><Icon name="link" size={19} />{creating ? 'Creating...' : 'Create quick split'}</Button>
+                    </div>
+                )}
+                {!draft && <div className="bg-mint rounded-[22px] p-4 flex flex-col gap-3">
                     <div className="flex flex-wrap gap-2">
                         <input readOnly aria-label="Share link" value={link} onFocus={e => e.currentTarget.select()} className="flex-[1_1_220px] min-w-0 h-[46px] px-4 rounded-full bg-white font-mono text-[13.5px] text-body border-0 overflow-hidden text-ellipsis" />
                         <Button variant="band" height={46} className="px-5 text-[15px]" onClick={() => copy(link, 'Link')}><Icon name="link" size={19} />Copy link</Button>
@@ -238,7 +288,7 @@ export default function QuickSplit({ token }: { token: string }) {
                             <Button height={36} className="px-3.5 !bg-coral-strong" onClick={async () => { try { await deleteQuickSplit(token, ownerKey ?? null); window.location.assign('/'); } catch (err: any) { setError(err.message); } }}>Delete</Button>
                         </div>
                     )}
-                </div>
+                </div>}
 
                 <Pop show={!!error} className="px-4 py-2.5 rounded-[22px] bg-coral-tint text-coral-on text-[13.5px] font-extrabold">{error}</Pop>
                 <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>
@@ -276,7 +326,7 @@ export default function QuickSplit({ token }: { token: string }) {
                         {joined ? (
                             <span className="text-[14.5px] font-semibold text-muted">
                                 You're <strong className="font-extrabold text-ink">{me}</strong>{' · '}
-                                <button type="button" onClick={() => { remember(token, { me: '' }); setMe(undefined); }} className="underline underline-offset-2">not you?</button>
+                                <button type="button" onClick={() => { if (!draft) remember(token, { me: '' }); setMe(undefined); }} className="underline underline-offset-2">not you?</button>
                             </span>
                         ) : <span />}
                         {data.people.length > 0 && (
@@ -394,7 +444,7 @@ export default function QuickSplit({ token }: { token: string }) {
                 </Card>
 
                 {/* Only the person who made the split can save it to a group. */}
-                {isOwner && (
+                {isOwner && !draft && (
                     <div className="flex flex-wrap items-center gap-3.5 py-[18px] px-5 rounded-[22px] bg-warm">
                         <span className="flex-[1_1_240px] flex flex-col gap-0.5 min-w-0">
                             <span className="text-[15.5px] font-black">Keep this in a group</span>
@@ -406,7 +456,7 @@ export default function QuickSplit({ token }: { token: string }) {
                     </div>
                 )}
             </div>
-            {importOpen && <QuickSplitImport data={data} onClose={() => setImportOpen(false)} />}
+            {importOpen && !draft && <QuickSplitImport data={data} onClose={() => setImportOpen(false)} />}
         </Shell>
     );
 }

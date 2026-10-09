@@ -5,11 +5,11 @@ import type { QuickSplit } from '../lib/quickSplit';
  * An in-memory stand-in for the qs_* database functions, with the same rules: unique names, locked = read-only,
  * the split itself is the owner's, and everyone else can only tap THEMSELVES (with the key joining gave them).
  */
-interface State extends QuickSplit { gone: boolean; ownerKey: string; seq: number; claimed: boolean; keys: Record<string, string> }
+interface State extends QuickSplit { token: string; gone: boolean; ownerKey: string; seq: number; claimed: boolean; keys: Record<string, string> }
 
 const blank = (): State => ({
     title: 'Dinner', tax: 0, tip: 0, paid_by: null, locked: false, version: 0, expires_at: '2026-11-05T00:00:00Z',
-    people: [], items: [], gone: false, ownerKey: 'OWNER', seq: 0, claimed: false, keys: {},
+    people: [], items: [], token: 'T'.repeat(32), gone: false, ownerKey: 'OWNER', seq: 0, claimed: false, keys: {},
 });
 
 const s: { state: State } = { state: blank() };
@@ -35,6 +35,12 @@ export const fakeQuick = {
         };
     },
     api: {
+        // The real one is a sequence of the calls below; here it just stores what the page handed over.
+        createFromDraft: vi.fn(async (d: QuickSplit, me?: string) => {
+            s.state = { ...blank(), title: d.title, tax: d.tax, tip: d.tip, paid_by: d.paid_by, people: [...d.people], items: d.items.map((i, n) => ({ ...i, id: `i${n}` })), seq: d.items.length };
+            void me;
+            return s.state.token;
+        }),
         getQuickSplit: vi.fn(async () => (s.state.gone ? null : structuredClone({ ...s.state, is_owner: s.state.claimed }))),
         claimQuickSplit: vi.fn(async (_t: string, key: string) => {
             guard(false);

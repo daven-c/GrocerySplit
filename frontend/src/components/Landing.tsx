@@ -39,8 +39,7 @@ const reveal = (i = 0) => {
 };
 
 export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
-    const [starting, setStarting] = useState(false);
-    const quick = () => { setStarting(true); startQuickSplit().catch(() => setStarting(false)); };
+    const quick = startQuickSplit;
     return (
         <div className="bg-white text-ink font-sans">
             <div className="bg-band text-white">
@@ -64,7 +63,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
                         <motion.div {...enter(2)} className="flex flex-wrap gap-2.5 items-center">
                             <motion.button {...tapFlat} onClick={onGetStarted} className="h-[52px] px-6 rounded-full bg-white text-band-deep text-base font-black">Start a group, free</motion.button>
                             {isEnabled('quickSplit') && (
-                                <motion.button {...tapFlat} disabled={starting} onClick={quick} className="h-[52px] px-[22px] rounded-full bg-band-btn text-white text-base font-extrabold flex items-center gap-1.5 hover:bg-band-btn-hover disabled:opacity-60">
+                                <motion.button {...tapFlat} onClick={quick} className="h-[52px] px-[22px] rounded-full bg-band-btn text-white text-base font-extrabold flex items-center gap-1.5 hover:bg-band-btn-hover">
                                     <Icon name="bolt" size={20} />Quick split, no account
                                 </motion.button>
                             )}
