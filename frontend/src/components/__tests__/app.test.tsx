@@ -6,8 +6,10 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 vi.mock('../../lib/api', async () => (await import('../../test/apiMock')).apiMock);
+vi.mock('../../lib/quickSplit', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/quickSplit')>()), startQuickSplit: vi.fn(async () => {}) }));
 vi.mock('../../lib/supabase', async () => (await import('../../test/apiMock')).supabaseModule);
 
+import { startQuickSplit } from '../../lib/quickSplit';
 import { apiMock as api, authMock, resetMocks, ME, signedInSession } from '../../test/apiMock';
 import App from '../../App';
 import Landing from '../Landing';
@@ -246,6 +248,20 @@ describe('App shell', () => {
         cleanup();
         render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
         expect(screen.getByRole('button', { name: 'Quick split, no account' })).toBeInTheDocument();
+    });
+
+    it('Quick split asks before it creates anything', async () => {
+        const u = userEvent.setup();
+        render(<Landing onSignIn={vi.fn()} onGetStarted={vi.fn()} />);
+        await u.click(screen.getByRole('button', { name: 'Quick split, no account' }));
+        expect(await screen.findByRole('dialog')).toHaveTextContent('Start a quick split?');
+        expect(startQuickSplit).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(startQuickSplit).not.toHaveBeenCalled();
+        await u.click(screen.getByRole('button', { name: 'Quick split, no account' }));
+        await u.click(await screen.findByRole('button', { name: 'Start quick split' }));
+        await waitFor(() => expect(startQuickSplit).toHaveBeenCalledTimes(1));
     });
 
     it('narrow screens get a header with the logo and a bottom tab bar instead of the sidebar', async () => {

@@ -3,7 +3,7 @@ import { motion, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useHomeTotals } from '../lib/totals';
 import { firstName, fmt, greeting, HUES, toneFor } from '../lib/people';
-import { startQuickSplit } from '../lib/quickSplit';
+import { useQuickSplitStart } from './QuickSplitStart';
 import { isEnabled } from '../lib/flags';
 import { Icon, Logo } from './ui';
 import { Toaster } from './Toast';
@@ -64,7 +64,8 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     const greet = user ? `${greeting()}, ${firstName(user.name)}.` : greeting();
     const net = totals.net;
     const overall = Math.abs(net) < 0.005 ? "Overall you're all square" : net > 0 ? "Overall you're up" : "Overall you're down";
-    const startQuick = () => { startQuickSplit().catch(err => console.error('Could not start a quick split', err)); };
+    const quickStart = useQuickSplitStart();
+    const startQuick = quickStart.ask;
 
     const avatarBtn = (size: number, border = false) => (
         <motion.button
@@ -142,6 +143,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
                     })}
                 </nav>
                 <Toaster />
+            {quickStart.dialog}
             </div>
         );
     }
@@ -191,6 +193,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
             </div>
             {main}
             <Toaster />
+            {quickStart.dialog}
         </div>
     );
 }

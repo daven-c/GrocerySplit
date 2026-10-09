@@ -10,7 +10,7 @@ import { MyQuickSplit, listMyQuickSplits } from '../lib/api';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
 import { fmt, fmtSigned, groupTile, memberTones } from '../lib/people';
-import { startQuickSplit } from '../lib/quickSplit';
+import { useQuickSplitStart } from './QuickSplitStart';
 import { toast } from './Toast';
 import { Avatar, AvatarStack, Button, Card, Icon, cellCls, inputCls, selectPillCls } from './ui';
 
@@ -53,6 +53,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [quickSplits, setQuickSplits] = useState<MyQuickSplit[]>([]);
     const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'link'; value: string }>(null);
     const [error, setError] = useState('');
+    const quickStart = useQuickSplitStart(setError);
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [settling, setSettling] = useState(false);
@@ -314,6 +315,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
 
     return (
         <div className="max-w-[1000px] mx-auto flex flex-col gap-6">
+            {quickStart.dialog}
             <Modal open={!!confirm} onClose={() => setConfirm(null)}>
                 {shownConfirm && (
                     <>
@@ -513,7 +515,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                             <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-2.5" aria-label="Your quick splits">
                                 <div className="flex items-center justify-between px-1.5">
                                     <span className="text-[17px] font-black">Your quick splits</span>
-                                    <motion.button {...tapFlat} onClick={() => startQuickSplit().catch(err => setError(err.message || 'Could not start a quick split'))} className="h-[34px] pl-2 pr-3 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-ink"><Icon name="bolt" size={17} />New</motion.button>
+                                    <motion.button {...tapFlat} onClick={quickStart.ask} className="h-[34px] pl-2 pr-3 flex items-center gap-1 rounded-full bg-soft text-[13.5px] font-extrabold text-ink"><Icon name="bolt" size={17} />New</motion.button>
                                 </div>
                                 {quickSplits.map(q => (
                                     <a key={q.token} href={`/s/${q.token}`} className="flex flex-col gap-3 p-4 rounded-[22px] bg-mint hover:bg-[oklch(0.95_0.04_158)] transition-colors text-ink no-underline">
