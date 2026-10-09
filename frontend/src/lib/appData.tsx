@@ -27,6 +27,9 @@ export function useAppData(): AppData {
     return v;
 }
 
+export const BACKGROUND_REFRESH_MS = 60_000;
+export const REFRESH_COOLDOWN_MS = 10_000;
+
 /** One shared copy of everything the signed-in shell, home and friends screens render. */
 export function AppDataProvider({ userId, children }: { userId: string; children: React.ReactNode }) {
     const [groups, setGroups] = useState<Group[]>([]);
@@ -41,7 +44,8 @@ export function AppDataProvider({ userId, children }: { userId: string; children
     // StrictMode runs cleanup then setup again on mount, so re-arm the flag in setup.
     useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-    const refresh = useCallback(async () => {
+    /** `silent` is a background top-up: a failure then leaves what is on screen alone instead of showing an error. */
+    const load = useCallback(async (silent = false) => {
         const ticket = ++latest.current; // overlapping refreshes: only the most recent response may win
         try {
             const [g, s, st, inv, adm] = await Promise.all([
@@ -52,11 +56,12 @@ export function AppDataProvider({ userId, children }: { userId: string; children
             setGroups(g); setSessions(s.filter(x => !x.draft)); setSettlements(st); setInvites(inv); setAdmin(adm);
             setError('');
         } catch (err: any) {
-            if (alive.current && ticket === latest.current) setError(err.message || 'Failed to load your data');
+            if (!silent && alive.current && ticket === latest.current) setError(err.message || 'Failed to load your data');
         } finally {
             if (alive.current && ticket === latest.current) setLoading(false);
         }
     }, []);
+    const refresh = useCallback(() => load(false), [load]);
 
     const patchSession = useCallback((id: string, updater: (s: Session) => Session) => {
         setSessions(prev => {
@@ -75,6 +80,32 @@ export function AppDataProvider({ userId, children }: { userId: string; children
         void deleteStaleDrafts().catch(() => {});
         void refresh();
     }, [refresh, userId]);
+
+    // Other people change shared groups while this tab sits open, so top the data up when the person comes back to
+    // the tab and once a minute while they are looking at it (but not while they are typing in a field).
+    useEffect(() => {
+        let last = Date.now();
+        const typing = () => {
+            const el = document.activeElement;
+            return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+        };
+        const run = (returning: boolean) => {
+            if (document.visibilityState !== 'visible') return;
+            if (!returning && typing()) return;
+            if (returning && Date.now() - last < REFRESH_COOLDOWN_MS) return; // flipping tabs quickly shouldn't refetch each time
+            last = Date.now();
+            void load(true);
+        };
+        const onBack = () => run(true);
+        const timer = setInterval(() => run(false), BACKGROUND_REFRESH_MS);
+        document.addEventListener('visibilitychange', onBack);
+        window.addEventListener('focus', onBack);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener('visibilitychange', onBack);
+            window.removeEventListener('focus', onBack);
+        };
+    }, [load]);
 
     const value = useMemo<AppData>(
         () => ({ me: userId, groups, sessions, settlements, invites, isAdmin: admin, loading, error, refresh, patchSession }),
