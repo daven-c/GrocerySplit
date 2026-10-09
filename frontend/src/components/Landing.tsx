@@ -42,12 +42,12 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
     return (
         <div className="bg-white text-ink font-sans">
             <div className="bg-band text-white">
-                <header className="max-w-[1160px] mx-auto px-6 py-[18px] flex items-center gap-2">
-                    <Logo size={24} word={21} onBand />
-                    <nav className="ml-auto flex items-center gap-1.5">
-                        <a href="#how" className="h-10 px-3.5 flex items-center text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">How it works</a>
-                        <motion.button {...tapFlat} onClick={onSignIn} className="h-10 px-3.5 text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">Sign in</motion.button>
-                        <motion.button {...tapFlat} onClick={onGetStarted} className="h-[42px] px-5 rounded-full bg-white text-band-deep text-[15px] font-black">Get started</motion.button>
+                <header className="max-w-[1160px] mx-auto px-4 sm:px-6 py-[18px] flex items-center gap-2">
+                    <span className="shrink-0"><Logo size={24} word={21} onBand /></span>
+                    <nav className="ml-auto flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                        <a href="#how" className="hidden sm:flex h-10 px-3.5 items-center text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">How it works</a>
+                        <motion.button {...tapFlat} onClick={onSignIn} className="h-10 px-2.5 sm:px-3.5 text-[15px] font-extrabold text-[oklch(0.88_0.05_155)] hover:text-white">Sign in</motion.button>
+                        <motion.button {...tapFlat} onClick={onGetStarted} className="h-[42px] px-4 sm:px-5 rounded-full bg-white text-band-deep text-[15px] font-black">Get started</motion.button>
                     </nav>
                 </header>
 

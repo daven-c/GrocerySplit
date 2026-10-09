@@ -42,7 +42,7 @@ export const apiMock = {
     listPhotos: vi.fn(), exportMyData: vi.fn(), deleteAccount: vi.fn(), linkPersonalPerson: vi.fn(), addPhoto: vi.fn(), removePhoto: vi.fn(),
     recordSettlement: vi.fn(), addGuest: vi.fn(), setGroupPinned: vi.fn(), listMyQuickSplits: vi.fn(), listExpenseLog: vi.fn(), saveReceipt: vi.fn(), renameGuest: vi.fn(), removeGuest: vi.fn(), ensurePersonalGroup: vi.fn(), usernameAvailable: vi.fn(), getMyUsername: vi.fn(), updateUsername: vi.fn(), updateSettlement: vi.fn(), listSettlementLog: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
     deleteItem: vi.fn(), deleteSession: vi.fn(), importReceiptIntoSession: vi.fn(), deleteStaleDrafts: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
-    adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
+    adminListUsers: vi.fn(), adminTotals: vi.fn(), adminMetrics: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
 };
 
 export const authMock = {
@@ -97,6 +97,15 @@ export function resetMocks() {
     apiMock.linkPersonalPerson.mockResolvedValue(undefined);
     apiMock.addPhoto.mockResolvedValue(undefined);
     apiMock.removePhoto.mockResolvedValue(undefined);
+    apiMock.adminMetrics.mockResolvedValue({
+        users: { total: 2, confirmed: 1, new_24h: 0, new_7d: 1, new_30d: 2, active_24h: 1, active_7d: 1, active_30d: 1, never_signed_in: 1, with_expense: 1 },
+        content: { groups: 2, shared_groups: 1, expenses: 3, receipts: 2, drafts: 0, items: 30, photos: 1, guests: 0, pending_invites: 0 },
+        money: { expense_total: 250.5, payments: 1, payments_total: 40 },
+        quick: { total: 3, new_7d: 1, live_7d: 1, locked: 0 },
+        activity: { edits_7d: 4, payments_7d: 1 },
+        series: [{ day: '2026-10-08', signups: 1, expenses: 2, payments: 0, quick: 1 }, { day: '2026-10-09', signups: 0, expenses: 1, payments: 1, quick: 0 }],
+        top_groups: [{ name: 'Maple St. House', members: 3, expenses: 5 }],
+    });
     apiMock.adminTotals.mockResolvedValue({ groups: 2, receipts: 5, items: 30, settlements: 1 });
     apiMock.adminListUsers.mockResolvedValue([
         { id: 'a', email: 'ddchang@x.com', name: 'Daven', created_at: '2026-10-01T00:00:00Z', last_sign_in_at: new Date().toISOString(), email_confirmed: true, is_admin: true, groups_count: 2, receipts_count: 4 },

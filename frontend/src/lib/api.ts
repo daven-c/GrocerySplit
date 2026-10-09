@@ -561,6 +561,20 @@ export interface AdminTotals {
     settlements: number;
 }
 
+export interface AdminMetrics {
+    users: { total: number; confirmed: number; new_24h: number; new_7d: number; new_30d: number; active_24h: number; active_7d: number; active_30d: number; never_signed_in: number; with_expense: number };
+    content: { groups: number; shared_groups: number; expenses: number; receipts: number; drafts: number; items: number; photos: number; guests: number; pending_invites: number };
+    money: { expense_total: number; payments: number; payments_total: number };
+    quick: { total: number; new_7d: number; live_7d: number; locked: number };
+    activity: { edits_7d: number; payments_7d: number };
+    series: { day: string; signups: number; expenses: number; payments: number; quick: number }[];
+    top_groups: { name: string; members: number; expenses: number }[];
+}
+
+export async function adminMetrics(): Promise<AdminMetrics> {
+    return check(await supabase.rpc('admin_metrics')) as AdminMetrics;
+}
+
 export async function isAdmin(): Promise<boolean> {
     const { data } = await supabase.auth.getUser();
     if (!data.user) return false;

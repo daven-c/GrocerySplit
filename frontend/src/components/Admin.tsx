@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem, tapFlat } from '../lib/motion';
-import { adminListUsers, adminTotals, adminCreateUser, adminConfirmUser, AdminUser, AdminTotals } from '../lib/api';
+import { adminListUsers, adminMetrics, adminCreateUser, adminConfirmUser, AdminUser, AdminMetrics } from '../lib/api';
 import { HUES, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, inputCls } from './ui';
 import { messageOf } from '../lib/errors';
@@ -23,6 +23,53 @@ function generatePassword(): string {
     return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
+const money = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
+
+const SERIES = [
+    { key: 'signups', label: 'Sign-ups' },
+    { key: 'expenses', label: 'Expenses' },
+    { key: 'payments', label: 'Payments' },
+    { key: 'quick', label: 'Quick splits' },
+] as const;
+
+function Trend({ series }: { series: AdminMetrics['series'] }) {
+    const [key, setKey] = useState<typeof SERIES[number]['key']>('signups');
+    const max = Math.max(1, ...series.map(d => d[key]));
+    const total = series.reduce((n, d) => n + d[key], 0);
+    return (
+        <Card className="p-5 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col">
+                    <span className="text-[17px] font-semibold">Last 30 days</span>
+                    <span className="text-[13px] text-faint">{total} {SERIES.find(s => s.key === key)!.label.toLowerCase()}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Metric">
+                    {SERIES.map(s => (
+                        <button key={s.key} role="tab" aria-selected={key === s.key} onClick={() => setKey(s.key)}
+                            className={`h-8 px-3 rounded-full text-[13px] font-semibold ${key === s.key ? 'bg-ink text-white' : 'bg-surface text-body'}`}>{s.label}</button>
+                    ))}
+                </div>
+            </div>
+            <div className="flex items-end gap-[3px] h-28" role="img" aria-label={`Daily ${key} for the last 30 days`}>
+                {series.map(d => (
+                    <div key={d.day} title={`${d.day}: ${d[key]}`} className="flex-1 min-w-0 rounded-t-sm bg-[oklch(0.62_0.13_155)]" style={{ height: `${Math.max(d[key] ? 6 : 2, (d[key] / max) * 100)}%`, opacity: d[key] ? 1 : 0.25 }} />
+                ))}
+            </div>
+            <div className="flex justify-between text-[11px] text-faint"><span>{series[0]?.day}</span><span>{series[series.length - 1]?.day}</span></div>
+        </Card>
+    );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="flex flex-col gap-2.5">
+            <h2 className="m-0 text-[15px] font-semibold text-muted">{title}</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{children}</div>
+        </section>
+    );
+}
+
 function Stat({ label, value, tone = 'plain', i = 0 }: { label: string; value: number | string; tone?: 'plain' | 'amber' | 'green'; i?: number }) {
     const tones = { plain: 'bg-white border border-edge text-ink', amber: 'bg-coral-tint text-coral-on', green: 'bg-green-tint text-green-on' };
     return (
@@ -35,7 +82,7 @@ function Stat({ label, value, tone = 'plain', i = 0 }: { label: string; value: n
 
 export default function Admin() {
     const [users, setUsers] = useState<AdminUser[]>([]);
-    const [totals, setTotals] = useState<AdminTotals | null>(null);
+    const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
@@ -56,9 +103,9 @@ export default function Admin() {
     const load = useCallback(async () => {
         setError('');
         try {
-            const [u, t] = await Promise.all([adminListUsers(), adminTotals()]);
+            const [u, m] = await Promise.all([adminListUsers(), adminMetrics()]);
             setUsers(u);
-            setTotals(t);
+            setMetrics(m);
         } catch (err) {
             setError(/not authorized/i.test(messageOf(err, '')) ? 'You do not have admin access.' : messageOf(err, 'Failed to load users'));
         } finally {
@@ -127,16 +174,61 @@ export default function Admin() {
 
             <Pop show={!!error} className="px-3 py-2.5 rounded-full bg-coral-tint text-coral-on text-[13px]">{error}</Pop>
 
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Group title="Users">
                 <Stat i={0} label="Users" value={stats.total} />
                 <Stat i={1} label="Unconfirmed" value={stats.unconfirmed} tone={stats.unconfirmed ? 'amber' : 'plain'} />
                 <Stat i={2} label="New (7 days)" value={stats.newWeek} tone="green" />
                 <Stat i={3} label="Active (7 days)" value={stats.activeWeek} />
-                <Stat i={4} label="Groups" value={totals?.groups ?? '–'} />
-                <Stat i={5} label="Expenses" value={totals?.receipts ?? '–'} />
-                <Stat i={6} label="Items" value={totals?.items ?? '–'} />
-                <Stat i={7} label="Payments" value={totals?.settlements ?? '–'} />
-            </section>
+                {metrics && (
+                    <>
+                        <Stat i={4} label="New (30 days)" value={metrics.users.new_30d} />
+                        <Stat i={5} label="Active today" value={metrics.users.active_24h} />
+                        <Stat i={6} label="Active (30 days)" value={metrics.users.active_30d} />
+                        <Stat i={7} label="Never signed in" value={metrics.users.never_signed_in} />
+                        <Stat i={8} label="Added an expense" value={`${metrics.users.with_expense} (${pct(metrics.users.with_expense, metrics.users.total)})`} />
+                        <Stat i={9} label="Confirmed" value={pct(metrics.users.confirmed, metrics.users.total)} />
+                        <Stat i={10} label="Weekly active rate" value={pct(stats.activeWeek, stats.total)} />
+                        <Stat i={11} label="Edits (7 days)" value={metrics.activity.edits_7d} />
+                    </>
+                )}
+            </Group>
+
+            {metrics && (
+                <>
+                    <Trend series={metrics.series} />
+                    <Group title="Content">
+                        <Stat i={0} label="Groups" value={metrics.content.groups} />
+                        <Stat i={1} label="Shared groups" value={metrics.content.shared_groups} />
+                        <Stat i={2} label="Expenses" value={metrics.content.expenses} />
+                        <Stat i={3} label="Receipts" value={metrics.content.receipts} />
+                        <Stat i={4} label="Line items" value={metrics.content.items} />
+                        <Stat i={5} label="Photos" value={metrics.content.photos} />
+                        <Stat i={6} label="Drafts" value={metrics.content.drafts} />
+                        <Stat i={7} label="Invites waiting" value={metrics.content.pending_invites} />
+                    </Group>
+                    <Group title="Money and quick splits">
+                        <Stat i={0} label="Expense volume" value={money(metrics.money.expense_total)} />
+                        <Stat i={1} label="Payments" value={metrics.money.payments} />
+                        <Stat i={2} label="Paid back" value={money(metrics.money.payments_total)} />
+                        <Stat i={3} label="Quick splits" value={metrics.quick.total} />
+                        <Stat i={4} label="Quick (7 days)" value={metrics.quick.new_7d} />
+                        <Stat i={5} label="Quick in use (7 days)" value={metrics.quick.live_7d} />
+                    </Group>
+                    {metrics.top_groups.length > 0 && (
+                        <section className="flex flex-col gap-2.5">
+                            <h2 className="m-0 text-[15px] font-semibold text-muted">Busiest groups</h2>
+                            <Card className="overflow-hidden">
+                                {metrics.top_groups.map((g, i) => (
+                                    <div key={`${g.name}-${i}`} className={`px-[18px] py-3 flex items-center justify-between gap-3 ${i ? 'border-t border-rule' : ''}`}>
+                                        <span className="text-[15px] font-semibold truncate">{g.name}</span>
+                                        <span className="text-[13px] text-faint shrink-0">{g.members} members · {g.expenses} expenses</span>
+                                    </div>
+                                ))}
+                            </Card>
+                        </section>
+                    )}
+                </>
+            )}
 
             <Card className="overflow-hidden">
                 <motion.button {...tapFlat} onClick={() => setShowCreate(v => !v)} aria-expanded={showCreate} className="w-full flex items-center justify-between p-5 text-left">
