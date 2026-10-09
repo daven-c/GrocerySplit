@@ -507,11 +507,15 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} groupId="gp" />);
         expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
         expect(screen.getByText('Private notebook')).toBeInTheDocument();
-        expect(screen.queryByRole('tablist')).not.toBeInTheDocument(); // no Expenses / Balances / Members tabs
+        expect(screen.queryByRole('tab', { name: /Expenses|Members/ })).not.toBeInTheDocument(); // no group-style tabs; only Balances | People beside the ledger
         expect(screen.getByLabelText('Personal totals')).toHaveTextContent('Owed to you');
         expect(screen.getByLabelText('Personal ledger')).toBeInTheDocument();
-        expect(screen.getByLabelText('Personal people')).toBeInTheDocument();
+        expect(screen.getByLabelText('Personal balances')).toBeInTheDocument(); // balances are the default view beside the ledger
+        expect(screen.queryByLabelText('Personal people')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Add expense/ })).toBeInTheDocument();
+        await userEvent.setup().click(screen.getByRole('tab', { name: /People/ })); // people are used less, so they swap in
+        expect(await screen.findByLabelText('Personal people')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Personal balances')).not.toBeInTheDocument();
     });
 
     it('group pages have no Home button (the nav bar already has one)', async () => {

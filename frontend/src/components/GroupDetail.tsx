@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
+import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, SegmentedTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
 import { linkPersonalPerson, createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
@@ -49,6 +49,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [email, setEmail] = useState('');
     const [personName, setPersonName] = useState('');
     const [personUser, setPersonUser] = useState('');
+    const [side, setSide] = useState<'balances' | 'people'>(initialTab === 'members' ? 'people' : 'balances'); // Personal: balances by default, people are used less often
     const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'link'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -671,17 +672,11 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                         <h2 className={section}>Ledger</h2>
                         {expensesView}
                     </section>
-                    <aside className="flex-[1_1_340px] min-w-0 flex flex-col gap-6">
-                        <section className="flex flex-col gap-3" aria-label="Personal people">
-                            <h2 className={section}>People</h2>
-                            {membersView}
-                        </section>
-                        {balancesView && (
-                            <section className="flex flex-col gap-3" aria-label="Personal balances">
-                                <h2 className={section}>Balances</h2>
-                                {balancesView}
-                            </section>
-                        )}
+                    <aside className="flex-[1_1_340px] min-w-0 flex flex-col gap-3">
+                        <SegmentedTabs id="personal-side" value={side} onChange={setSide} tabs={[{ value: 'balances', label: 'Balances' }, { value: 'people', label: `People ${group.members.length}` }]} />
+                        {side === 'balances'
+                            ? <section aria-label="Personal balances">{balancesView}</section>
+                            : <section aria-label="Personal people">{membersView}</section>}
                     </aside>
                 </div>
             </div>
