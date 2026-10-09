@@ -30,11 +30,13 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [loading, setLoading] = useState(false);
+    const [unconfirmed, setUnconfirmed] = useState(false); // sign-in said the email isn't confirmed yet: offer to resend the link
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setNotice('');
+        setUnconfirmed(false);
         setLoading(true);
         try {
             if (forgot) {
@@ -56,12 +58,40 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                     options: { data: { name: name.trim(), username: handle } },
                 });
                 if (error) throw error;
+                // For an address that already has an account, Supabase pretends it worked and sends nothing (the user it
+                // returns has no identities). Say so, instead of promising an email that will never come.
+                if (!data.session && data.user && data.user.identities?.length === 0) {
+                    throw new Error('That email already has an account. Sign in instead, or use "Forgot password?" if you can\'t remember the password.');
+                }
                 if (data.session) onLogin();
                 else setNotice('Account created! Check your email for a confirmation link, then sign in.');
             }
         } catch (err: any) {
             const msg: string = err.message || 'Authentication failed';
-            setError(/rate limit/i.test(msg) ? (forgot ? 'Too many emails were sent recently. Please wait a little and try again.' : 'Too many sign-up emails were sent recently. Please wait about an hour and try again.') : msg);
+            if (isLogin && !forgot && (err.code === 'email_not_confirmed' || /not confirmed/i.test(msg))) {
+                // The password was right, but the account is waiting for its email link.
+                setUnconfirmed(true);
+                setError('Please confirm your email first. We sent a link when you signed up (check spam too).');
+            } else if (isLogin && !forgot && /invalid login credentials/i.test(msg)) {
+                // Supabase gives this for a wrong password, an unknown email, and (when the password is wrong) an unconfirmed account.
+                setError("That email and password don't match. If you just made this account, confirm your email first, then sign in.");
+            } else setError(/rate limit/i.test(msg) ? (forgot ? 'Too many emails were sent recently. Please wait a little and try again.' : 'Too many sign-up emails were sent recently. Please wait about an hour and try again.') : msg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resendConfirmation = async () => {
+        setError('');
+        setNotice('');
+        setLoading(true);
+        try {
+            const { error: err } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+            if (err) throw err;
+            setNotice('Sent again. Check your inbox and spam folder for the confirmation link.');
+        } catch (err: any) {
+            const msg: string = err.message || 'Could not send it';
+            setError(/rate limit|security purposes|seconds/i.test(msg) ? 'Please wait a minute before asking for another email.' : msg);
         } finally {
             setLoading(false);
         }
@@ -142,6 +172,9 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                         )}
 
                         <Pop show={!!error} className="text-[13.5px] font-bold text-coral-strong">{error}</Pop>
+                        {unconfirmed && (
+                            <button type="button" onClick={resendConfirmation} disabled={loading} className="self-start text-[13.5px] font-extrabold text-body underline underline-offset-2 disabled:opacity-60">Resend confirmation email</button>
+                        )}
                         <Pop show={!!notice} className="px-4 py-2.5 rounded-[22px] bg-green-tint text-green-on text-[13.5px] font-extrabold">{notice}</Pop>
 
                         <Button type="submit" height={52} wide disabled={loading} className="mt-1.5 text-base">

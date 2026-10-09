@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, MotionConfig, MotionGlobalConfig, animate, useMotionValue, useTransform } from 'framer-motion';
 
@@ -51,13 +51,53 @@ export const enter = (i = 0) => ({
     transition: { ...gentle, delay: Math.min(i, 8) * 0.035 },
 });
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** A dialog: named by its first heading, takes focus when it opens, keeps Tab inside, and hands focus back on close. */
 export function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+    const panel = useRef<HTMLDivElement | null>(null);
+    const opener = useRef<HTMLElement | null>(null); // what had focus before the dialog took it
+    const close = useRef(onClose);
+    close.current = onClose; // callers pass a new function every render; the dialog must not re-arm itself for that
+
     useEffect(() => {
         if (!open) return;
-        const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') return close.current();
+            if (e.key !== 'Tab' || !panel.current) return;
+            const items = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(el => !el.closest('[hidden], [aria-hidden="true"]'));
+            if (!items.length) { e.preventDefault(); panel.current.focus(); return; }
+            const first = items[0], last = items[items.length - 1], now = document.activeElement;
+            if (e.shiftKey && (now === first || !panel.current.contains(now))) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && (now === last || !panel.current.contains(now))) { e.preventDefault(); first.focus(); }
+        };
         document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [open, onClose]);
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            const back = opener.current;
+            opener.current = null;
+            if (back && document.contains(back)) back.focus(); // back to what opened it
+        };
+    }, [open]);
+
+    // Named by its first heading (re-checked each render, since the content can change while it is open).
+    useEffect(() => {
+        const el = panel.current;
+        if (!el) return;
+        const heading = el.querySelector<HTMLElement>('h1, h2, h3');
+        if (heading) {
+            if (!heading.id) heading.id = `dialog-title-${Math.random().toString(36).slice(2, 8)}`;
+            el.setAttribute('aria-labelledby', heading.id);
+            el.removeAttribute('aria-label');
+        } else if (!el.hasAttribute('aria-labelledby')) el.setAttribute('aria-label', 'Dialog');
+    });
+
+    // The dialog is portalled and animated in, so move focus into it as soon as it is on the page.
+    const attach = useCallback((el: HTMLDivElement | null) => {
+        panel.current = el;
+        if (el && !el.contains(document.activeElement)) opener.current = document.activeElement as HTMLElement | null;
+        if (el && !el.contains(document.activeElement)) (el.querySelector<HTMLElement>('input, select, textarea') ?? el.querySelector<HTMLElement>(FOCUSABLE) ?? el).focus({ preventScroll: true });
+    }, []);
 
     // Portal to <body>: dialogs must not inherit a page's mid-animation opacity/transform (fades multiply,
     // and `fixed` positioning is relative to any transformed ancestor).
@@ -72,8 +112,10 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
                     onClick={onClose}
                 >
                     <motion.div
+                        ref={attach}
                         role="dialog"
                         aria-modal="true"
+                        tabIndex={-1}
                         className="bg-white rounded-[24px] border border-edge p-6 w-full max-w-sm shadow-popover"
                         initial={{ opacity: FROM, scale: 0.92, y: 14 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}

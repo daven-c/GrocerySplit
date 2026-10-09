@@ -11,5 +11,6 @@ export const supabase = {
         signUp: async () => ({ data: { session }, error: null }),
         updateUser: async () => ({ data: { user: session.user }, error: null }),
         resetPasswordForEmail: async () => ({ data: {}, error: null }),
+        resend: async () => ({ data: {}, error: null }),
     },
 };

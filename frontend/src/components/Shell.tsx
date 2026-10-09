@@ -59,6 +59,12 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     const recordName = sessions.find(s => s.id === recordId)?.name ?? '';
     const titles: Partial<Record<ShellView, string>> = { group: groupName, import: 'Scan a receipt', split: recordName || 'Receipt', expense: recordName || 'Expense', friends: 'People', account: 'Account', admin: 'Admin' };
 
+    // The tab title says where you are (and the browser history and screen readers announce it).
+    useEffect(() => {
+        const t = titles[view];
+        document.title = view === 'home' || !t ? 'Settled' : `${t} · Settled`;
+    }, [view, groupName, recordName]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const meTone = toneFor(HUES[0]);
     const initial = (user?.name?.trim()[0] ?? '?').toUpperCase();
     const greet = user ? `${greeting()}, ${firstName(user.name)}.` : greeting();
@@ -79,7 +85,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     );
 
     const main = (
-        <main className={`flex-1 min-w-0 ${narrow ? 'px-4 pb-8' : 'px-10 pb-16'} ${isHome ? (narrow ? '-mt-[50px]' : '-mt-16') : narrow ? 'pt-6' : 'pt-9'}`}>
+        <main id="main-content" tabIndex={-1} className={`outline-none flex-1 min-w-0 ${narrow ? 'px-4 pb-8' : 'px-10 pb-16'} ${isHome ? (narrow ? '-mt-[50px]' : '-mt-16') : narrow ? 'pt-6' : 'pt-9'}`}>
             <motion.div key={pageKey} initial={{ opacity: 0.7, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 {children}
             </motion.div>
@@ -89,6 +95,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
     if (narrow) {
         return (
             <div className="min-h-screen flex flex-col bg-white">
+                <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[130] focus:px-4 focus:py-2 focus:rounded-full focus:bg-ink focus:text-white focus:text-sm focus:font-extrabold">Skip to content</a>
                 {isHome ? (
                     <div className="bg-band text-white pt-5 px-[22px] pb-[74px] flex flex-col gap-[22px]">
                         <div className="flex items-center justify-between">
@@ -148,6 +155,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
 
     return (
         <div className="min-h-screen flex flex-col bg-white">
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[130] focus:px-4 focus:py-2 focus:rounded-full focus:bg-ink focus:text-white focus:text-sm focus:font-extrabold">Skip to content</a>
             <div className={`bg-band text-white px-10 ${isHome ? 'pb-[104px]' : ''}`}>
                 <header className="h-[72px] flex items-center gap-1.5 max-w-[1120px] mx-auto">
                     <motion.button {...tapFlat} onClick={() => onNav('home')} aria-label="Settled home" className="mr-[22px] text-white"><Logo size={24} word={21} onBand /></motion.button>

@@ -49,8 +49,9 @@ export const authMock = {
     getSession: vi.fn(), onAuthStateChange: vi.fn(),
     getUser: vi.fn(async () => ({ data: { user: { id: ME } } })),
     signInWithPassword: vi.fn(async (_a?: any) => ({ error: null as any })),
-    signUp: vi.fn(async (_a?: any) => ({ data: { session: null as any }, error: null as any })),
+    signUp: vi.fn(async (_a?: any) => ({ data: { session: null as any, user: { identities: [{}] } as any }, error: null as any })),
     signOut: vi.fn(async () => ({ error: null })),
+    resend: vi.fn(async (_a?: any) => ({ data: {}, error: null as any })),
     resetPasswordForEmail: vi.fn(async (_e?: string, _o?: any) => ({ data: {}, error: null as any })),
     updateUser: vi.fn(async (_a?: any) => ({ data: {}, error: null as any })),
 };
@@ -64,6 +65,7 @@ export const supabaseModule = {
             signUp: (a: any) => authMock.signUp(a),
             signOut: () => authMock.signOut(),
             resetPasswordForEmail: (e: string, o: any) => authMock.resetPasswordForEmail(e, o),
+            resend: (a: any) => authMock.resend(a),
             updateUser: (a: any) => authMock.updateUser(a),
         },
     },

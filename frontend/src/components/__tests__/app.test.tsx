@@ -61,6 +61,31 @@ describe('Auth', () => {
         expect(screen.getByText('Sign in to see who owes what.')).toBeInTheDocument();
     });
 
+    it('sign-in tells an unconfirmed account to confirm its email, and can send the link again', async () => {
+        const u = userEvent.setup();
+        authMock.signInWithPassword.mockResolvedValueOnce({ error: { code: 'email_not_confirmed', message: 'Email not confirmed' } } as any);
+        render(<Auth onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Email'), 'new@x.com');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Sign in' }));
+        expect(await screen.findByText(/Please confirm your email first/)).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Resend confirmation email' }));
+        await waitFor(() => expect(authMock.resend).toHaveBeenCalledWith({ type: 'signup', email: 'new@x.com' }));
+        expect(await screen.findByText(/Sent again/)).toBeInTheDocument();
+    });
+
+    it('a wrong password says the details do not match and hints at an unconfirmed account', async () => {
+        const u = userEvent.setup();
+        authMock.signInWithPassword.mockResolvedValueOnce({ error: { code: 'invalid_credentials', message: 'Invalid login credentials' } } as any);
+        render(<Auth onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Email'), 'me@x.com');
+        await u.type(screen.getByLabelText('Password'), 'wrongpass');
+        await u.click(screen.getByRole('button', { name: 'Sign in' }));
+        const msg = await screen.findByText(/That email and password don't match/);
+        expect(msg).toHaveTextContent('confirm your email first');
+        expect(screen.queryByRole('button', { name: 'Resend confirmation email' })).not.toBeInTheDocument(); // can't tell, so no resend
+    });
+
     it('Forgot password asks for just an email and sends a reset link without saying whether it exists', async () => {
         const u = userEvent.setup();
         render(<Auth onLogin={vi.fn()} />);
@@ -110,6 +135,19 @@ describe('Auth', () => {
         expect(await screen.findByText(/Overall you're/)).toBeInTheDocument(); // back in the app
     });
 
+    it('sign-up for an address that already has an account says so, instead of promising an email', async () => {
+        const u = userEvent.setup();
+        authMock.signUp.mockResolvedValueOnce({ data: { session: null, user: { identities: [] } as any }, error: null });
+        render(<Auth initialMode="signup" onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Your name'), 'Sam');
+        await u.type(screen.getByLabelText('Username'), 'sam_99');
+        await u.type(screen.getByLabelText('Email'), 'sam@x.com');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        expect(await screen.findByText(/That email already has an account/)).toBeInTheDocument();
+        expect(screen.queryByText(/Account created/)).not.toBeInTheDocument();
+    });
+
     it('toggles password visibility', async () => {
         const u = userEvent.setup();
         render(<Auth onLogin={vi.fn()} />);
@@ -131,7 +169,7 @@ describe('Auth', () => {
 
         authMock.signInWithPassword.mockResolvedValueOnce({ error: { message: 'Invalid login credentials' } } as any);
         await u.click(screen.getByRole('button', { name: 'Sign in' }));
-        expect(await screen.findByText('Invalid login credentials')).toBeInTheDocument();
+        expect(await screen.findByText(/That email and password don't match/)).toBeInTheDocument();
     });
 
     it('sign up refuses a taken or malformed username before creating anything', async () => {

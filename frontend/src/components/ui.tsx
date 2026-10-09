@@ -13,10 +13,9 @@ export function Icon({ name, fill = false, size = 20, className = '' }: { name: 
     );
 }
 
-/** The Settled mark: a circle in two halves. On white: ink + green. On the green band: white + mint. */
-export function LogoMark({ size = 22, onBand = false }: { size?: number; onBand?: boolean }) {
-    const bg = onBand ? 'linear-gradient(90deg,#fff 50%,oklch(0.82 0.17 150) 50%)' : 'linear-gradient(90deg,#26221E 50%,oklch(0.68 0.16 155) 50%)';
-    return <span aria-hidden="true" className="rounded-full shrink-0 inline-block" style={{ width: size, height: size, background: bg }} />;
+/** The Settled mark: the corner-shop tile from /favicon.svg. It reads on both white and the green band, so `onBand` only exists to keep call sites unchanged. */
+export function LogoMark({ size = 22 }: { size?: number; onBand?: boolean }) {
+    return <img src="/favicon.svg" alt="" aria-hidden="true" width={size} height={size} className="shrink-0 inline-block" />;
 }
 
 export function Logo({ size = 22, word = 19, onBand = false }: { size?: number; word?: number; onBand?: boolean }) {

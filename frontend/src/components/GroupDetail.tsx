@@ -310,7 +310,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             <Modal open={!!confirm} onClose={() => setConfirm(null)}>
                 {shownConfirm && (
                     <>
-                        <h3 className="m-0 mb-2 text-xl font-black text-ink">{confirmText[shownConfirm.kind].title}</h3>
+                        <h2 className="m-0 mb-2 text-xl font-black text-ink">{confirmText[shownConfirm.kind].title}</h2>
                         <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">{confirmText[shownConfirm.kind].body}</p>
                         <div className="flex gap-3">
                             <Button variant="secondary" wide height={44} onClick={() => setConfirm(null)}>Cancel</Button>
@@ -321,7 +321,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             </Modal>
 
             <Modal open={pbOpen} onClose={() => setPbOpen(false)}>
-                <h3 className="m-0 mb-1 text-xl font-black text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h3>
+                <h2 className="m-0 mb-1 text-xl font-black text-ink">{pbEditId ? 'Edit transfer' : 'Record a transfer'}</h2>
                 <p className="m-0 mb-4 text-sm font-semibold text-muted">Evens out what two members of {group.name} owe each other. It doesn't move money.{pbEditId && ' Changes are logged under Activity.'}</p>
                 <div className="flex flex-col gap-3">
                     <label className={labelCls2}>Who paid

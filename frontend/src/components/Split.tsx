@@ -258,7 +258,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
             </AnimatePresence>
 
             <Modal open={!!itemToDelete} onClose={() => setItemToDelete(null)}>
-                <h3 className="m-0 mb-2 text-xl font-black">Delete item?</h3>
+                <h2 className="m-0 mb-2 text-xl font-black">Delete item?</h2>
                 <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">Remove this item from the receipt? Everyone's totals update.</p>
                 <div className="flex gap-3">
                     <Button variant="secondary" wide height={44} onClick={() => setItemToDelete(null)}>Cancel</Button>
@@ -266,7 +266,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 </div>
             </Modal>
             <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h3 className="m-0 mb-2 text-xl font-black">Delete expense?</h3>
+                <h2 className="m-0 mb-2 text-xl font-black">Delete expense?</h2>
                 <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this receipt'}</strong> and its {items.length} items for everyone in the group.</p>
                 <div className="flex gap-3">
                     <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>

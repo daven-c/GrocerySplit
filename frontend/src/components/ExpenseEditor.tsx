@@ -249,7 +249,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     return (
         <div className="max-w-[1080px] mx-auto flex flex-col gap-5">
             <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h3 className="m-0 mb-2 text-xl font-black">Delete expense?</h3>
+                <h2 className="m-0 mb-2 text-xl font-black">Delete expense?</h2>
                 <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</p>
                 <div className="flex gap-3">
                     <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>
