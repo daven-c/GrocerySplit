@@ -630,13 +630,13 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     <Avatar name={m.name} tone={tones[m.user_id]} size={44} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className="text-base font-extrabold truncate">{m.name}</span>
-                                        <span className="text-[13.5px] font-semibold text-faint truncate">{m.pending ? (isPersonal ? 'Just a name' : 'Invite pending') : m.username ? `@${m.username}` : m.email}</span>
+                                        <span className="text-[13.5px] font-semibold text-faint truncate">{m.pending ? (isPersonal ? 'Just a name' : 'Not joined yet') : m.username ? `@${m.username}` : m.email}</span>
                                     </span>
                                     {m.role === 'owner' && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">Owner</span>}
-                                    {m.pending && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">{isPersonal ? 'Name only' : 'Invited'}</span>}
+                                    {m.pending && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">{isPersonal ? 'Name only' : 'Not joined'}</span>}
                                     {isOwner && m.pending && (
                                         <span className="flex items-center gap-2.5 text-xs font-extrabold text-body">
-                                            {isPersonal && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>}
+                                            <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
                                             <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
                                     )}
@@ -680,12 +680,12 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     </AnimatePresence>
                                 </div>
                             )}
-                            {isOwner && isPersonal && (
+                            {isOwner && (
                                 <div className={panelCls}>
-                                    <span className="text-base font-black">Add someone by name</span>
+                                    <span className="text-base font-black">{isPersonal ? 'Add someone by name' : 'Add a temporary person'}</span>
                                     <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className="h-[46px] px-4 border-[1.5px] border-transparent rounded-full bg-white text-[15px] font-bold" />
                                     <Button variant="band" height={44} wide onClick={addPerson} disabled={!personName.trim()}>Add</Button>
-                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">No account needed and nobody is notified. Use them in expenses like anyone else.</span>
+                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">{isPersonal ? 'No account needed and nobody is notified. Use them in expenses like anyone else.' : "For a friend who hasn't signed up yet. Just a name: no account, nobody is notified. Use them in expenses like anyone else."}</span>
                                 </div>
                             )}
                             {isPersonal ? null : isOwner ? (
