@@ -12,6 +12,7 @@ import { apiMock as api, resetMocks, ME } from '../../test/apiMock';
 import { renderWithData } from '../../test/render';
 import Dashboard from '../Dashboard';
 import GroupDetail from '../GroupDetail';
+import QuickSplitList from '../QuickSplitList';
 
 beforeEach(() => { resetMocks(); localStorage.removeItem('splitpot:flags'); });
 afterEach(cleanup);
@@ -321,7 +322,35 @@ describe('Group detail', () => {
         expect(await screen.findByText('Add a temporary person')).toBeInTheDocument();
         await u.type(screen.getByLabelText("Person's name"), 'Dee');
         await u.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith(props.groupId, 'Dee'));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith(props.groupId, 'Dee', undefined));
+    });
+
+    it('in Personal, a person can be added with a username, which links them without inviting anyone', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }]);
+        renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
+        await u.type(await screen.findByLabelText('Their username'), '@bo_b');
+        await u.click(screen.getByRole('button', { name: 'Add' })); // a username alone is enough; the name defaults to theirs
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', '', '@bo_b'));
+        expect(api.inviteToGroup).not.toHaveBeenCalled();
+    });
+
+    it('in Personal, an existing name can be linked to an account and unlinked again', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        const bo = { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member' as const, pending: true };
+        const cy = { user_id: 'g-cy', joined_at: '2026-10-05T00:00:00Z', name: 'Cy', email: '', role: 'member' as const, pending: true, linked_user: 'u-cy', linked_username: 'cy_x' };
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0], bo, cy] }]);
+        renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
+        expect(await screen.findByText('Linked to @cy_x')).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Unlink' }));
+        await waitFor(() => expect(api.linkPersonalPerson).toHaveBeenCalledWith('g-cy', ''));
+        await u.click(screen.getByRole('button', { name: 'Link to account' }));
+        await u.type(screen.getByLabelText('Username for Bobby'), 'bo_b');
+        await u.click(screen.getByRole('button', { name: 'Link' }));
+        await waitFor(() => expect(api.linkPersonalPerson).toHaveBeenCalledWith('g-bo', 'bo_b'));
+        expect(api.inviteToGroup).not.toHaveBeenCalled();
     });
 
     it('in Personal, add people by name, rename and remove them', async () => {
@@ -332,7 +361,7 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
         await u.type(await screen.findByLabelText("Person's name"), 'Dee');
         await u.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', 'Dee'));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', 'Dee', undefined));
         expect(screen.getByText('Name only')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Rename' }));
         const nm = screen.getByLabelText('New name for Bobby');
@@ -358,7 +387,7 @@ describe('Group detail', () => {
         const g1 = (await import('../../test/apiMock')).group;
         api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }]);
         renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
-        expect(await screen.findByText(/This is your Personal section/)).toBeInTheDocument();
+        expect(await screen.findByText('Private notebook')).toBeInTheDocument();
         expect(screen.queryByLabelText('Invite by username')).not.toBeInTheDocument();
         expect(screen.getByLabelText("Person's name")).toBeInTheDocument();
         expect(screen.queryByText('Delete group')).not.toBeInTheDocument();
@@ -472,7 +501,30 @@ describe('Group detail', () => {
         expect(api.listSettlementLog).not.toHaveBeenCalled();
     });
 
-    it('Personal lists your unexpired quick splits (and shared groups do not)', async () => {
+    it('Personal is a single private page, not a group with tabs', async () => {
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }, g1]);
+        renderWithData(<GroupDetail {...props} groupId="gp" />);
+        expect(await screen.findByRole('heading', { name: 'Personal' })).toBeInTheDocument();
+        expect(screen.getByText('Private notebook')).toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /Expenses|Members/ })).not.toBeInTheDocument(); // no group-style tabs; only Balances | People beside the ledger
+        expect(screen.getByLabelText('Personal totals')).toHaveTextContent('Owed to you');
+        expect(screen.getByLabelText('Personal ledger')).toBeInTheDocument();
+        expect(screen.getByLabelText('Personal balances')).toBeInTheDocument(); // balances are the default view beside the ledger
+        expect(screen.queryByLabelText('Personal people')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Add expense/ })).toBeInTheDocument();
+        await userEvent.setup().click(screen.getByRole('tab', { name: /People/ })); // people are used less, so they swap in
+        expect(await screen.findByLabelText('Personal people')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Personal balances')).not.toBeInTheDocument();
+    });
+
+    it('group pages have no Home button (the nav bar already has one)', async () => {
+        renderWithData(<GroupDetail {...props} />);
+        await screen.findByRole('tab', { name: /Expenses/ });
+        expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
+    });
+
+    it('quick splits are listed on Home, not inside a group', async () => {
         const g1 = (await import('../../test/apiMock')).group;
         const qs = [
             { token: 'a'.repeat(32), title: 'Sushi night', locked: false, people: 3, items: 4, total: 96.5, updated_at: '2026-10-05T10:00:00Z', expires_at: '2026-11-04T10:00:00Z' },
@@ -481,18 +533,16 @@ describe('Group detail', () => {
         api.listMyQuickSplits.mockResolvedValue(qs);
         api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }, g1]);
         const personal = renderWithData(<GroupDetail {...props} groupId="gp" />);
+        await screen.findByRole('heading', { name: 'Personal' });
+        expect(screen.queryByLabelText('Your quick splits')).not.toBeInTheDocument();
+        personal.unmount();
+        renderWithData(<QuickSplitList />);
         const list = await screen.findByLabelText('Your quick splits');
-        expect(within(list).getByText('Sushi night')).toBeInTheDocument();
+        expect(await within(list).findByText('Sushi night')).toBeInTheDocument();
         expect(within(list).getByText(/3 people · 4 items · expires Nov 4/)).toBeInTheDocument();
         expect(within(list).getByText('$96.50')).toBeInTheDocument();
         expect(within(list).getByText('Sushi night').closest('a')).toHaveAttribute('href', `/s/${'a'.repeat(32)}`);
         expect(within(list).getByText('Locked lunch')).toBeInTheDocument();
-        personal.unmount();
-        api.listMyQuickSplits.mockClear();
-        renderWithData(<GroupDetail {...props} />); // a shared group
-        await screen.findByRole('tab', { name: /Expenses/ });
-        expect(screen.queryByLabelText('Your quick splits')).not.toBeInTheDocument();
-        expect(api.listMyQuickSplits).not.toHaveBeenCalled();
     });
 
     it('shows the group total cost, not counting drafts', async () => {

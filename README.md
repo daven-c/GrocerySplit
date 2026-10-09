@@ -1,6 +1,6 @@
-# Splitpot
+# Settled
 
-Split any shared cost with the people you share it with: groceries, rent, bills, dinners and trips. Add what was spent, say who shares it, and Splitpot works out who owes whom, with balances that carry across every group you're in. (Formerly GrocerySplit; itemized grocery receipts are still a first-class feature.)
+Split any shared cost with the people you share it with: groceries, rent, bills, dinners and trips. Add what was spent, say who shares it, and Settled works out who owes whom, with balances that carry across every group you're in. (Formerly GrocerySplit; itemized grocery receipts are still a first-class feature.)
 
 ## Two ways to add a cost
 

@@ -1,4 +1,4 @@
-# Splitpot v3 ("Corner shop") redesign: what changed and what the design did not cover
+# Settled v3 ("Corner shop") redesign: what changed and what the design did not cover
 
 The redesign (`design_handoff_splitpot_redesign 2`) is applied as a **visual layer only**. No data model, API, database or business logic changed. Every existing feature is still reachable; where the design had no screen for one, it is restyled in the new look and listed below.
 

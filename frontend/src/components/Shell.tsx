@@ -150,7 +150,7 @@ export default function Shell({ view, narrow, user, groupId, recordId, onNav, on
         <div className="min-h-screen flex flex-col bg-white">
             <div className={`bg-band text-white px-10 ${isHome ? 'pb-[104px]' : ''}`}>
                 <header className="h-[72px] flex items-center gap-1.5 max-w-[1120px] mx-auto">
-                    <motion.button {...tapFlat} onClick={() => onNav('home')} aria-label="Splitpot home" className="mr-[22px] text-white"><Logo size={24} word={21} onBand /></motion.button>
+                    <motion.button {...tapFlat} onClick={() => onNav('home')} aria-label="Settled home" className="mr-[22px] text-white"><Logo size={24} word={21} onBand /></motion.button>
                     <nav aria-label="Primary" className="flex items-center gap-1.5">
                         {nav.map(n => {
                             const on = activeNav === n.id;

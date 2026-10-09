@@ -39,7 +39,7 @@ export const apiMock = {
     listGroups: vi.fn(), listSessions: vi.fn(), listSettlements: vi.fn(), myInvites: vi.fn(), respondToInvite: vi.fn(),
     createGroup: vi.fn(), isAdmin: vi.fn(), getGroup: vi.fn(), getSession: vi.fn(), createSession: vi.fn(),
     deleteGroup: vi.fn(), removeMember: vi.fn(), inviteToGroup: vi.fn(), listPendingInvites: vi.fn(), revokeInvite: vi.fn(),
-    listPhotos: vi.fn(), addPhoto: vi.fn(), removePhoto: vi.fn(),
+    listPhotos: vi.fn(), linkPersonalPerson: vi.fn(), addPhoto: vi.fn(), removePhoto: vi.fn(),
     recordSettlement: vi.fn(), addGuest: vi.fn(), setGroupPinned: vi.fn(), listMyQuickSplits: vi.fn(), listExpenseLog: vi.fn(), saveReceipt: vi.fn(), renameGuest: vi.fn(), removeGuest: vi.fn(), ensurePersonalGroup: vi.fn(), usernameAvailable: vi.fn(), getMyUsername: vi.fn(), updateUsername: vi.fn(), updateSettlement: vi.fn(), listSettlementLog: vi.fn(), deleteSettlement: vi.fn(), updateSession: vi.fn(), updateItem: vi.fn(), addItem: vi.fn(),
     deleteItem: vi.fn(), deleteSession: vi.fn(), importReceiptIntoSession: vi.fn(), deleteStaleDrafts: vi.fn(), updateDisplayName: vi.fn(), requestEmailChange: vi.fn(), changePassword: vi.fn(),
     adminListUsers: vi.fn(), adminTotals: vi.fn(), adminCreateUser: vi.fn(), adminConfirmUser: vi.fn(),
@@ -86,6 +86,7 @@ export function resetMocks() {
     apiMock.getSession.mockImplementation(async (id: string) => clone(sessions.find(s => s.id === id)!));
     apiMock.listPendingInvites.mockResolvedValue([]);
     apiMock.listPhotos.mockResolvedValue([]);
+    apiMock.linkPersonalPerson.mockResolvedValue(undefined);
     apiMock.addPhoto.mockResolvedValue(undefined);
     apiMock.removePhoto.mockResolvedValue(undefined);
     apiMock.adminTotals.mockResolvedValue({ groups: 2, receipts: 5, items: 30, settlements: 1 });

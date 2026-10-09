@@ -54,3 +54,22 @@ export function greeting(date = new Date()): string {
     const h = date.getHours();
     return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
 }
+
+/**
+ * How each person is named in sentences and menus: the plain name, plus their @username when someone else in the
+ * same list shares that name, so two "Sam"s can be told apart.
+ */
+export function labelMap(members: { user_id: string; name: string; username?: string }[]): Record<string, string> {
+    const count = new Map<string, number>();
+    for (const m of members) count.set(m.name.trim().toLowerCase(), (count.get(m.name.trim().toLowerCase()) ?? 0) + 1);
+    return Object.fromEntries(members.map(m => [
+        m.user_id,
+        (count.get(m.name.trim().toLowerCase()) ?? 0) > 1 && m.username ? `${m.name} (@${m.username})` : m.name,
+    ]));
+}
+
+/** Today's date where the person is (YYYY-MM-DD). The database's own "today" is UTC, which is already tomorrow on a US evening. */
+export function localToday(now: Date = new Date()): string {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}

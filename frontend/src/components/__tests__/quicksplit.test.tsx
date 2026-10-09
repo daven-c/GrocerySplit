@@ -314,7 +314,7 @@ describe('Quick split page (no account)', () => {
         fakeQuick.seed({ people: ['Ann'], ownerKey: 'OWNER' });
         localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER' }));
         view();
-        expect(await screen.findByText(/Sign in to Splitpot to turn this split/)).toBeInTheDocument();
+        expect(await screen.findByText(/Sign in to Settled to turn this split/)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Import to a group' })).not.toBeInTheDocument();
     });
 
@@ -359,5 +359,28 @@ describe('Quick split draft (nothing exists until Create)', () => {
         await waitFor(() => expect(assign).toHaveBeenCalledWith(`/s/${fakeQuick.state.token}`));
         expect(fakeQuick.state.people).toEqual(['Ann']);
         expect(fakeQuick.state.items).toMatchObject([{ name: 'Pizza', price: 12, assigned: ['Ann'] }]);
+    });
+});
+
+describe('Quick split owner sign-in note', () => {
+    it('tells a signed-out owner to sign in to keep it, but not guests or signed-in owners', async () => {
+        fakeQuick.seed({ people: ['Ann'] });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER', me: 'Ann' }));
+        const first = view();
+        expect(await screen.findByText(/Sign in to keep this and manage it from any device/)).toBeInTheDocument();
+        first.unmount();
+
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ me: 'Ann', memberKey: 'key-Ann' })); // a guest
+        const guest = view();
+        await screen.findByText('Who owes what');
+        expect(screen.queryByText(/Sign in to keep this and manage it from any device/)).not.toBeInTheDocument();
+        guest.unmount();
+
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER', me: 'Ann' }));
+        authMock.getSession.mockResolvedValue({ data: { session: { user: { id: ME } } } });
+        view();
+        await screen.findByText('Who owes what');
+        await waitFor(() => expect(screen.getByText('Import to a group')).toBeInTheDocument()); // signed in
+        expect(screen.queryByText(/Sign in to keep this and manage it from any device/)).not.toBeInTheDocument();
     });
 });

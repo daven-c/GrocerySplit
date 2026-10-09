@@ -20,7 +20,7 @@ const ROWS = [
 const STEPS = [
     { icon: 'photo_camera', title: 'Read the receipt', body: 'Copy our prompt into any AI chat with a photo of the receipt. Paste back what it returns and every line item appears.', bg: 'oklch(0.965 0.03 158)', fg: 'oklch(0.42 0.11 158)' },
     { icon: 'touch_app', title: 'Tap who had what', body: 'Pick a person and tap their items, or split one item between a few people. Shared staples take one tap.', bg: 'oklch(0.97 0.03 250)', fg: 'oklch(0.45 0.13 250)' },
-    { icon: 'handshake', title: 'Settle up', body: 'Splitpot tracks who paid and who owes, across every group. Mark payments as you make them.', bg: 'oklch(0.97 0.03 40)', fg: 'oklch(0.5 0.15 35)' },
+    { icon: 'handshake', title: 'Settle up', body: 'Settled tracks who paid and who owes, across every group. Mark payments as you make them.', bg: 'oklch(0.97 0.03 40)', fg: 'oklch(0.5 0.15 35)' },
 ];
 const POINTS = [
     { title: 'Exact, every time', body: 'All the math runs in whole cents. Tax and tip are shared by what each person bought, and the totals always match the receipt.' },
@@ -58,7 +58,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
                             Split the groceries down to the penny.
                         </motion.h1>
                         <motion.p {...enter(1)} className="m-0 text-[19px] leading-normal font-semibold text-[oklch(0.88_0.05_155)] max-w-[480px]" style={{ textWrap: 'pretty' } as React.CSSProperties}>
-                            Snap the receipt, tap who had what, and Splitpot works out everyone's share with tax and tip included. Rent and bills too, and balances carry across every group you're in.
+                            Snap the receipt, tap who had what, and Settled works out everyone's share with tax and tip included. Rent and bills too, and balances carry across every group you're in.
                         </motion.p>
                         <motion.div {...enter(2)} className="flex flex-wrap gap-2.5 items-center">
                             <motion.button {...tapFlat} onClick={onGetStarted} className="h-[52px] px-6 rounded-full bg-white text-band-deep text-base font-black">Start a group, free</motion.button>
@@ -131,7 +131,7 @@ export default function Landing({ onSignIn, onGetStarted }: LandingProps) {
             </section>
 
             <footer className="max-w-[1160px] mx-auto px-6 pt-7 pb-10 border-t border-rule flex flex-wrap gap-4 justify-between text-sm font-bold text-faint">
-                <span>Splitpot · costsplit.davenc.dev</span>
+                <span>Settled · settled.davenc.dev</span>
                 <span>Made for households, trips and anyone who shares a fridge.</span>
             </footer>
         </div>
