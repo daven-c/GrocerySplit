@@ -310,9 +310,9 @@ export async function removeMember(groupId: string, userId: string) {
     check(await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId));
 }
 
-/** Invite by @username. They can be used in expenses while the invite is pending. */
-export async function inviteToGroup(groupId: string, username: string) {
-    const { error } = await supabase.rpc('invite_person', { p_group: groupId, p_username: username.trim() });
+/** Invite by @username. They can be used in expenses while the invite is pending. With guestId, the invite is attached to that name-only person so their expenses move over on accept. */
+export async function inviteToGroup(groupId: string, username: string, guestId?: string) {
+    const { error } = await supabase.rpc('invite_person', { p_group: groupId, p_username: username.trim(), p_guest: guestId ?? null });
     if (error) throw new Error(error.message);
 }
 

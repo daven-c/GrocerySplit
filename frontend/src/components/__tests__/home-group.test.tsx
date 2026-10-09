@@ -302,6 +302,19 @@ describe('Group detail', () => {
         await waitFor(() => expect(api.removeGuest).toHaveBeenCalledWith('g-cam'));
     });
 
+    it('links a temporary person to a username so their expenses move over', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        const cam = { user_id: 'g-cam', joined_at: '2026-10-05T00:00:00Z', name: 'Cam', email: '', role: 'member' as const, pending: true };
+        api.listGroups.mockResolvedValue([{ ...g1, members: [...g1.members, cam] }]);
+        renderWithData(<GroupDetail {...props} initialTab="members" />);
+        await u.click(await screen.findByRole('button', { name: 'Link to account' }));
+        const field = screen.getByLabelText('Username for Cam');
+        await u.type(field, 'cam_99');
+        await u.click(within(field.parentElement!).getByRole('button', { name: 'Send invite' }));
+        await waitFor(() => expect(api.inviteToGroup).toHaveBeenCalledWith('g1', 'cam_99', 'g-cam'));
+    });
+
     it('in a shared group, the owner can add a temporary person by name', async () => {
         const u = userEvent.setup();
         renderWithData(<GroupDetail {...props} initialTab="members" />);

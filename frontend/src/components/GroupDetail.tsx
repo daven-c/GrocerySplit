@@ -51,7 +51,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [email, setEmail] = useState('');
     const [personName, setPersonName] = useState('');
     const [quickSplits, setQuickSplits] = useState<MyQuickSplit[]>([]);
-    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename'; value: string }>(null);
+    const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'link'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [confirm, setConfirm] = useState<Confirm>(null);
@@ -255,7 +255,10 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         if (!guestOp || !guestOp.value.trim()) return;
         setError(''); setNotice('');
         try {
-            await renameGuest(guestOp.id, guestOp.value);
+            if (guestOp.kind === 'link') {
+                await inviteToGroup(groupId, guestOp.value, guestOp.id);
+                toast('Invite sent');
+            } else await renameGuest(guestOp.id, guestOp.value);
             setGuestOp(null);
             await reloadPeople();
         } catch (err: any) { setError(err.message || 'That did not work'); }
@@ -637,6 +640,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     {isOwner && m.pending && (
                                         <span className="flex items-center gap-2.5 text-xs font-extrabold text-body">
                                             <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
+                                            {!pending.some(p => p.name === m.name) && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>}
                                             <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
                                     )}
@@ -647,8 +651,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     )}
                                     {guestOp?.id === m.user_id && (
                                         <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
-                                            <input autoFocus aria-label={`New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder="New name" maxLength={60} className="h-10 px-4 border-[1.5px] border-line rounded-full bg-field text-sm font-bold flex-1 min-w-[160px]" />
-                                            <Button height={38} className="px-4" disabled={!guestOp.value.trim()} onClick={runGuestOp}>Rename</Button>
+                                            <input autoFocus aria-label={guestOp.kind === 'link' ? `Username for ${m.name}` : `New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder={guestOp.kind === 'link' ? '@username' : 'New name'} maxLength={60} className="h-10 px-4 border-[1.5px] border-line rounded-full bg-field text-sm font-bold flex-1 min-w-[160px]" />
+                                            <Button height={38} className="px-4" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'link' ? 'Send invite' : 'Rename'}</Button>
                                             <Button variant="secondary" height={38} className="px-4" onClick={() => setGuestOp(null)}>Cancel</Button>
                                         </div>
                                     )}
