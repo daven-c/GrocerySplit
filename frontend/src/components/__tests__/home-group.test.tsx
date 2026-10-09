@@ -322,7 +322,35 @@ describe('Group detail', () => {
         expect(await screen.findByText('Add a temporary person')).toBeInTheDocument();
         await u.type(screen.getByLabelText("Person's name"), 'Dee');
         await u.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith(props.groupId, 'Dee'));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith(props.groupId, 'Dee', undefined));
+    });
+
+    it('in Personal, a person can be added with a username, which links them without inviting anyone', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0]] }]);
+        renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
+        await u.type(await screen.findByLabelText('Their username'), '@bo_b');
+        await u.click(screen.getByRole('button', { name: 'Add' })); // a username alone is enough; the name defaults to theirs
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', '', '@bo_b'));
+        expect(api.inviteToGroup).not.toHaveBeenCalled();
+    });
+
+    it('in Personal, an existing name can be linked to an account and unlinked again', async () => {
+        const u = userEvent.setup();
+        const g1 = (await import('../../test/apiMock')).group;
+        const bo = { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member' as const, pending: true };
+        const cy = { user_id: 'g-cy', joined_at: '2026-10-05T00:00:00Z', name: 'Cy', email: '', role: 'member' as const, pending: true, linked_user: 'u-cy', linked_username: 'cy_x' };
+        api.listGroups.mockResolvedValue([{ id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [g1.members[0], bo, cy] }]);
+        renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
+        expect(await screen.findByText('Linked to @cy_x')).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Unlink' }));
+        await waitFor(() => expect(api.linkPersonalPerson).toHaveBeenCalledWith('g-cy', ''));
+        await u.click(screen.getByRole('button', { name: 'Link to account' }));
+        await u.type(screen.getByLabelText('Username for Bobby'), 'bo_b');
+        await u.click(screen.getByRole('button', { name: 'Link' }));
+        await waitFor(() => expect(api.linkPersonalPerson).toHaveBeenCalledWith('g-bo', 'bo_b'));
+        expect(api.inviteToGroup).not.toHaveBeenCalled();
     });
 
     it('in Personal, add people by name, rename and remove them', async () => {
@@ -333,7 +361,7 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} groupId="gp" initialTab="members" />);
         await u.type(await screen.findByLabelText("Person's name"), 'Dee');
         await u.click(screen.getByRole('button', { name: 'Add' }));
-        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', 'Dee'));
+        await waitFor(() => expect(api.addGuest).toHaveBeenCalledWith('gp', 'Dee', undefined));
         expect(screen.getByText('Name only')).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Rename' }));
         const nm = screen.getByLabelText('New name for Bobby');

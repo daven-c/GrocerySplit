@@ -11,11 +11,28 @@ export default function Friends() {
     const { me, groups: allGroups, sessions, settlements, refresh, loading } = useAppData();
     // Your Personal section only has names, not people, so it never appears here.
     const groups = useMemo(() => allGroups.filter(g => !g.personal), [allGroups]);
+    const personalGroups = useMemo(() => allGroups.filter(g => g.personal), [allGroups]);
     const [open, setOpen] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
     const balances = useMemo(() => computeBalances(me, groups, sessions, settlements), [me, groups, sessions, settlements]);
+    // Names in your Personal section that you pointed at an account. What is between you stays in Personal: it is shown
+    // as its own line, and never counts toward the totals, the amounts here, or anything you can mark paid.
+    const personal = useMemo(() => {
+        const bal = computeBalances(me, personalGroups, sessions, settlements);
+        const byUser = new Map<string, { net: number; name: string; username?: string; tone: ReturnType<typeof memberTones>[string] }>();
+        for (const g of personalGroups) {
+            const tones = memberTones(g.members, me);
+            for (const m of g.members) {
+                if (!m.linked_user) continue;
+                const net = bal.friends[m.user_id]?.byGroup[g.id] ?? 0;
+                const cur = byUser.get(m.linked_user);
+                byUser.set(m.linked_user, { net: (cur?.net ?? 0) + net, name: cur?.name ?? m.name, username: m.linked_username, tone: cur?.tone ?? tones[m.user_id] });
+            }
+        }
+        return byUser;
+    }, [me, personalGroups, sessions, settlements]);
     const myName = groups.flatMap(g => g.members).find(m => m.user_id === me)?.name ?? 'You';
     const groupName = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
 
@@ -30,10 +47,13 @@ export default function Friends() {
                 else byId.set(m.user_id, { id: m.user_id, name: m.name, username: m.username, email: m.email, groupIds: [g.id], tone: tones[m.user_id] }); // color from the first shared group
             }
         }
+        for (const [uid, p] of personal) {
+            if (!byId.has(uid)) byId.set(uid, { id: uid, name: p.name, username: p.username, email: '', groupIds: [], tone: p.tone });
+        }
         return [...byId.values()]
             .map(f => ({ ...f, net: balances.friends[f.id]?.net ?? 0, byGroup: balances.friends[f.id]?.byGroup ?? {} }))
             .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || a.name.localeCompare(b.name));
-    }, [groups, me, balances]);
+    }, [groups, me, balances, personal]);
 
     const owedToMe = friends.reduce((a, f) => a + (f.net > 0.004 ? f.net : 0), 0);
     const iOwe = friends.reduce((a, f) => a + (f.net < -0.004 ? -f.net : 0), 0);
@@ -94,11 +114,11 @@ export default function Friends() {
                                     <Avatar name={f.name} tone={f.tone} size={46} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className="text-base font-extrabold truncate">{f.name}{f.username && <span className="ml-1.5 text-[13.5px] font-bold text-faint">@{f.username}</span>}</span>
-                                        <span className="text-[13.5px] font-semibold text-faint truncate">{f.groupIds.map(id => groupName[id]).join(', ')}</span>
+                                        <span className="text-[13.5px] font-semibold text-faint truncate">{f.groupIds.length ? f.groupIds.map(id => groupName[id]).join(', ') : 'Personal only'}</span>
                                     </span>
                                     <span className="flex flex-col items-end gap-px">
-                                        {settled ? <span className="text-base font-black text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix={f.net < 0 ? '-$' : '$'} className={`text-base font-black ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
-                                        <span className="text-[12.5px] font-bold text-faint">{settled ? 'all square' : f.net > 0 ? 'owes you' : 'you owe'}</span>
+                                        {f.groupIds.length === 0 ? <span className="text-base font-black text-faint">Personal</span> : settled ? <span className="text-base font-black text-faint">Settled</span> : <AnimatedNumber value={Math.abs(f.net)} prefix={f.net < 0 ? '-$' : '$'} className={`text-base font-black ${f.net > 0 ? 'text-green' : 'text-coral'}`} />}
+                                        <span className="text-[12.5px] font-bold text-faint">{f.groupIds.length === 0 ? 'only you see this' : settled ? 'all square' : f.net > 0 ? 'owes you' : 'you owe'}</span>
                                     </span>
                                     <Icon name={expanded ? 'expand_less' : 'expand_more'} size={22} className="text-chev" />
                                 </motion.button>
@@ -116,7 +136,16 @@ export default function Friends() {
                                                 </motion.div>
                                             ))}
                                         </AnimatePresence>
-                                        {lines.length === 0 && <span className="text-[14.5px] font-bold text-faint">You two are square.</span>}
+                                        {lines.length === 0 && f.groupIds.length > 0 && <span className="text-[14.5px] font-bold text-faint">You two are square.</span>}
+                                        {personal.has(f.id) && (
+                                            <div className="flex flex-col gap-px py-3 pl-4 pr-3.5 rounded-[18px] bg-warm" aria-label={`Personal with ${f.name}`}>
+                                                <span className="flex items-center gap-1.5 text-[14.5px] font-extrabold"><Icon name="lock" size={16} fill />Personal</span>
+                                                <span className="text-[13.5px] font-bold text-body">
+                                                    {Math.abs(personal.get(f.id)!.net) < 0.005 ? 'Nothing between you in Personal.' : personal.get(f.id)!.net > 0 ? `${f.name} owes ${myName} ${fmt(personal.get(f.id)!.net)}` : `${myName} owes ${f.name} ${fmt(-personal.get(f.id)!.net)}`}
+                                                </span>
+                                                <span className="text-[12.5px] font-semibold text-[#6E655C]">Only you can see this. It isn't counted in the amounts above.</span>
+                                            </div>
+                                        )}
                                         {lines.length > 1 && (
                                             <Button variant="secondary" height={36} className="self-start text-[13.5px] px-4" disabled={busy} onClick={() => settleAll(f)}>Settle everything with {f.name}</Button>
                                         )}

@@ -99,7 +99,7 @@ export const ensurePersonalGroup = async () => {
     }
     return wait(p.id);
 };
-export const addGuest = async (gid: string, name: string) => { const gidn = id('guest'); groups = groups.map(g => g.id === gid ? { ...g, members: [...g.members, { user_id: gidn, joined_at: new Date().toISOString(), name, email: '', role: 'member', pending: true }] } : g); return wait(gidn); };
+export const addGuest = async (gid: string, name: string, _username?: string) => { const gidn = id('guest'); groups = groups.map(g => g.id === gid ? { ...g, members: [...g.members, { user_id: gidn, joined_at: new Date().toISOString(), name, email: '', role: 'member', pending: true }] } : g); return wait(gidn); };
 export const renameGuest = async (uid: string, name: string) => { groups = groups.map(g => ({ ...g, members: g.members.map(m => m.user_id === uid ? { ...m, name } : m) })); return wait(undefined); };
 export const removeGuest = async (uid: string) => { groups = groups.map(g => ({ ...g, members: g.members.filter(m => m.user_id !== uid) })); return wait(undefined); };
 export const updateSettlement = async (sid: string, from_user: string, to_user: string, amount: number) => { settlements = settlements.map(s => s.id === sid ? { ...s, from_user, to_user, amount } : s); return wait(undefined); };
@@ -117,3 +117,4 @@ export const saveReceipt = async (sid: string, patch: any, items: any[]) => {
 export const listPhotos = async (_sid: string) => wait([] as { id: string; path: string; url: string }[]);
 export const addPhoto = async (_sid: string, _gid: string, _file: Blob, _ext?: string) => wait(undefined);
 export const removePhoto = async (_p: unknown) => wait(undefined);
+export const linkPersonalPerson = async (uid: string, username: string) => { groups = groups.map(g => ({ ...g, members: g.members.map(m => m.user_id === uid ? { ...m, linked_user: username ? 'u-' + username : undefined, linked_username: username || undefined } : m) })); return wait(undefined); };

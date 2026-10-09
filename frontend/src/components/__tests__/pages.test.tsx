@@ -32,6 +32,27 @@ describe('Friends', () => {
         expect(rows[1]).toHaveTextContent('$578.85');
     });
 
+    it('shows what is between you in Personal on a linked person, kept out of every total', async () => {
+        const u = userEvent.setup();
+        const { group, base } = await import('../../test/apiMock') as any;
+        const guest = { user_id: 'g-bo', joined_at: '2026-10-05T00:00:00Z', name: 'Bobby', email: '', role: 'member', pending: true, linked_user: 'u-bo', linked_username: 'bo_b' };
+        const stranger = { user_id: 'g-zed', joined_at: '2026-10-05T00:00:00Z', name: 'Zed', email: '', role: 'member', pending: true, linked_user: 'u-zed', linked_username: 'zed_z' };
+        const personal = { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [group.members[0], guest, stranger] };
+        const tab = { ...sessions[1], id: 'sp', group_id: 'gp', kind: 'expense', paid_by: ME, amount: 40, split_method: 'exact', split_data: { [ME]: 20, 'g-bo': 20 } };
+        api.listGroups.mockResolvedValue([group, personal]);
+        api.listSessions.mockResolvedValue([...sessions, tab]);
+        renderWithData(<Friends />);
+        await waitFor(() => expect(screen.getByText('$1,182.82')).toBeInTheDocument(), { timeout: 3000 }); // unchanged by Personal
+        await u.click(await screen.findByRole('button', { name: /Bo @bo_b/ }));
+        const box = await screen.findByLabelText('Personal with Bo');
+        expect(box).toHaveTextContent('Bo owes Daven $20.00');
+        expect(box).toHaveTextContent("Only you can see this. It isn't counted in the amounts above.");
+        expect(screen.getByText('$603.97')).toBeInTheDocument(); // Bo's shared total, without the $20
+        // someone linked but with no shared group still shows up, marked Personal only
+        expect(screen.getByRole('button', { name: /Zed/ })).toHaveTextContent('Personal only');
+        void base;
+    });
+
     it('expands a friend, marks a payment received, and refreshes', async () => {
         const u = userEvent.setup();
         renderWithData(<Friends />);

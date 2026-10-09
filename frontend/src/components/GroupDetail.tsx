@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, Pop, Modal, UnderlineTabs, AnimatedNumber, listItem, spring, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { useDismiss } from '../lib/hooks';
-import { createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
+import { linkPersonalPerson, createSession, deleteGroup, removeMember, inviteToGroup, listPendingInvites, revokeInvite, recordSettlement, addGuest, renameGuest, removeGuest, updateSettlement, deleteSettlement, listSettlementLog, listExpenseLog, PendingInvite, Session, Settlement } from '../lib/api';
 import { groupLedger } from '../lib/ledger';
 import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { isEnabled } from '../lib/flags';
@@ -48,6 +48,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const [pending, setPending] = useState<PendingInvite[]>([]);
     const [email, setEmail] = useState('');
     const [personName, setPersonName] = useState('');
+    const [personUser, setPersonUser] = useState('');
     const [guestOp, setGuestOp] = useState<null | { id: string; kind: 'rename' | 'link'; value: string }>(null);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -236,9 +237,10 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     const reloadPeople = async () => { await refresh(); setPending(await listPendingInvites(groupId)); };
     const addPerson = async () => {
         const n = personName.trim();
-        if (!n) return;
+        const u = isPersonal ? personUser.trim() : '';
+        if (!n && !u) return;
         setError(''); setNotice('');
-        try { await addGuest(groupId, n); setPersonName(''); await reloadPeople(); }
+        try { await addGuest(groupId, n, u || undefined); setPersonName(''); setPersonUser(''); await reloadPeople(); }
         catch (err: any) { setError(err.message || 'Could not add that person'); }
     };
     const runGuestOp = async () => {
@@ -246,8 +248,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         setError(''); setNotice('');
         try {
             if (guestOp.kind === 'link') {
-                await inviteToGroup(groupId, guestOp.value, guestOp.id);
-                toast('Invite sent');
+                if (isPersonal) { await linkPersonalPerson(guestOp.id, guestOp.value); toast('Linked'); }
+                else { await inviteToGroup(groupId, guestOp.value, guestOp.id); toast('Invite sent'); }
             } else await renameGuest(guestOp.id, guestOp.value);
             setGuestOp(null);
             await reloadPeople();
@@ -608,14 +610,18 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     <Avatar name={m.name} tone={tones[m.user_id]} size={44} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className="text-base font-extrabold truncate">{m.name}</span>
-                                        <span className="text-[13.5px] font-semibold text-faint truncate">{m.pending ? (isPersonal ? 'Just a name' : 'Not joined yet') : m.username ? `@${m.username}` : m.email}</span>
+                                        <span className="text-[13.5px] font-semibold text-faint truncate">{m.pending ? (isPersonal ? (m.linked_username ? `Linked to @${m.linked_username}` : 'Just a name') : 'Not joined yet') : m.username ? `@${m.username}` : m.email}</span>
                                     </span>
                                     {m.role === 'owner' && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">Owner</span>}
-                                    {m.pending && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">{isPersonal ? 'Name only' : 'Not joined'}</span>}
+                                    {m.pending && <span className="text-[12.5px] font-extrabold text-muted px-2.5 py-1 rounded-full bg-soft">{isPersonal ? (m.linked_user ? 'Linked' : 'Name only') : 'Not joined'}</span>}
                                     {isOwner && m.pending && (
                                         <span className="flex items-center gap-2.5 text-xs font-extrabold text-body">
                                             <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'rename', value: m.name })} className="underline underline-offset-2">Rename</button>
-                                            {!isPersonal && !pending.some(p => p.name === m.name) && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>}
+                                            {isPersonal
+                                                ? (m.linked_user
+                                                    ? <button type="button" onClick={async () => { setError(''); try { await linkPersonalPerson(m.user_id, ''); await reloadPeople(); } catch (er: any) { setError(er.message || 'Could not unlink'); } }} className="underline underline-offset-2">Unlink</button>
+                                                    : <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>)
+                                                : !pending.some(p => p.name === m.name) && <button type="button" onClick={() => setGuestOp({ id: m.user_id, kind: 'link', value: '' })} className="underline underline-offset-2">Link to account</button>}
                                             <motion.button {...tapFlat} aria-label={`Remove ${m.name}`} onClick={() => dropGuest(m.user_id)} className="w-8 h-8 grid place-items-center rounded-full text-faint hover:bg-coral-tint hover:text-coral"><Icon name="close" size={18} /></motion.button>
                                         </span>
                                     )}
@@ -627,7 +633,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                     {guestOp?.id === m.user_id && (
                                         <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
                                             <input autoFocus aria-label={guestOp.kind === 'link' ? `Username for ${m.name}` : `New name for ${m.name}`} value={guestOp.value} onChange={e => setGuestOp({ ...guestOp, value: e.target.value })} onKeyDown={e => e.key === 'Enter' && runGuestOp()} placeholder={guestOp.kind === 'link' ? '@username' : 'New name'} maxLength={60} className="h-10 px-4 border-[1.5px] border-line rounded-full bg-field text-sm font-bold flex-1 min-w-[160px]" />
-                                            <Button height={38} className="px-4" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'link' ? 'Send invite' : 'Rename'}</Button>
+                                            <Button height={38} className="px-4" disabled={!guestOp.value.trim()} onClick={runGuestOp}>{guestOp.kind === 'link' ? (isPersonal ? 'Link' : 'Send invite') : 'Rename'}</Button>
                                             <Button variant="secondary" height={38} className="px-4" onClick={() => setGuestOp(null)}>Cancel</Button>
                                         </div>
                                     )}
@@ -663,8 +669,9 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
                                 <div className={panelCls}>
                                     <span className="text-base font-black">{isPersonal ? 'Add someone by name' : 'Add a temporary person'}</span>
                                     <input value={personName} onChange={e => setPersonName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="Name" aria-label="Person's name" maxLength={60} className="h-[46px] px-4 border-[1.5px] border-transparent rounded-full bg-white text-[15px] font-bold" />
-                                    <Button variant="band" height={44} wide onClick={addPerson} disabled={!personName.trim()}>Add</Button>
-                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">{isPersonal ? 'No account needed and nobody is notified. Use them in expenses like anyone else.' : "For a friend who hasn't signed up yet. Just a name: no account, nobody is notified. Use them in expenses like anyone else."}</span>
+                                    {isPersonal && <input value={personUser} onChange={e => setPersonUser(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPerson()} placeholder="@username (optional)" aria-label="Their username" autoCapitalize="none" className="h-[46px] px-4 border-[1.5px] border-transparent rounded-full bg-white text-[15px] font-bold" />}
+                                    <Button variant="band" height={44} wide onClick={addPerson} disabled={!personName.trim() && !(isPersonal && personUser.trim())}>Add</Button>
+                                    <span className="text-[13px] font-semibold leading-[1.45] text-[#5E6A60]">{isPersonal ? 'A name is enough, no account needed. Add their username too to link them to their account. Nobody is notified or shown anything; it just lets People show what is between you in Personal, kept apart from your real balances.' : "For a friend who hasn't signed up yet. Just a name: no account, nobody is notified. Use them in expenses like anyone else."}</span>
                                 </div>
                             )}
                             {isPersonal ? null : isOwner ? (

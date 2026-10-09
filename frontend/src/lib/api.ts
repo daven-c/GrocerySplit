@@ -279,6 +279,9 @@ export interface Member {
     username?: string;
     /** This member has pinned the group (only meaningful on their own row). */
     pinned?: boolean;
+    /** A name in your Personal section that points at a real account. Nobody is notified; it only groups what is between you. */
+    linked_user?: string;
+    linked_username?: string;
 }
 
 export interface Group {
@@ -315,11 +318,11 @@ const mapGroup = (r: any): Group => ({
     personal: !!r.personal,
     members: (r.group_members ?? [])
         .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, pinned: !!m.pinned, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '', username: m.profiles?.username ?? undefined }))
-        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true })))
+        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true, linked_user: g.linked_user ?? undefined, linked_username: g.linked_username ?? undefined })))
         .sort((a: Member, b: Member) => (!!a.pending !== !!b.pending ? (a.pending ? 1 : -1) : (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name)))),
 });
 
-const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(user_id, role, joined_at, pinned, profiles(name, email, username)), group_guests(id, name, created_at)';
+const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(user_id, role, joined_at, pinned, profiles(name, email, username)), group_guests(id, name, created_at, linked_user, linked_username)';
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));
@@ -362,7 +365,10 @@ const rpc = async (fn: string, args: Record<string, unknown>) => {
     if (error) throw new Error(error.message);
     return data;
 };
-export const addGuest = (groupId: string, name: string): Promise<string> => rpc('add_guest', { p_group: groupId, p_name: name });
+/** A name, or (in Personal only) a username to link to that account without inviting them; the name then defaults to theirs. */
+export const addGuest = (groupId: string, name: string, username?: string): Promise<string> => rpc('add_guest', { p_group: groupId, p_name: name, p_username: username?.trim() || null });
+/** Personal only: point a name at an account by username (empty to unlink). Nobody is notified. */
+export const linkPersonalPerson = (guestId: string, username: string) => rpc('link_personal_person', { p_guest: guestId, p_username: username });
 export const renameGuest = (guestId: string, name: string) => rpc('rename_guest', { p_guest: guestId, p_name: name });
 export const removeGuest = (guestId: string) => rpc('remove_guest', { p_guest: guestId });
 /** The user's private Personal group (created the first time). */
