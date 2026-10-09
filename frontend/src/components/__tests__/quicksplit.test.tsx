@@ -362,6 +362,35 @@ describe('Quick split draft (nothing exists until Create)', () => {
     });
 });
 
+describe('Quick split draft leave warning', () => {
+    const leave = () => { const ev = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(ev); return ev.defaultPrevented; };
+    beforeEach(() => {
+        Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), origin: 'http://localhost', hash: '', pathname: '/s/new' } });
+    });
+
+    it('does not warn for an empty draft, warns once it has something in it, and stops warning after Create', async () => {
+        const u = userEvent.setup();
+        render(<QuickSplit token={null} />);
+        await screen.findByText('Nothing is saved yet');
+        expect(leave()).toBe(false); // nothing to lose
+        await u.type(screen.getByLabelText('Your name'), 'Ann');
+        await u.click(screen.getByRole('button', { name: 'Join' }));
+        await screen.findByLabelText('New item name');
+        expect(leave()).toBe(true); // a person is in it now
+        await u.click(screen.getByRole('button', { name: 'Create quick split' }));
+        await waitFor(() => expect(window.location.assign).toHaveBeenCalled());
+        expect(leave()).toBe(false); // saved: leaving is fine
+    });
+
+    it('a saved split never warns', async () => {
+        fakeQuick.seed({ people: ['Ann'], items: [{ name: 'Pizza', price: 12 }] });
+        localStorage.setItem(`splitpot:quick:${TOKEN}`, JSON.stringify({ ownerKey: 'OWNER', me: 'Ann' }));
+        view();
+        await screen.findByText('Who owes what');
+        expect(leave()).toBe(false);
+    });
+});
+
 describe('Quick split owner sign-in note', () => {
     it('tells a signed-out owner to sign in to keep it, but not guests or signed-in owners', async () => {
         fakeQuick.seed({ people: ['Ann'] });

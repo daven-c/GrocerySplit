@@ -108,6 +108,16 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         document.title = data ? `${data.title} · Settled` : 'Settled';
     }, [data?.title]);
 
+    // A draft that has something in it is thrown away if the page is left, so ask first (the browser shows its own prompt).
+    const created = useRef(false);
+    const draftHasContent = draft && !!data && (data.people.length > 0 || data.items.length > 0 || data.tax > 0 || data.tip > 0 || !!data.paid_by || data.title !== 'Dinner');
+    useEffect(() => {
+        if (!draftHasContent) return;
+        const warn = (e: BeforeUnloadEvent) => { if (!created.current) { e.preventDefault(); e.returnValue = ''; } };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [draftHasContent]);
+
     /** Apply a change on screen right away, send it, then take the server's version. */
     const act = async (optimistic: ((d: QuickSplitData) => QuickSplitData) | null, send: () => Promise<unknown>) => {
         setError('');
@@ -230,6 +240,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         setError('');
         try {
             const t = await createFromDraft(data, me);
+            created.current = true; // it is saved now, so leaving is fine
             window.location.assign(`/s/${t}`);
         } catch (err: any) {
             setError(err.message || 'Could not create the split.');
