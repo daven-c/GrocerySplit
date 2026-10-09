@@ -166,7 +166,7 @@ run('shared groups integration', () => {
 
         await as('a');
         const rec = await api.createSession({ groupId, name: 'Dinner', items: [{ name: 'Pizza', price: 20 }], participants: [await uid('a'), await uid('b')] });
-        let s = await api.getSession(rec);
+        const s = await api.getSession(rec);
         expect(s.paid_by).toBe(a); // defaults to whoever added it
         await api.updateItem(rec, s.items[0].id, { assigned_users: [await uid('a'), await uid('b')] });
         await expect(api.updateSession(rec, { paid_by: c })).rejects.toThrow(); // outsider cannot be the payer

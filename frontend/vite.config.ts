@@ -24,5 +24,15 @@ export default defineConfig({
 	},
 	build: {
 		outDir: "build",
+		rollupOptions: {
+			output: {
+				// Big libraries in their own files: they change rarely, so browsers keep them between deploys.
+				manualChunks: {
+					react: ["react", "react-dom"],
+					supabase: ["@supabase/supabase-js"],
+					motion: ["framer-motion"],
+				},
+			},
+		},
 	},
 });

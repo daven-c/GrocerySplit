@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { SplitData, SplitMethod } from './expenses';
 import { localToday } from './people';
+import type { GroupRow, ItemRow, SessionRow } from './dbRows';
 
 export interface Item {
     id: string;
@@ -38,14 +39,17 @@ const check = <T>(res: { data: T; error: { message: string } | null }): NonNulla
     return res.data as NonNullable<T>;
 };
 
-const mapItem = (r: any): Item => ({
+/** A database row where these numeric columns can arrive as strings (Postgres numeric). */
+type Raw<T, K extends keyof T> = Omit<T, K> & { [P in K]: number | string | null };
+
+const mapItem = (r: ItemRow): Item => ({
     id: r.id,
     name: r.name,
     price: Number(r.price),
     assigned_users: r.assigned_users ?? [],
 });
 
-const mapSession = (r: any): Session => ({
+const mapSession = (r: SessionRow): Session => ({
     id: r.id,
     photo_count: r.session_photos?.[0]?.count ?? 0,
     group_id: r.group_id,
@@ -95,6 +99,7 @@ export async function createSession(input: {
     tax?: number;
     tip?: number;
     participants?: string[];
+    paidBy?: string;
     items?: { name: string; price: number; assigned_users?: string[] }[];
 }): Promise<string> {
     const s = check(
@@ -111,6 +116,7 @@ export async function createSession(input: {
                 tax: input.tax ?? 0,
                 tip: input.tip ?? 0,
                 participants: input.participants ?? [],
+                ...(input.paidBy ? { paid_by: input.paidBy } : {}),
             })
             .select('id')
             .single()
@@ -136,14 +142,20 @@ export async function importReceiptIntoSession(
     input: { store?: string; date?: string; tax: number; tip: number; items: { name: string; price: number }[] }
 ) {
     const cur = check(await supabase.from('sessions').select('name, tax, tip').eq('id', sessionId).single());
-    check(await supabase.from('items').insert(input.items.map(i => ({ session_id: sessionId, name: i.name, price: i.price }))));
+    const added = check(await supabase.from('items').insert(input.items.map(i => ({ session_id: sessionId, name: i.name, price: i.price }))).select('id'));
     const placeholder = ['Receipt', 'Manual Receipt', 'Grocery Trip'].includes(cur.name);
-    await updateSession(sessionId, {
-        tax: Math.round((Number(cur.tax) + input.tax) * 100) / 100,
-        tip: Math.round((Number(cur.tip) + input.tip) * 100) / 100,
-        ...(input.date ? { session_date: input.date } : {}),
-        ...(placeholder && input.store ? { name: input.store } : {}),
-    });
+    try {
+        await updateSession(sessionId, {
+            tax: Math.round((Number(cur.tax) + input.tax) * 100) / 100,
+            tip: Math.round((Number(cur.tip) + input.tip) * 100) / 100,
+            ...(input.date ? { session_date: input.date } : {}),
+            ...(placeholder && input.store ? { name: input.store } : {}),
+        });
+    } catch (err) {
+        // The items went in but the totals did not: take the items back out so the import is all or nothing.
+        await supabase.from('items').delete().in('id', added.map(r => r.id));
+        throw err;
+    }
 }
 
 export async function updateSession(
@@ -353,15 +365,15 @@ export interface PendingInvite {
     created_at: string;
 }
 
-const mapGroup = (r: any): Group => ({
+const mapGroup = (r: GroupRow): Group => ({
     id: r.id,
     name: r.name,
     owner_id: r.owner_id,
     created_at: r.created_at,
     personal: !!r.personal,
     members: (r.group_members ?? [])
-        .map((m: any) => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, pinned: !!m.pinned, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '', username: m.profiles?.username ?? undefined }))
-        .concat((r.group_guests ?? []).map((g: any): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true, linked_user: g.linked_user ?? undefined, linked_username: g.linked_username ?? undefined })))
+        .map((m): Member => ({ user_id: m.user_id, joined_at: m.joined_at ?? '', role: m.role, pinned: !!m.pinned, name: m.profiles?.name ?? 'Unknown', email: m.profiles?.email ?? '', username: m.profiles?.username ?? undefined }))
+        .concat((r.group_guests ?? []).map((g): Member => ({ user_id: g.id, joined_at: g.created_at ?? '', role: 'member', name: g.name, email: '', pending: true, linked_user: g.linked_user ?? undefined, linked_username: g.linked_username ?? undefined })))
         .sort((a: Member, b: Member) => (!!a.pending !== !!b.pending ? (a.pending ? 1 : -1) : (a.role !== b.role ? (a.role === 'owner' ? -1 : 1) : a.joined_at !== b.joined_at ? a.joined_at.localeCompare(b.joined_at) : a.name.localeCompare(b.name)))),
 });
 
@@ -369,11 +381,11 @@ const GROUP_SELECT = 'id, name, owner_id, created_at, personal, group_members(us
 
 export async function listGroups(): Promise<Group[]> {
     const data = check(await supabase.from('groups').select(GROUP_SELECT).order('created_at'));
-    return data.map(mapGroup);
+    return (data as unknown as GroupRow[]).map(mapGroup); // the untyped client guesses relations as arrays; GroupRow is the real shape
 }
 
 export async function getGroup(id: string): Promise<Group> {
-    return mapGroup(check(await supabase.from('groups').select(GROUP_SELECT).eq('id', id).single()));
+    return mapGroup(check(await supabase.from('groups').select(GROUP_SELECT).eq('id', id).single()) as unknown as GroupRow);
 }
 
 /** Pin or unpin a group for the signed-in user only. */
@@ -446,7 +458,7 @@ export interface Settlement {
 
 export async function listSettlements(): Promise<Settlement[]> {
     const data = check(await supabase.from('settlements').select('*').order('created_at', { ascending: false }));
-    return data.map((r: any) => ({ ...r, amount: Number(r.amount) }));
+    return (data as Raw<Settlement, 'amount'>[]).map(r => ({ ...r, amount: Number(r.amount) }));
 }
 
 export async function recordSettlement(groupId: string, fromUser: string, toUser: string, amount: number) {
@@ -487,7 +499,7 @@ export interface MyQuickSplit {
 /** The signed-in user's own quick splits that have not expired (they live under Personal until they do). */
 export async function listMyQuickSplits(): Promise<MyQuickSplit[]> {
     const data = check(await supabase.rpc('my_quick_splits'));
-    return data.map((r: any) => ({ ...r, total: Number(r.total) }));
+    return (data as Raw<MyQuickSplit, 'total'>[]).map(r => ({ ...r, total: Number(r.total) }));
 }
 
 export interface ExpenseLogEntry {
@@ -507,7 +519,7 @@ export interface ExpenseLogEntry {
 /** Every expense and receipt created, edited or deleted in a group, newest first. Written by the database. */
 export async function listExpenseLog(groupId: string): Promise<ExpenseLogEntry[]> {
     const data = check(await supabase.from('expense_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
-    return data.map((r: any) => ({ ...r, total: Number(r.total), changes: r.changes ?? [] }));
+    return (data as (Raw<ExpenseLogEntry, 'total' | 'changes'> & { changes: ExpenseLogEntry['changes'] | null })[]).map(r => ({ ...r, total: Number(r.total), changes: r.changes ?? [] }));
 }
 
 /** Save a receipt's details and its items together, atomically, as one edit. Items without an id are new. */
@@ -522,7 +534,7 @@ export async function saveReceipt(
 
 export async function listSettlementLog(groupId: string): Promise<SettlementLogEntry[]> {
     const data = check(await supabase.from('settlement_log').select('*').eq('group_id', groupId).order('created_at', { ascending: false }));
-    return data.map((r: any) => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));
+    return (data as Raw<SettlementLogEntry, 'amount' | 'prev_amount'>[]).map(r => ({ ...r, amount: Number(r.amount), prev_amount: r.prev_amount == null ? null : Number(r.prev_amount) }));
 }
 
 export async function deleteSettlement(id: string) {
@@ -572,7 +584,7 @@ export async function isAdmin(): Promise<boolean> {
 
 export async function adminListUsers(): Promise<AdminUser[]> {
     const rows = check(await supabase.rpc('admin_list_users'));
-    return rows.map((r: any) => ({ ...r, groups_count: Number(r.groups_count), receipts_count: Number(r.receipts_count) }));
+    return (rows as Raw<AdminUser, 'groups_count' | 'receipts_count'>[]).map(r => ({ ...r, groups_count: Number(r.groups_count), receipts_count: Number(r.receipts_count) }));
 }
 
 export async function adminTotals(): Promise<AdminTotals> {
@@ -584,7 +596,7 @@ async function adminCall<T>(body: Record<string, unknown>): Promise<T> {
     const { data, error } = await supabase.functions.invoke('admin-users', { body });
     if (error) {
         let message = error.message;
-        const ctx = (error as any).context;
+        const ctx = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
         if (ctx && typeof ctx.json === 'function') {
             try { message = (await ctx.json()).error ?? message; } catch { /* keep generic message */ }
         }

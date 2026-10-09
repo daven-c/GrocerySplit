@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../lib/motion';
-import { Group, createSession, listGroups, updateSession } from '../lib/api';
+import { Group, createSession, listGroups } from '../lib/api';
 import { QuickSplit } from '../lib/quickSplit';
 import { Button } from './ui';
+import { messageOf } from '../lib/errors';
 
 const selectCls = 'h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-sm font-bold text-ink max-w-[200px]';
 
@@ -45,16 +46,15 @@ export default function QuickSplitImport({ data, onClose }: { data: QuickSplit; 
         setError('');
         try {
             const toMember = (p: string) => map[p] ?? ''; // receipts name people by id
-            const id = await createSession({
-                groupId: group.id, name: data.title, category: 'groceries', tax: data.tax, tip: data.tip,
+            const payer = data.paid_by ? map[data.paid_by] : '';
+            await createSession({
+                groupId: group.id, name: data.title, category: 'groceries', tax: data.tax, tip: data.tip, ...(payer ? { paidBy: payer } : {}),
                 participants: group.members.map(m => m.user_id),
                 items: data.items.map(i => ({ name: i.name, price: i.price, assigned_users: i.assigned.map(toMember).filter(Boolean) })),
             });
-            const payer = data.paid_by ? map[data.paid_by] : '';
-            if (payer) await updateSession(id, { paid_by: payer });
             setDone(group.name);
-        } catch (err: any) {
-            setError(err.message || 'Could not import this split.');
+        } catch (err) {
+            setError(messageOf(err, 'Could not import this split.'));
             setSaving(false);
         }
     };

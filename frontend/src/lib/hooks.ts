@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
+/** Old Safari only has the pre-standard listener methods. */
+type MediaQueryListLegacy = { addListener?: (cb: () => void) => void; removeListener?: (cb: () => void) => void };
+
 /** True below the 760px breakpoint (phone layout). Defaults to wide where matchMedia is unavailable. */
 export function useNarrow(): boolean {
     const query = '(max-width: 759px)';
@@ -11,10 +14,10 @@ export function useNarrow(): boolean {
         const on = () => setNarrow(mql.matches);
         on();
         if (mql.addEventListener) mql.addEventListener('change', on);
-        else (mql as any).addListener?.(on);
+        else (mql as MediaQueryListLegacy).addListener?.(on);
         return () => {
             if (mql.removeEventListener) mql.removeEventListener('change', on);
-            else (mql as any).removeListener?.(on);
+            else (mql as MediaQueryListLegacy).removeListener?.(on);
         };
     }, []);
     return narrow;

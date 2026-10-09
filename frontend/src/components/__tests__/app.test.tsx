@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -416,7 +415,7 @@ describe('Drafts in the app shell', () => {
         api.getSession.mockImplementation(async (id: string) => (id === 's9' ? structuredClone(rec) : structuredClone((await import('../../test/apiMock')).sessions.find(x => x.id === id)!)));
         api.updateSession.mockImplementation(async (_id: string, patch: any) => { rec = { ...rec, ...patch }; });
         render(<App />);
-        const sidebar = await screen.findByRole('navigation', { name: 'Primary' });
+        await screen.findByRole('navigation', { name: 'Primary' });
         await u.click(await within(screen.getByRole('main')).findByRole('button', { name: /^Roomies/ }));
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Add an expense'));

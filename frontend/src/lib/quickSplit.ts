@@ -35,7 +35,7 @@ export async function getQuickSplit(token: string): Promise<QuickSplit | null> {
         ...d,
         tax: Number(d.tax),
         tip: Number(d.tip),
-        items: (d.items ?? []).map((i: any) => ({ ...i, price: Number(i.price), assigned: i.assigned ?? [] })),
+        items: (d.items ?? []).map((i: { id: string; name: string; price: number | string; assigned?: string[] | null }) => ({ ...i, price: Number(i.price), assigned: i.assigned ?? [] })),
     };
 }
 
@@ -86,24 +86,17 @@ export function startQuickSplit() {
     window.location.assign(quickDraftPath);
 }
 
-/** Create the real split from a draft: same title, people, items, who had what, tax, tip and payer. Returns its token. */
+/** Create the real split from a draft in one database call, so it exists completely or not at all. Returns its token. */
 export async function createFromDraft(d: QuickSplit, me?: string): Promise<string> {
-    const { token, ownerKey } = await createQuickSplit(d.title.trim() || 'Dinner');
-    try {
-        remember(token, { ownerKey, ...(me ? { me } : {}) });
-        for (const name of d.people) await joinQuickSplit(token, name);
-        if (d.items.length) await addQuickItems(token, d.items.map(i => ({ name: i.name, price: i.price })), ownerKey);
-        const patch = { ...(d.tax > 0 ? { tax: d.tax } : {}), ...(d.tip > 0 ? { tip: d.tip } : {}), ...(d.paid_by ? { paid_by: d.paid_by } : {}) };
-        if (Object.keys(patch).length) await setQuickSplit(token, patch, ownerKey);
-        if (d.items.some(i => i.assigned.length)) {
-            const saved = await getQuickSplit(token);
-            for (const [n, it] of d.items.entries()) {
-                if (it.assigned.length && saved?.items[n]) await setQuickAssigned(token, saved.items[n].id, it.assigned, ownerKey);
-            }
-        }
-    } catch (err) {
-        await deleteQuickSplit(token, ownerKey).catch(() => {});
-        throw err;
-    }
-    return token;
+    const data = await run('qs_create_from_draft', {
+        p_title: d.title.trim() || 'Dinner',
+        p_people: d.people,
+        p_items: d.items.map(i => ({ name: i.name, price: i.price, assigned: i.assigned })),
+        p_tax: d.tax,
+        p_tip: d.tip,
+        p_paid_by: d.paid_by,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    remember(row.token, { ownerKey: row.owner_key, ...(me ? { me } : {}) });
+    return row.token;
 }

@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -131,6 +130,51 @@ describe('Friends', () => {
 
 describe('Account', () => {
     const props = { user: { id: ME, name: 'Daven Chang', email: 'me@x.com' }, onLogout: vi.fn() };
+
+    it('downloads your data as a file', async () => {
+        const u = userEvent.setup();
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        (URL as any).createObjectURL = vi.fn(() => 'blob:data');
+        (URL as any).revokeObjectURL = vi.fn();
+        renderWithData(<Account {...props} />);
+        await u.click(await screen.findByRole('button', { name: 'Download my data' }));
+        await waitFor(() => expect(api.exportMyData).toHaveBeenCalled());
+        expect(await screen.findByText(/Downloaded/)).toBeInTheDocument();
+        expect(click).toHaveBeenCalledTimes(1);
+        click.mockRestore();
+    });
+
+    it('deleting the account needs DELETE typed, then deletes and signs out', async () => {
+        const u = userEvent.setup();
+        const onLogout = vi.fn();
+        renderWithData(<Account {...props} onLogout={onLogout} />);
+        await u.click(await screen.findByRole('button', { name: 'Delete my account' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Delete your account?' });
+        const go = within(dialog).getByRole('button', { name: 'Delete account' });
+        expect(go).toBeDisabled();
+        await u.type(within(dialog).getByLabelText('Type DELETE to confirm'), 'delete'); // wrong case: still not enough
+        expect(go).toBeDisabled();
+        await u.clear(within(dialog).getByLabelText('Type DELETE to confirm'));
+        await u.type(within(dialog).getByLabelText('Type DELETE to confirm'), 'DELETE');
+        expect(go).toBeEnabled();
+        await u.click(go);
+        await waitFor(() => expect(api.deleteAccount).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(onLogout).toHaveBeenCalled());
+    });
+
+    it('if the database refuses (you own a group others are in), the reason is shown and you stay signed in', async () => {
+        const u = userEvent.setup();
+        const onLogout = vi.fn();
+        api.deleteAccount.mockRejectedValueOnce(new Error('You own groups that other people are in (Roomies). Delete those groups first, so nobody loses their expenses.'));
+        renderWithData(<Account {...props} onLogout={onLogout} />);
+        await u.click(await screen.findByRole('button', { name: 'Delete my account' }));
+        const dialog = await screen.findByRole('dialog');
+        await u.type(within(dialog).getByLabelText('Type DELETE to confirm'), 'DELETE');
+        await u.click(within(dialog).getByRole('button', { name: 'Delete account' }));
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent('You own groups that other people are in (Roomies)');
+        expect(onLogout).not.toHaveBeenCalled();
+        expect(within(dialog).getByRole('button', { name: 'Delete account' })).toBeEnabled(); // can try again after fixing it
+    });
 
     it('shows who you are, your email and group count', async () => {
         renderWithData(<Account {...props} />);

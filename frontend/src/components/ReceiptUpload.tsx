@@ -5,6 +5,7 @@ import { importReceiptIntoSession } from '../lib/api';
 import { RECEIPT_PROMPT, EXAMPLE_RECEIPT_JSON, ParsedReceipt, parseReceiptJson } from '../lib/receiptImport';
 import { fmt } from '../lib/people';
 import { Button, Card, Icon } from './ui';
+import { messageOf } from '../lib/errors';
 
 interface ReceiptUploadProps {
     groupId: string;
@@ -32,8 +33,9 @@ export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, 
         if (!json.trim()) return null;
         try {
             return { ok: parseReceiptJson(json) };
-        } catch (e: any) {
-            return { err: /valid JSON/i.test(e.message) ? "That doesn't look like receipt JSON yet. Make sure you copied the whole reply." : (e.message as string) };
+        } catch (e) {
+            const msg = messageOf(e, 'That did not read as a receipt.');
+            return { err: /valid JSON/i.test(msg) ? "That doesn't look like receipt JSON yet. Make sure you copied the whole reply." : msg };
         }
     }, [json]);
     const receipt = parsed && 'ok' in parsed ? parsed.ok : null;
@@ -64,8 +66,8 @@ export default function ReceiptUpload({ groupId, sessionId, narrow, onImported, 
             await importReceiptIntoSession(sessionId, { store: receipt.store, date: receipt.date, tax: receipt.tax, tip: receipt.tip, items: receipt.items });
             await refresh();
             onImported();
-        } catch (err: any) {
-            setError(err.message || 'Failed to import the receipt');
+        } catch (err) {
+            setError(messageOf(err, 'Failed to import the receipt'));
         } finally {
             setLoading(false);
         }

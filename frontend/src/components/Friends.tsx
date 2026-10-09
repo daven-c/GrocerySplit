@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence, Collapse, Pop, AnimatedNumber, enter, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { computeBalances } from '../lib/balances';
@@ -6,6 +6,7 @@ import { recordSettlement, deleteSettlement } from '../lib/api';
 import { fmt, memberTones } from '../lib/people';
 import { Avatar, Button, Card, Icon } from './ui';
 import { toast } from './Toast';
+import { messageOf } from '../lib/errors';
 
 export default function Friends() {
     const { me, groups: allGroups, sessions, settlements, refresh, loading } = useAppData();
@@ -62,7 +63,7 @@ export default function Friends() {
         setBusy(true);
         setError('');
         try { await fn(); await refresh(); toast('Done'); }
-        catch (err: any) { setError(err.message || 'Something went wrong'); }
+        catch (err) { setError(messageOf(err, 'Something went wrong')); }
         finally { setBusy(false); }
     };
     const settle = (friendId: string, groupId: string, net: number) =>

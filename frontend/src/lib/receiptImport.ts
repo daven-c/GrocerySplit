@@ -42,7 +42,7 @@ export const EXAMPLE_RECEIPT_JSON = `{
 }`;
 
 const asMoney = (v: unknown): number | null => {
-    const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v.replace(/[^0-9.\-]/g, '')) : NaN;
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v.replace(/[^0-9.-]/g, '')) : NaN;
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 };
 
@@ -50,7 +50,7 @@ export function parseReceiptJson(raw: string): ParsedReceipt {
     // Chat models often wrap JSON in ```json fences or add a sentence around it.
     let text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     if (!text.startsWith('{') && !text.startsWith('[')) {
-        const m = text.match(/[\[{][\s\S]*[\]}]/);
+        const m = text.match(/[[{][\s\S]*[\]}]/);
         if (m) text = m[0];
     }
 

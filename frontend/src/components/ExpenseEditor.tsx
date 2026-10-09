@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, Modal, AnimatedNumber, tap, tapFlat } from '../lib/motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, AnimatedNumber, tap, tapFlat } from '../lib/motion';
 import { useAppData } from '../lib/appData';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
 import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
 import { fmt, labelMap, memberTones } from '../lib/people';
-import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
+import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, rowLabelCls, selectPillCls } from './ui';
 import { toast } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
+import ConfirmDialog from './ConfirmDialog';
+import { messageOf } from '../lib/errors';
 
 interface ExpenseEditorProps {
     sessionId: string;
@@ -49,7 +51,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const [reload, setReload] = useState(0); // bumped by Cancel to put the saved version back
 
     const group = groups.find(g => g.id === record?.group_id);
-    const members = group?.members ?? [];
+    const members = useMemo(() => group?.members ?? [], [group]); // a stable array, so hooks below don't re-run every render
     const tones = useMemo(() => memberTones(members, me), [members, me]);
     const labels = useMemo(() => labelMap(members), [members]);
 
@@ -76,7 +78,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             setValues(Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])));
             savedMeta.current = JSON.stringify([s.name.trim() || 'Expense', s.session_date, s.category, s.paid_by ?? s.user_id ?? '']);
             savedSplit.current = JSON.stringify([s.amount ?? 0, s.split_method ?? 'exact', s.split_data ?? {}]);
-        }).catch(err => !cancelled && setLoadError(err.message || 'Failed to load the expense'));
+        }).catch(err => !cancelled && setLoadError(messageOf(err, 'Failed to load the expense')));
         return () => { cancelled = true; };
     }, [sessionId, reload]);
 
@@ -143,8 +145,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             savedSplit.current = splitSig;
             await refresh();
             toast('Changes saved');
-        } catch (err: any) {
-            setError(err.message || 'Could not save the changes');
+        } catch (err) {
+            setError(messageOf(err, 'Could not save the changes'));
         } finally {
             setSaving(false);
         }
@@ -162,8 +164,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             });
             await refresh();
             onSwitched('receipt');
-        } catch (err: any) {
-            setError(err.message || 'Could not switch to splitting by item');
+        } catch (err) {
+            setError(messageOf(err, 'Could not switch to splitting by item'));
             setSaving(false);
         }
     };
@@ -203,8 +205,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             await refresh();
             toast('Expense saved');
             onSaved();
-        } catch (err: any) {
-            setError(err.message || 'Could not save the expense');
+        } catch (err) {
+            setError(messageOf(err, 'Could not save the expense'));
             setSaving(false);
         }
     };
@@ -212,7 +214,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const handleDelete = async () => {
         setConfirmDelete(false);
         try { await deleteSession(sessionId); await refresh(); onBack(); }
-        catch (err: any) { setError(err.message || 'Could not delete the expense'); }
+        catch (err) { setError(messageOf(err, 'Could not delete the expense')); }
     };
 
     if (loadError) return <p className="text-center text-coral py-16">{loadError}</p>;
@@ -224,20 +226,19 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
     const hint = METHODS.find(m => m.value === method)?.hint;
 
-    const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
     // Paid by / date / category / delete: the first card, above the cost.
     const details = (
         <div className="bg-wash rounded-[24px] py-4 px-[18px] flex flex-col gap-3">
-            <label className={labelCls2}>Paid by
+            <label className={rowLabelCls}>Paid by
                 <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                     {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
                     {members.map(m => <option key={m.user_id} value={m.user_id}>{labels[m.user_id]}</option>)}
                 </select>
             </label>
-            <label className={labelCls2}>Date
+            <label className={rowLabelCls}>Date
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-[38px] px-3 border-[1.5px] border-line rounded-full bg-white text-[14.5px] font-bold text-ink" />
             </label>
-            <label className={labelCls2}>Category
+            <label className={rowLabelCls}>Category
                 <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                     {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
@@ -248,14 +249,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
 
     return (
         <div className="max-w-[1080px] mx-auto flex flex-col gap-5">
-            <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-                <h2 className="m-0 mb-2 text-xl font-black">Delete expense?</h2>
-                <p className="m-0 mb-6 text-muted font-semibold leading-relaxed">This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</p>
-                <div className="flex gap-3">
-                    <Button variant="secondary" wide height={44} onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                    <Button wide height={44} className="!bg-coral-strong hover:opacity-90" onClick={handleDelete}>Delete</Button>
-                </div>
-            </Modal>
+            <ConfirmDialog open={confirmDelete} title="Delete expense?" body={<>This permanently deletes <strong className="text-ink">{name || 'this expense'}</strong> for everyone in the group.</>} confirmLabel="Delete" onConfirm={handleDelete} onClose={() => setConfirmDelete(false)} />
 
             <div className="flex flex-wrap items-end justify-between gap-4">
                 <div className="flex flex-col gap-2 min-w-0 flex-1">

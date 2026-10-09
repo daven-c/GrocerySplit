@@ -3,6 +3,7 @@ import { motion, Modal, tapFlat } from '../lib/motion';
 import { Photo, addPhoto, listPhotos, removePhoto } from '../lib/api';
 import { MAX_PHOTOS, shrinkPhoto } from '../lib/photos';
 import { Icon } from './ui';
+import { messageOf } from '../lib/errors';
 
 const OK_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -14,7 +15,7 @@ export default function ReceiptPhotos({ sessionId, groupId }: { sessionId: strin
     const [viewing, setViewing] = useState<Photo | null>(null);
     const input = useRef<HTMLInputElement>(null);
 
-    const load = useCallback(() => listPhotos(sessionId).then(setPhotos).catch(err => { setPhotos([]); setError(err.message || 'Could not load photos'); }), [sessionId]);
+    const load = useCallback(() => listPhotos(sessionId).then(setPhotos).catch(err => { setPhotos([]); setError(messageOf(err, 'Could not load photos')); }), [sessionId]);
     useEffect(() => { load(); }, [load]);
 
     const room = MAX_PHOTOS - (photos?.length ?? 0);
@@ -32,8 +33,8 @@ export default function ReceiptPhotos({ sessionId, groupId }: { sessionId: strin
                 if (!OK_TYPES.includes(blob.type)) throw new Error('Use a JPEG, PNG or WebP photo.');
                 await addPhoto(sessionId, groupId, blob, blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg');
             }
-        } catch (err: any) {
-            setError(err.message || 'Could not add that photo');
+        } catch (err) {
+            setError(messageOf(err, 'Could not add that photo'));
         } finally {
             setBusy(false);
             await load();
@@ -43,7 +44,7 @@ export default function ReceiptPhotos({ sessionId, groupId }: { sessionId: strin
     const remove = async (photo: Photo) => {
         setError('');
         try { await removePhoto(photo); setViewing(null); await load(); }
-        catch (err: any) { setError(err.message || 'Could not remove that photo'); }
+        catch (err) { setError(messageOf(err, 'Could not remove that photo')); }
     };
 
     return (

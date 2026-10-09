@@ -3,6 +3,7 @@ import { motion, AnimatePresence, Pop, Collapse, AnimatedNumber, enter, listItem
 import { adminListUsers, adminMetrics, adminCreateUser, adminConfirmUser, AdminUser, AdminMetrics } from '../lib/api';
 import { HUES, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, inputCls } from './ui';
+import { messageOf } from '../lib/errors';
 
 const DAY = 86_400_000;
 
@@ -105,8 +106,8 @@ export default function Admin() {
             const [u, m] = await Promise.all([adminListUsers(), adminMetrics()]);
             setUsers(u);
             setMetrics(m);
-        } catch (err: any) {
-            setError(/not authorized/i.test(err.message) ? 'You do not have admin access.' : err.message || 'Failed to load users');
+        } catch (err) {
+            setError(/not authorized/i.test(messageOf(err, '')) ? 'You do not have admin access.' : messageOf(err, 'Failed to load users'));
         } finally {
             setLoading(false);
         }
@@ -142,8 +143,8 @@ export default function Admin() {
             setCreated({ email: email.trim().toLowerCase(), password });
             setName(''); setEmail(''); setPassword(''); setMakeAdmin(false);
             await load();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            setError(messageOf(err, 'That did not work'));
         } finally {
             setCreating(false);
         }
@@ -153,7 +154,7 @@ export default function Admin() {
         setBusyId(id);
         setError('');
         try { await adminConfirmUser(id); await load(); }
-        catch (err: any) { setError(err.message); }
+        catch (err) { setError(messageOf(err, 'That did not work')); }
         finally { setBusyId(null); }
     };
 
@@ -269,7 +270,7 @@ export default function Admin() {
                         <Icon name="search" size={20} className="text-faint" />
                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email..." className="flex-1 min-w-0 border-0 bg-transparent text-sm" />
                     </div>
-                    <select value={sort} onChange={e => setSort(e.target.value as any)} aria-label="Sort users" className="h-[42px] bg-white border border-line rounded-full px-3.5 text-sm font-semibold text-ink">
+                    <select value={sort} onChange={e => setSort(e.target.value as typeof sort)} aria-label="Sort users" className="h-[42px] bg-white border border-line rounded-full px-3.5 text-sm font-semibold text-ink">
                         <option value="newest">Newest first</option>
                         <option value="active">Recently active</option>
                         <option value="name">Name A–Z</option>

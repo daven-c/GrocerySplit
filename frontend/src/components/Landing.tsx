@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { motion, FROM, enter, tapFlat, spring } from '../lib/motion';
 import { Icon, Logo } from './ui';
 import { toneFor } from '../lib/people';

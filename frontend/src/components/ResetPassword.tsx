@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { motion, Pop, enter } from '../lib/motion';
 import { Button, Logo, labelCls } from './ui';
+import { messageOf } from '../lib/errors';
 
 /** Shown after someone opens the reset link in their email: they are signed in just long enough to choose a new password. */
 export default function ResetPassword({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
@@ -21,8 +22,8 @@ export default function ResetPassword({ onDone, onCancel }: { onDone: () => void
             const { error: err } = await supabase.auth.updateUser({ password });
             if (err) throw err;
             onDone();
-        } catch (err: any) {
-            setError(err.message || 'Could not change the password. Ask for a new link and try again.');
+        } catch (err) {
+            setError(messageOf(err, 'Could not change the password. Ask for a new link and try again.'));
             setSaving(false);
         }
     };

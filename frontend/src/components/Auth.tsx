@@ -4,6 +4,7 @@ import { usernameAvailable } from '../lib/api';
 import { motion, Pop, Collapse, SegmentedTabs, enter, tapFlat } from '../lib/motion';
 import { Icon, Logo, Button, labelCls } from './ui';
 import { fmt, toneFor, HUES } from '../lib/people';
+import { codeOf, messageOf } from '../lib/errors';
 
 interface AuthProps {
     initialMode?: 'login' | 'signup';
@@ -66,9 +67,9 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                 if (data.session) onLogin();
                 else setNotice('Account created! Check your email for a confirmation link, then sign in.');
             }
-        } catch (err: any) {
-            const msg: string = err.message || 'Authentication failed';
-            if (isLogin && !forgot && (err.code === 'email_not_confirmed' || /not confirmed/i.test(msg))) {
+        } catch (err) {
+            const msg: string = messageOf(err, 'Authentication failed');
+            if (isLogin && !forgot && (codeOf(err) === 'email_not_confirmed' || /not confirmed/i.test(msg))) {
                 // The password was right, but the account is waiting for its email link.
                 setUnconfirmed(true);
                 setError('Please confirm your email first. We sent a link when you signed up (check spam too).');
@@ -89,8 +90,8 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
             const { error: err } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
             if (err) throw err;
             setNotice('Sent again. Check your inbox and spam folder for the confirmation link.');
-        } catch (err: any) {
-            const msg: string = err.message || 'Could not send it';
+        } catch (err) {
+            const msg: string = messageOf(err, 'Could not send it');
             setError(/rate limit|security purposes|seconds/i.test(msg) ? 'Please wait a minute before asking for another email.' : msg);
         } finally {
             setLoading(false);

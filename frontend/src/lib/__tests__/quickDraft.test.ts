@@ -24,27 +24,22 @@ describe('quick split drafts', () => {
         expect(quickToken('/s/new')).toBeNull();
     });
 
-    it('creates the split only when asked, then replays people, items, settings and who had what', async () => {
-        rpc.mockImplementation(async (fn: string) => {
-            if (fn === 'qs_create') return { data: [{ token: 'T'.repeat(32), owner_key: 'OK' }], error: null };
-            if (fn === 'qs_get') return { data: { ...draft, items: [{ id: 'r1', name: 'Pizza', price: 20, assigned: [] }, { id: 'r2', name: 'Soda', price: 3, assigned: [] }] }, error: null };
-            return { data: null, error: null };
-        });
+    it('creates the whole split in one database call, and remembers this browser as its owner', async () => {
+        rpc.mockResolvedValue({ data: [{ token: 'T'.repeat(32), owner_key: 'OK' }], error: null });
         const token = await createFromDraft(draft, 'Ann');
         expect(token).toBe('T'.repeat(32));
-        expect(rpc.mock.calls.map(c => c[0])).toEqual(['qs_create', 'qs_join', 'qs_join', 'qs_add_items', 'qs_set', 'qs_get', 'qs_set_assigned']);
-        expect(rpc.mock.calls[0][1]).toEqual({ p_title: 'Pizza night' });
-        expect(rpc.mock.calls.at(-1)![1]).toMatchObject({ p_item: 'r1', p_people: ['Ann', 'Bo'], p_owner_key: 'OK' });
+        expect(rpc).toHaveBeenCalledTimes(1);
+        expect(rpc).toHaveBeenCalledWith('qs_create_from_draft', {
+            p_title: 'Pizza night', p_people: ['Ann', 'Bo'], p_tax: 2, p_tip: 0, p_paid_by: 'Ann',
+            p_items: [{ name: 'Pizza', price: 20, assigned: ['Ann', 'Bo'] }, { name: 'Soda', price: 3, assigned: [] }],
+        });
         expect(JSON.parse(localStorage.getItem(`splitpot:quick:${'T'.repeat(32)}`)!)).toMatchObject({ ownerKey: 'OK', me: 'Ann' });
     });
 
-    it('deletes the half-made split if a step fails', async () => {
-        rpc.mockImplementation(async (fn: string) => {
-            if (fn === 'qs_create') return { data: [{ token: 'T'.repeat(32), owner_key: 'OK' }], error: null };
-            if (fn === 'qs_add_items') return { data: null, error: { message: 'boom' } };
-            return { data: null, error: null };
-        });
-        await expect(createFromDraft(draft)).rejects.toThrow('boom');
-        expect(rpc.mock.calls.at(-1)![0]).toBe('qs_delete');
+    it('passes the error on and remembers nothing if it fails (nothing was created)', async () => {
+        rpc.mockResolvedValue({ data: null, error: { message: 'That name is taken.' } });
+        await expect(createFromDraft(draft, 'Ann')).rejects.toThrow('That name is taken.');
+        expect(rpc).toHaveBeenCalledTimes(1);
+        expect(localStorage.length).toBe(0);
     });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import type { Session as AuthSession } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { deleteSession, ensurePersonalGroup } from "./lib/api";
@@ -15,8 +15,11 @@ import Split from "./components/Split";
 import ExpenseEditor from "./components/ExpenseEditor";
 import Friends from "./components/Friends";
 import Account from "./components/Account";
-import Admin from "./components/Admin";
+const Admin = lazy(() => import("./components/Admin")); // admins only, so everyone else never downloads it
 import ResetPassword from "./components/ResetPassword";
+import PageLoading from "./components/PageLoading";
+import { toastError } from "./components/Toast";
+import { messageOf } from "./lib/errors";
 
 type View = 'landing' | 'auth' | 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
 
@@ -107,7 +110,7 @@ const App: React.FC = () => {
     const handleNav = (v: NavView) => {
         if (v !== 'personal') return setView(v);
         // Personal is its own section: a private group created the first time it is opened.
-        ensurePersonalGroup().then(id => openGroup(id)).catch(err => console.error('Could not open Personal', err));
+        ensurePersonalGroup().then(id => openGroup(id)).catch(err => { console.error('Could not open Personal', err); toastError(messageOf(err, 'Could not open Personal. Try again.')); });
     };
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -176,7 +179,7 @@ const App: React.FC = () => {
                         {view === 'expense' && recordId && <ExpenseEditor sessionId={recordId} narrow={narrow} onBack={() => setView(groupId ? 'group' : 'home')} onSaved={handleSaved} onDiscard={handleDiscard} onSwitched={handleSwitched} />}
                         {view === 'friends' && <Friends />}
                         {view === 'account' && <Account user={user} onLogout={handleLogout} />}
-                        {view === 'admin' && <Admin />}
+                        {view === 'admin' && <Suspense fallback={<PageLoading />}><Admin /></Suspense>}
                     </Shell>
                 </AppDataProvider>
             )}

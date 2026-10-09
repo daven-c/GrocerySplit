@@ -11,6 +11,7 @@ import { HUES, fmt, toneFor } from '../lib/people';
 import { Avatar, Button, Card, Icon, Logo, cellCls, inputCls, selectPillCls } from './ui';
 import { Toaster, toast } from './Toast';
 import QuickSplitImport from './QuickSplitImport';
+import { messageOf } from '../lib/errors';
 
 const POLL_MS = 4000;
 const money = (s: string) => Math.max(0, Math.round((parseFloat(s) || 0) * 100) / 100);
@@ -75,8 +76,8 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
             if (!alive.current) return;
             if (!d) setMissing(true);
             else if (busy.current === 0) setData(d);
-        } catch (err: any) {
-            if (alive.current && busy.current === 0) setError(err.message || 'Could not load this split.');
+        } catch (err) {
+            if (alive.current && busy.current === 0) setError(messageOf(err, 'Could not load this split.'));
         }
     }, [token, draft]);
 
@@ -104,9 +105,10 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         return () => { alive.current = false; clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
     }, [token, load, draft]);
 
+    const pageTitle = data?.title;
     useEffect(() => {
-        document.title = data ? `${data.title} · Settled` : 'Settled';
-    }, [data?.title]);
+        document.title = pageTitle ? `${pageTitle} · Settled` : 'Settled';
+    }, [pageTitle]);
 
     // A draft that has something in it is thrown away if the page is left, so ask first (the browser shows its own prompt).
     const created = useRef(false);
@@ -125,7 +127,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
         busy.current++;
         if (optimistic) setData(d => (d ? optimistic(d) : d));
         try { await send(); }
-        catch (err: any) { setError(err.message || 'That did not save.'); }
+        catch (err) { setError(messageOf(err, 'That did not save.')); }
         finally { busy.current--; }
         if (busy.current === 0) await load();
     };
@@ -177,8 +179,8 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
             setNameInput('');
             toast(`Joined as ${n}`);
             await load();
-        } catch (err: any) {
-            setError(err.message || 'Could not join.');
+        } catch (err) {
+            setError(messageOf(err, 'Could not join.'));
             await load();
         }
     };
@@ -219,7 +221,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
                 await addQuickItems(token, r.items, ok);
                 if (r.tax > 0 || r.tip > 0) await setQuickSplit(token, { ...(r.tax > 0 ? { tax: r.tax } : {}), ...(r.tip > 0 ? { tip: r.tip } : {}) }, ok);
             });
-        } catch (err: any) { setError(err.message); }
+        } catch (err) { setError(messageOf(err, 'That did not work')); }
     };
 
     if (missing) {
@@ -242,8 +244,8 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
             const t = await createFromDraft(data, me);
             created.current = true; // it is saved now, so leaving is fine
             window.location.assign(`/s/${t}`);
-        } catch (err: any) {
-            setError(err.message || 'Could not create the split.');
+        } catch (err) {
+            setError(messageOf(err, 'Could not create the split.'));
             setCreating(false);
         }
     };
@@ -302,7 +304,7 @@ export default function QuickSplit({ token: tokenProp }: { token: string | null 
                         <div role="alertdialog" aria-label="Delete this split" className="flex flex-wrap items-center gap-3 p-3 pl-4 rounded-[22px] bg-coral-tint text-coral-on text-sm font-bold">
                             <span className="flex-1 min-w-[200px]">Delete this split for everyone? This can't be undone.</span>
                             <Button variant="white" height={36} className="px-3.5" onClick={() => setConfirmDelete(false)}>Cancel</Button>
-                            <Button height={36} className="px-3.5 !bg-coral-strong" onClick={async () => { try { await deleteQuickSplit(token, ownerKey ?? null); window.location.assign('/'); } catch (err: any) { setError(err.message); } }}>Delete</Button>
+                            <Button height={36} className="px-3.5 !bg-coral-strong" onClick={async () => { try { await deleteQuickSplit(token, ownerKey ?? null); window.location.assign('/'); } catch (err) { setError(messageOf(err, 'That did not work')); } }}>Delete</Button>
                         </div>
                     )}
                 </div>}

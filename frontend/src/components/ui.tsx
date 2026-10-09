@@ -76,6 +76,8 @@ export function Button({
 
 export const inputCls = 'w-full h-[46px] px-4 border-[1.5px] border-line rounded-full bg-field text-[15px] font-bold text-ink';
 export const labelCls = 'text-[14px] font-extrabold text-body';
+/** A label with its control on the right (the Paid by / Date / Category rows). */
+export const rowLabelCls = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
 /** Small inline number boxes (tax, tip, amounts). */
 export const cellCls = 'h-9 px-2.5 border-[1.5px] border-line rounded-xl bg-field text-right text-[15px] font-extrabold text-ink';
 /** A pill select. */
