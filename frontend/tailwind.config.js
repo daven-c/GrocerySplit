@@ -6,8 +6,8 @@ module.exports = {
 			colors: {
 				ink: { DEFAULT: "#26221E", hover: "#3A342E" },
 				body: "#5E564E",
-				muted: "#8A8178",
-				faint: "#9A9087",
+				muted: "#6B635B",
+				faint: "#766E67",
 				ghost: "#B5AB9F",
 				dash: "#E3DBD0",
 				line: "#EDE7DF",

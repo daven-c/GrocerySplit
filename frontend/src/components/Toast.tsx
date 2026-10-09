@@ -21,12 +21,12 @@ export function Toaster() {
         return () => { if (listener === setMessage) listener = null; if (timer) clearTimeout(timer); };
     }, []);
     return (
-        <div className="fixed inset-x-0 bottom-6 z-[120] flex justify-center pointer-events-none">
+        // Always on the page, so screen readers pick up what is put into it ("Changes saved", "Link copied").
+        <div role="status" aria-live="polite" className="fixed inset-x-0 bottom-6 z-[120] flex justify-center pointer-events-none">
             <AnimatePresence>
                 {message && (
                     <motion.div
                         key={message}
-                        role="status"
                         initial={{ opacity: 0.8, y: 14 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}

@@ -63,7 +63,7 @@ export default function QuickSplitImport({ data, onClose }: { data: QuickSplit; 
         <Modal open onClose={onClose}>
             {done ? (
                 <>
-                    <h3 className="m-0 mb-2 text-xl font-black text-ink">Imported to {done}</h3>
+                    <h2 className="m-0 mb-2 text-xl font-black text-ink">Imported to {done}</h2>
                     <p className="m-0 mb-5 text-muted leading-relaxed">It's now a receipt in that group, with the same items and who had what.</p>
                     <div className="flex gap-3">
                         <Button variant="secondary" wide height={44} onClick={onClose}>Close</Button>
@@ -72,7 +72,7 @@ export default function QuickSplitImport({ data, onClose }: { data: QuickSplit; 
                 </>
             ) : (
                 <>
-                    <h3 className="m-0 mb-1 text-xl font-black text-ink">Import to a group</h3>
+                    <h2 className="m-0 mb-1 text-xl font-black text-ink">Import to a group</h2>
                     <p className="m-0 mb-4 text-sm text-muted">Pick the group, then say who each name is. Anyone left as "Nobody" has their items unassigned.</p>
                     {groups === null ? <p className="text-faint animate-pulse">Loading your groups…</p> : groups.length === 0 ? (
                         <p className="text-sm text-muted">You don't have a group yet. Create one in Settled first, then import.</p>
