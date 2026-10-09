@@ -37,8 +37,8 @@ const toDollars = (c: number) => c / 100;
 /**
  * Receipts say who paid (`paid_by`) and how each participant's share works out; everyone else on
  * the receipt owes the payer their share. Recorded settlements then offset those debts.
- * Receipt participants are matched to members by display name; names shared by two members, or names with
- * no matching member (guests), cannot be attributed and are ignored. Standalone expenses use member ids.
+ * Receipts and standalone expenses both name people by id (members and temporary people alike), so two people who
+ * share a display name stay apart. Someone who has left the group can't be settled with, so they are not charged.
  */
 export function computeBalances(me: string, groups: BalanceGroup[], sessions: BalanceSession[], settlements: BalanceSettlement[]): Balances {
     const cents: Record<string, Record<string, number>> = {}; // friend -> group -> cents
@@ -47,26 +47,17 @@ export function computeBalances(me: string, groups: BalanceGroup[], sessions: Ba
         cents[friend][group] += c;
     };
 
-    const nameToId = new Map<string, Map<string, string | null>>();
     const memberIds = new Map<string, Set<string>>();
-    for (const g of groups) {
-        memberIds.set(g.id, new Set(g.members.map(m => m.user_id)));
-        const m = new Map<string, string | null>();
-        for (const mem of g.members) m.set(mem.name, m.has(mem.name) ? null : mem.user_id);
-        nameToId.set(g.id, m);
-    }
+    for (const g of groups) memberIds.set(g.id, new Set(g.members.map(m => m.user_id)));
 
     for (const s of sessions) {
         const payer = s.paid_by ?? s.user_id;
-        const lookup = nameToId.get(s.group_id);
-        if (!payer || !lookup) continue;
-        // Receipts split item by item and are matched to members by display name; standalone expenses
-        // carry their split by member id, so they never suffer from duplicate names.
+        const members = memberIds.get(s.group_id);
+        if (!payer || !members) continue;
         const owed: [string | null | undefined, number][] =
             s.kind === 'expense'
-                ? // Someone who has left the group can't be settled with, so they are not charged.
-                  Object.entries(splitExpense(s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}).shares).filter(([id]) => memberIds.get(s.group_id)?.has(id))
-                : computeSplit(s.items, s.participants, s.tax, s.tip).totals.map(([name, amt]) => [lookup.get(name), amt] as [string | null | undefined, number]);
+                ? Object.entries(splitExpense(s.amount ?? 0, s.split_method ?? 'equal', s.split_data ?? {}).shares).filter(([id]) => members.has(id))
+                : computeSplit(s.items, s.participants, s.tax, s.tip).totals.filter(([id]) => members.has(id));
         for (const [debtor, amount] of owed) {
             if (!debtor || debtor === payer || amount <= 0) continue;
             const c = Math.round(amount * 100);

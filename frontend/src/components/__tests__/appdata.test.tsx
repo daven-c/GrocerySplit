@@ -61,3 +61,54 @@ describe('AppDataProvider', () => {
         expect(ctx.loading).toBe(false);
     });
 });
+
+describe('AppDataProvider keeps shared data fresh', () => {
+    const setVisibility = (v: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v });
+    afterEach(() => { vi.useRealTimers(); setVisibility('visible'); });
+
+    it('re-fetches when the person returns to the tab, but not on every quick flip', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        render(<AppDataProvider userId={ME}><Probe /></AppDataProvider>);
+        await screen.findByText('Roomies,Ski Trip');
+        const before = api.listGroups.mock.calls.length;
+
+        act(() => { vi.advanceTimersByTime(11_000); });
+        await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+        await waitFor(() => expect(api.listGroups.mock.calls.length).toBe(before + 1));
+
+        await act(async () => { document.dispatchEvent(new Event('visibilitychange')); }); // straight away again
+        expect(api.listGroups.mock.calls.length).toBe(before + 1);
+    });
+
+    it('picks up other people\'s changes on the one-minute check, and skips it while a field is focused or the tab is hidden', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        render(<AppDataProvider userId={ME}><Probe /><input aria-label="typing" /></AppDataProvider>);
+        await screen.findByText('Roomies,Ski Trip');
+        const before = api.listGroups.mock.calls.length;
+        api.listGroups.mockResolvedValue([{ ...group, name: 'Renamed by Amy' }]);
+
+        setVisibility('hidden');
+        await act(async () => { vi.advanceTimersByTime(61_000); });
+        expect(api.listGroups.mock.calls.length).toBe(before); // hidden: no polling
+
+        setVisibility('visible');
+        screen.getByLabelText('typing').focus();
+        await act(async () => { vi.advanceTimersByTime(61_000); });
+        expect(api.listGroups.mock.calls.length).toBe(before); // typing: leave the screen alone
+
+        (document.activeElement as HTMLElement).blur();
+        await act(async () => { vi.advanceTimersByTime(61_000); });
+        expect(await screen.findByText('Renamed by Amy')).toBeInTheDocument();
+    });
+
+    it('a failed background top-up keeps what is on screen and shows no error', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        render(<AppDataProvider userId={ME}><Probe /></AppDataProvider>);
+        await screen.findByText('Roomies,Ski Trip');
+        api.listGroups.mockRejectedValue(new Error('offline'));
+        await act(async () => { vi.advanceTimersByTime(61_000); });
+        await waitFor(() => expect(api.listGroups).toHaveBeenCalledTimes(2));
+        expect(screen.getByText('Roomies,Ski Trip')).toBeInTheDocument();
+        expect(ctx.error).toBe('');
+    });
+});

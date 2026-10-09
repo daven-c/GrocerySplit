@@ -158,7 +158,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
         try {
             await updateSession(sessionId, {
                 kind: 'receipt', name: name.trim() || 'Expense', session_date: date || record.session_date, category,
-                ...(paidBy ? { paid_by: paidBy } : {}), participants: members.map(m => m.name),
+                ...(paidBy ? { paid_by: paidBy } : {}), participants: members.map(m => m.user_id),
             });
             await refresh();
             onSwitched('receipt');
@@ -304,7 +304,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                                         <motion.button
                                             {...tap}
                                             aria-pressed={on}
-                                            aria-label={`${m.name} is in on this`}
+                                            aria-label={`${labels[m.user_id]} is in on this`}
                                             onClick={() => toggleMember(m.user_id)}
                                             className="w-10 h-10 rounded-full grid place-items-center text-[15px] font-black p-0 shrink-0"
                                             style={{ background: on ? t.bg : '#fff', color: on ? t.fg : '#C2B8AC', border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#E3DBD0'}` }}
@@ -316,7 +316,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
                                             <span className="flex items-center gap-1 text-sm font-extrabold text-muted">
                                                 {method === 'exact' && '$'}
                                                 <input
-                                                    aria-label={`${m.name} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
+                                                    aria-label={`${labels[m.user_id]} ${method === 'exact' ? 'amount' : method === 'percent' ? 'percent' : 'shares'}`}
                                                     inputMode="decimal"
                                                     value={values[m.user_id] ?? ''}
                                                     onChange={e => { setFixed(f => f.includes(m.user_id) ? f : [...f, m.user_id]); setValues(v => ({ ...v, [m.user_id]: e.target.value })); }}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<defs>
+		<clipPath id="awning">
+			<path d="M140 80H372L428 186a43 43 0 0 1-86 0a43 43 0 0 1-86 0a43 43 0 0 1-86 0a43 43 0 0 1-86 0Z"/>
+		</clipPath>
+	</defs>
+	<rect width="512" height="512" rx="112" fill="#085634"/>
+	<rect x="118" y="224" width="276" height="200" rx="30" fill="#FAF7F3"/>
+	<path d="M196 336L240 380L320 290" fill="none" stroke="#20b46b" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+	<path d="M140 80H372L428 186a43 43 0 0 1-86 0a43 43 0 0 1-86 0a43 43 0 0 1-86 0a43 43 0 0 1-86 0Z" fill="#085634" stroke="#085634" stroke-width="30" stroke-linejoin="round"/>
+	<g clip-path="url(#awning)">
+		<rect x="60" y="60" width="400" height="200" fill="#FAF7F3"/>
+		<path d="M198 60H256V260H170Z M314 60H372L480 260H342Z" fill="#20b46b"/>
+	</g>
+</svg>

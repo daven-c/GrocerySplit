@@ -16,6 +16,7 @@ import ExpenseEditor from "./components/ExpenseEditor";
 import Friends from "./components/Friends";
 import Account from "./components/Account";
 import Admin from "./components/Admin";
+import ResetPassword from "./components/ResetPassword";
 
 type View = 'landing' | 'auth' | 'home' | 'group' | 'import' | 'split' | 'expense' | 'friends' | 'account' | 'admin';
 
@@ -30,6 +31,8 @@ const App: React.FC = () => {
     const [newGroupTick, setNewGroupTick] = useState(0);
     // A new expense/receipt is a draft until its author presses Save; leaving without saving discards it.
     const [draftId, setDraftId] = useState<string | null>(null);
+    // Opening the reset link from an email signs the person in; until they choose a new password they see only that screen.
+    const [recovering, setRecovering] = useState(() => typeof window !== 'undefined' && /[#&]type=recovery/.test(window.location.hash));
     const narrow = useNarrow();
 
     const user = auth ? { id: auth.user.id, email: auth.user.email, name: auth.user.user_metadata?.name || auth.user.email?.split('@')[0] || 'User' } : null;
@@ -55,7 +58,8 @@ const App: React.FC = () => {
             finish(null);
         }, 6000);
 
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY') setRecovering(true);
             setAuth(session);
             // A late session (after the timeout) should still land in the app; sign-out returns to the landing page.
             setView(v => (session ? (v === 'landing' || v === 'auth' ? 'home' : v) : 'landing'));
@@ -119,6 +123,15 @@ const App: React.FC = () => {
             <div className="min-h-screen bg-white flex items-center justify-center" role="status" aria-label="Loading">
                 <div className="w-7 h-7 border-[3px] border-edge border-t-ink rounded-full animate-spin" />
             </div>
+        );
+    }
+
+    if (recovering && auth) {
+        const leave = () => { window.history.replaceState(null, '', window.location.pathname); setRecovering(false); };
+        return (
+            <MotionConfig reducedMotion="user">
+                <ResetPassword onDone={() => { leave(); setView('home'); }} onCancel={() => { leave(); void supabase.auth.signOut(); }} />
+            </MotionConfig>
         );
     }
 

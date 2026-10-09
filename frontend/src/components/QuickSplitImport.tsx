@@ -44,11 +44,10 @@ export default function QuickSplitImport({ data, onClose }: { data: QuickSplit; 
         setSaving(true);
         setError('');
         try {
-            const nameOf = (id: string) => group.members.find(m => m.user_id === id)?.name ?? '';
-            const toMember = (p: string) => (map[p] ? nameOf(map[p]) : '');
+            const toMember = (p: string) => map[p] ?? ''; // receipts name people by id
             const id = await createSession({
                 groupId: group.id, name: data.title, category: 'groceries', tax: data.tax, tip: data.tip,
-                participants: group.members.map(m => m.name),
+                participants: group.members.map(m => m.user_id),
                 items: data.items.map(i => ({ name: i.name, price: i.price, assigned_users: i.assigned.map(toMember).filter(Boolean) })),
             });
             const payer = data.paid_by ? map[data.paid_by] : '';

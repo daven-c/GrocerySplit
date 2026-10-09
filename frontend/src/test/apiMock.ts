@@ -15,12 +15,12 @@ export const otherGroup = {
     members: [{ user_id: 'u-amy', joined_at: '2026-02-01T00:00:00Z', name: 'Amy', email: 'amy@x.com', role: 'owner' as const }, { user_id: ME, joined_at: '2026-02-02T00:00:00Z', name: 'Daven', email: 'me@x.com', role: 'member' as const }],
 };
 
-const base = { group_id: 'g1', user_id: ME, draft: false, tax: 0, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-05T10:00:00Z', amount: null, split_method: null, split_data: {} };
+const base = { group_id: 'g1', user_id: ME, draft: false, tax: 0, tip: 0, participants: [ME, 'u-amy', 'u-bo'], updated_at: '2026-10-05T10:00:00Z', amount: null, split_method: null, split_data: {} };
 export const receipt = {
     ...base, id: 's1', kind: 'receipt' as const, category: 'groceries', paid_by: ME, name: 'Costco', session_date: '2026-10-01', tax: 3.2,
     items: [
-        { id: 'i1', name: 'Oat Milk', price: 8, assigned_users: ['Daven', 'Amy'] },
-        { id: 'i2', name: 'Eggs', price: 6.5, assigned_users: ['Amy', 'Bo'] },
+        { id: 'i1', name: 'Oat Milk', price: 8, assigned_users: [ME, 'u-amy'] },
+        { id: 'i2', name: 'Eggs', price: 6.5, assigned_users: ['u-amy', 'u-bo'] },
         { id: 'i3', name: 'Chicken Breast', price: 22.4, assigned_users: [] },
     ],
 };
@@ -51,6 +51,8 @@ export const authMock = {
     signInWithPassword: vi.fn(async (_a?: any) => ({ error: null as any })),
     signUp: vi.fn(async (_a?: any) => ({ data: { session: null as any }, error: null as any })),
     signOut: vi.fn(async () => ({ error: null })),
+    resetPasswordForEmail: vi.fn(async (_e?: string, _o?: any) => ({ data: {}, error: null as any })),
+    updateUser: vi.fn(async (_a?: any) => ({ data: {}, error: null as any })),
 };
 export const supabaseModule = {
     supabase: {
@@ -61,6 +63,8 @@ export const supabaseModule = {
             signInWithPassword: (a: any) => authMock.signInWithPassword(a),
             signUp: (a: any) => authMock.signUp(a),
             signOut: () => authMock.signOut(),
+            resetPasswordForEmail: (e: string, o: any) => authMock.resetPasswordForEmail(e, o),
+            updateUser: (a: any) => authMock.updateUser(a),
         },
     },
 };

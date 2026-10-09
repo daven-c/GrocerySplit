@@ -113,10 +113,10 @@ export function totalOf(e: ExpenseLike): number {
     return Math.round((e.items.reduce((a, i) => a + i.price, 0) + e.tax + e.tip) * 100) / 100;
 }
 
-/** What one member owes on a record (dollars). Receipts are matched by display name, expenses by user id. */
+/** What one member owes on a record (dollars). Both kinds name people by id. */
 export function myShare(e: ExpenseLike, member: { user_id: string; name: string } | undefined): number {
     if (!member) return 0;
     if (e.kind === 'expense') return splitExpense(e.amount ?? 0, e.split_method ?? 'equal', e.split_data ?? {}).shares[member.user_id] ?? 0;
     const { totals } = computeSplit(e.items, e.participants, e.tax, e.tip);
-    return totals.find(([n]) => n === member.name)?.[1] ?? 0;
+    return totals.find(([id]) => id === member.user_id)?.[1] ?? 0;
 }

@@ -54,7 +54,8 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
     const group = groups.find(g => g.id === record?.group_id);
     const members = group?.members ?? [];
-    const names = useMemo(() => members.map(m => m.name), [members]);
+    // Receipts name people by id, never by display name, so two people called the same stay apart.
+    const ids = useMemo(() => members.map(m => m.user_id), [members]);
     const tones = useMemo(() => memberTones(members, me), [members, me]);
 
     const flash = (message: string, type: 'success' | 'error' = 'error') => {
@@ -83,7 +84,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
 
     useEffect(() => {
         if (!record || !group) return;
-        const everyone = group.members.map(m => m.name);
+        const everyone = group.members.map(m => m.user_id);
         if (everyone.length !== record.participants.length || everyone.some(n => !record.participants.includes(n))) {
             // Reflect it locally first so this effect doesn't write the same change again on every refresh.
             setRecord(r => (r ? { ...r, participants: everyone } : r));
@@ -98,15 +99,15 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const current = JSON.stringify([name, date, num(tax), num(tip), paidBy, category, items.map(i => [i.id, i.name, i.price, i.assigned_users])]);
     const dirty = !!record && !live && current !== baseline.current;
 
-    const split = useMemo(() => computeSplit(items, names, num(tax), num(tip)), [items, names, tax, tip]);
+    const split = useMemo(() => computeSplit(items, ids, num(tax), num(tip)), [items, ids, tax, tip]);
     const subtotal = items.reduce((a, i) => a + i.price, 0);
     const total = Math.round((subtotal + num(tax) + num(tip)) * 100) / 100;
-    const assignedCount = items.filter(i => i.assigned_users.some(u => names.includes(u))).length;
-    const memberByName = (n: string) => members.find(m => m.name === n);
+    const assignedCount = items.filter(i => i.assigned_users.some(u => ids.includes(u))).length;
+    const memberById = (id: string) => members.find(m => m.user_id === id);
     const payer = members.find(m => m.user_id === paidBy);
     const labels = useMemo(() => labelMap(members), [members]);
     const payerLabel = payer ? labels[payer.user_id] : 'someone';
-    const display = (n: string) => { const m = memberByName(n); return m ? labels[m.user_id] : n; };
+    const display = (id: string) => labels[id] ?? '';
 
     const setAssigned = async (itemId: string, next: string[]) => {
         const prev = items;
@@ -122,7 +123,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     };
     const toggle = (item: Item, who: string) =>
         setAssigned(item.id, item.assigned_users.includes(who) ? item.assigned_users.filter(u => u !== who) : [...item.assigned_users, who]);
-    const toggleAll = (item: Item) => setAssigned(item.id, names.every(n => item.assigned_users.includes(n)) ? [] : [...names]);
+    const toggleAll = (item: Item) => setAssigned(item.id, ids.every(n => item.assigned_users.includes(n)) ? [] : [...ids]);
 
     const handleAddItem = async () => {
         if (!live) {
@@ -242,7 +243,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     if (importing) return <ReceiptUpload groupId={record.group_id} sessionId={sessionId} narrow={narrow} onImported={() => setImporting(false)} onParsed={applyImport} onBack={() => setImporting(false)} />;
 
     const maxShare = Math.max(...split.totals.map(([, v]) => v), 0.01);
-    const paintTone = paint ? tones[memberByName(paint)?.user_id ?? ''] : null;
+    const paintTone = paint ? tones[paint] : null;
     const labelCls2 = 'flex items-center justify-between gap-3 text-[14.5px] font-bold text-body';
 
     return (
@@ -299,21 +300,21 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 <div className="flex-[999_1_440px] min-w-0 flex flex-col gap-3.5">
                     <div className="flex flex-col gap-3 py-4 px-[18px] rounded-[24px] bg-wash">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-[15px] font-black">{paint ? `Tap the items ${paint} had` : 'Pick a person, then tap their items'}</span>
+                            <span className="text-[15px] font-black">{paint ? `Tap the items ${display(paint)} had` : 'Pick a person, then tap their items'}</span>
                             <span className="text-[13.5px] font-bold text-muted whitespace-nowrap">{assignedCount} of {items.length} assigned</span>
                         </div>
                         <div className="flex flex-wrap gap-2" role="group" aria-label="Who to assign">
                             {members.map(m => {
-                                const on = paint === m.name;
+                                const on = paint === m.user_id;
                                 return (
                                     <motion.button
                                         key={m.user_id}
                                         {...tapFlat}
                                         aria-pressed={on}
-                                        onClick={() => setPaint(on ? null : m.name)}
+                                        onClick={() => setPaint(on ? null : m.user_id)}
                                         className={`flex items-center gap-2 h-[42px] pl-[5px] pr-4 rounded-full text-[15px] font-extrabold transition-colors ${on ? 'bg-ink text-white' : 'bg-white text-ink shadow-[0_1px_3px_rgba(38,34,30,0.1)]'}`}
                                     >
-                                        <Avatar name={m.name} tone={tones[m.user_id]} size={32} />{display(m.name)}
+                                        <Avatar name={m.name} tone={tones[m.user_id]} size={32} />{display(m.user_id)}
                                     </motion.button>
                                 );
                             })}
@@ -326,10 +327,10 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                     <Card className="overflow-hidden">
                         <AnimatePresence initial={false} mode="popLayout">
                             {items.map((item, i) => {
-                                const n = item.assigned_users.filter(u => names.includes(u)).length;
+                                const n = item.assigned_users.filter(u => ids.includes(u)).length;
                                 const hit = !!paint && item.assigned_users.includes(paint);
                                 const isEditing = editing?.id === item.id;
-                                const only = n === 1 ? item.assigned_users.find(u => names.includes(u)) : null;
+                                const only = n === 1 ? item.assigned_users.find(u => ids.includes(u)) : null;
                                 return (
                                     <motion.div
                                         key={item.id}
@@ -357,16 +358,16 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                         )}
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                             {members.map(m => {
-                                                const on = item.assigned_users.includes(m.name);
+                                                const on = item.assigned_users.includes(m.user_id);
                                                 const t = tones[m.user_id];
                                                 return (
                                                     <motion.button
                                                         key={m.user_id}
                                                         {...tap}
-                                                        title={m.name}
-                                                        aria-label={`${m.name} on ${item.name}`}
+                                                        title={display(m.user_id)}
+                                                        aria-label={`${display(m.user_id)} on ${item.name}`}
                                                         aria-pressed={on}
-                                                        onClick={e => { e.stopPropagation(); void toggle(item, m.name); }}
+                                                        onClick={e => { e.stopPropagation(); void toggle(item, m.user_id); }}
                                                         className="w-[34px] h-[34px] rounded-full grid place-items-center text-[13px] font-black p-0"
                                                         style={{ background: on ? t.bg : '#fff', color: on ? t.fg : '#C2B8AC', border: `1.5px ${on ? 'solid' : 'dashed'} ${on ? t.bg : '#E3DBD0'}` }}
                                                     >
@@ -376,7 +377,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                                             })}
                                             <motion.button {...tapFlat} onClick={e => { e.stopPropagation(); void toggleAll(item); }} className="h-[34px] px-3 rounded-full bg-soft text-[13px] font-extrabold text-body">Everyone</motion.button>
                                             <span className={`ml-auto text-[13px] font-bold ${n === 0 ? 'text-coral' : 'text-faint'}`}>
-                                                {n === 0 ? 'Nobody yet' : n === 1 ? `Just ${only}` : `${fmt(item.price / n)} each`}
+                                                {n === 0 ? 'Nobody yet' : n === 1 ? `Just ${display(only ?? '')}` : `${fmt(item.price / n)} each`}
                                             </span>
                                         </div>
                                     </motion.div>
@@ -395,13 +396,13 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                 <div className="flex-[1_1_300px] min-w-0 flex flex-col gap-3.5 min-[760px]:sticky min-[760px]:top-6">
                     <Card className="p-5 flex flex-col gap-4">
                         <span className="text-lg font-black">Who pays what</span>
-                        {split.totals.map(([n, amt]) => {
-                            const m = memberByName(n);
+                        {[...split.totals].sort((a, b) => display(a[0]).localeCompare(display(b[0]))).map(([n, amt]) => {
+                            const m = memberById(n);
                             const t = m ? tones[m.user_id] : null;
                             if (!m || !t) return null;
                             return (
                                 <div key={m.user_id} className="flex items-center gap-3">
-                                    <Avatar name={n} tone={t} size={36} />
+                                    <Avatar name={m.name} tone={t} size={36} />
                                     <span className="flex-1 flex flex-col gap-[5px]">
                                         <span className="flex justify-between"><span className="text-[15px] font-extrabold">{display(n)}</span><AnimatedNumber value={amt} prefix="$" className="text-[15.5px] font-black" /></span>
                                         <span className="h-1.5 rounded-[3px] bg-soft"><motion.span className="block h-full rounded-[3px] opacity-50" style={{ background: t.fg }} initial={false} animate={{ width: `${(amt / maxShare) * 100}%` }} transition={{ duration: 0.25 }} /></span>

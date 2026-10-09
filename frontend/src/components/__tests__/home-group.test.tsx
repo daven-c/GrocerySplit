@@ -230,7 +230,7 @@ describe('Group detail', () => {
         renderWithData(<GroupDetail {...props} onOpenRecord={onOpenRecord} />);
         await u.click(await screen.findByRole('button', { name: /Add expense/ }));
         await u.click(await screen.findByText('Split by item'));
-        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: ['Daven', 'Amy', 'Bo'], category: 'groceries', draft: true }));
+        await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({ groupId: 'g1', name: 'Receipt', participants: [ME, 'u-amy', 'u-bo'], category: 'groceries', draft: true }));
         await waitFor(() => expect(onOpenRecord).toHaveBeenCalledWith('s9', 'receipt', true));
     });
 

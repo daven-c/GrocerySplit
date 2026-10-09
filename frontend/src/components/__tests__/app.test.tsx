@@ -52,13 +52,62 @@ describe('Auth', () => {
     it('sign up reveals the name field with the new copy; sign in hides it', async () => {
         const u = userEvent.setup();
         render(<Auth initialMode="signup" onLogin={vi.fn()} />);
-        expect(screen.getByRole('heading', { name: 'Start your first pot' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Start your first group' })).toBeInTheDocument();
         expect(screen.getByPlaceholderText('What your friends call you')).toBeInTheDocument();
         expect(screen.getByText('Pick a username: people invite you to groups by it, and your email stays private.')).toBeInTheDocument();
         await u.click(screen.getByRole('tab', { name: 'Sign in' }));
         expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByPlaceholderText('What your friends call you')).not.toBeInTheDocument());
         expect(screen.getByText('Sign in to see who owes what.')).toBeInTheDocument();
+    });
+
+    it('Forgot password asks for just an email and sends a reset link without saying whether it exists', async () => {
+        const u = userEvent.setup();
+        render(<Auth onLogin={vi.fn()} />);
+        await u.click(screen.getByRole('button', { name: 'Forgot password?' }));
+        expect(screen.getByRole('heading', { name: 'Reset your password' })).toBeInTheDocument();
+        expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+        await u.type(screen.getByLabelText('Email'), ' me@x.com ');
+        await u.click(screen.getByRole('button', { name: 'Send reset link' }));
+        await waitFor(() => expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith('me@x.com', { redirectTo: window.location.origin }));
+        expect(await screen.findByText(/If that email has an account, a reset link is on its way/)).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Back to sign in' }));
+        expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+        expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    });
+
+    it('Forgot password shows a calm message when emails are rate limited', async () => {
+        const u = userEvent.setup();
+        authMock.resetPasswordForEmail.mockResolvedValueOnce({ data: {}, error: { message: 'email rate limit exceeded' } });
+        render(<Auth onLogin={vi.fn()} />);
+        await u.click(screen.getByRole('button', { name: 'Forgot password?' }));
+        await u.type(screen.getByLabelText('Email'), 'me@x.com');
+        await u.click(screen.getByRole('button', { name: 'Send reset link' }));
+        expect(await screen.findByText('Too many emails were sent recently. Please wait a little and try again.')).toBeInTheDocument();
+    });
+
+    it('opening a reset link shows only the new-password screen until a password is chosen', async () => {
+        const u = userEvent.setup();
+        let fire: (event: string, session: any) => void = () => {};
+        authMock.onAuthStateChange.mockImplementation((cb: any) => { fire = cb; return { data: { subscription: { unsubscribe() {} } } }; });
+        signIn();
+        render(<App />);
+        await screen.findByText(/Overall you're/); // signed in: the app
+        act(() => fire('PASSWORD_RECOVERY', signedInSession));
+        expect(await screen.findByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument();
+        expect(screen.queryByText(/Overall you're/)).not.toBeInTheDocument();
+
+        await u.type(screen.getByLabelText('New password'), 'newsecret1');
+        await u.type(screen.getByLabelText('Type it again'), 'different1');
+        await u.click(screen.getByRole('button', { name: 'Save password' }));
+        expect(await screen.findByText('The two passwords are different.')).toBeInTheDocument();
+        expect(authMock.updateUser).not.toHaveBeenCalled();
+
+        await u.clear(screen.getByLabelText('Type it again'));
+        await u.type(screen.getByLabelText('Type it again'), 'newsecret1');
+        await u.click(screen.getByRole('button', { name: 'Save password' }));
+        await waitFor(() => expect(authMock.updateUser).toHaveBeenCalledWith({ password: 'newsecret1' }));
+        expect(await screen.findByText(/Overall you're/)).toBeInTheDocument(); // back in the app
     });
 
     it('toggles password visibility', async () => {
@@ -138,7 +187,7 @@ describe('App shell', () => {
         render(<App />);
         expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Get started' }));
-        expect(await screen.findByRole('heading', { name: 'Start your first pot' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Start your first group' })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Back to the home page' }));
         expect(await screen.findByRole('heading', { level: 1, name: /Split the groceries/ })).toBeInTheDocument();
         await u.click(screen.getByRole('button', { name: 'Sign in' }));

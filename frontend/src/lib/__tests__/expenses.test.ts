@@ -65,13 +65,14 @@ describe('convertSplit', () => {
 });
 
 describe('totalOf / myShare', () => {
-    const receipt = { tax: 1, tip: 0, participants: ['Me', 'Amy'], items: [{ price: 8, assigned_users: ['Me', 'Amy'] }] };
+    const receipt = { tax: 1, tip: 0, participants: ['me', 'amy'], items: [{ price: 8, assigned_users: ['me', 'amy'] }] };
     it('receipts total items + tax + tip; expenses use their amount', () => {
         expect(totalOf(receipt)).toBe(9);
         expect(totalOf({ ...receipt, kind: 'expense', amount: 2400 })).toBe(2400);
     });
-    it('shares: receipts by name, expenses by id', () => {
+    it('shares: receipts and expenses both go by id, so a same-named person is not confused', () => {
         expect(myShare(receipt, { user_id: 'me', name: 'Me' })).toBe(4.5);
+        expect(myShare(receipt, { user_id: 'someone-else', name: 'Me' })).toBe(0); // same display name, different person
         const exp = { ...receipt, kind: 'expense' as const, amount: 100, split_method: 'percent' as const, split_data: { me: 70, amy: 30 } };
         expect(myShare(exp, { user_id: 'me', name: 'Me' })).toBe(70);
         expect(myShare(exp, { user_id: 'amy', name: 'Amy' })).toBe(30);

@@ -158,7 +158,12 @@ export async function deleteStaleDrafts() {
     const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const { data } = await supabase.auth.getUser();
     if (!data.user) return;
-    check(await supabase.from('sessions').delete().eq('draft', true).eq('user_id', data.user.id).lt('updated_at', cutoff));
+    const stale = check(await supabase.from('sessions').select('id').eq('draft', true).eq('user_id', data.user.id).lt('updated_at', cutoff));
+    if (!stale.length) return;
+    const ids = stale.map(r => r.id);
+    // A draft can have photos already; their files are not removed with the rows, so delete them first.
+    await removeStoredPhotos(supabase.from('session_photos').select('path').in('session_id', ids));
+    check(await supabase.from('sessions').delete().in('id', ids));
 }
 
 export async function deleteSession(id: string) {
