@@ -1,41 +1,52 @@
 # Settled
 
-Split any shared cost with the people you share it with: groceries, rent, bills, dinners and trips. Add what was spent, say who shares it, and Settled works out who owes whom, with balances that carry across every group you're in. (Formerly GrocerySplit; itemized grocery receipts are still a first-class feature.)
+Split any shared cost with the people you share it with: groceries, rent, bills, dinners and trips. Add what was spent, say who shares it, and Settled works out who owes whom, with balances that carry across every group you're in. All money is handled in whole cents, so totals always add up. (Formerly GrocerySplit, then Splitpot. Itemized grocery receipts are still a first-class feature.)
 
-## Two ways to add a cost
+Live at https://settled.davenc.dev (the `dev` branch deploys to https://dev.settled.davenc.dev).
 
-- **Groceries (itemized receipt):** open a blank receipt and type the items in, or press **Import from JSON** to fill it from a photo read by any AI chat. Pick a person, then tap the items they had; tax and tip are shared in proportion to what each person bought.
-- **One expense editor:** rent, utilities, dinner, a trip, a grocery run. Choose who paid and who shares it, then pick **Split by**: **amounts** (the default, starting as an even split you can adjust), **shares** (e.g. two shares for the bigger room), or **by item** (the itemized receipt editor, with tax, tip and JSON import). Switching keeps the name, payer and date. The editor shows live per-person amounts and won't save a split that doesn't add up.
+## What you can do
 
-**Nothing is added until you press Save.** A new bill or receipt opens as a draft that nobody else in the group sees and that doesn't count toward balances; **Save** publishes it and **Discard** (or leaving the screen) throws it away. Existing expenses autosave as you edit them.
+### Groups and expenses
+- **Groups** are the top level: a household, a trip, a club. Every member can see and edit the group's expenses. The owner invites people, removes members and deletes the group; any member can leave.
+- **Add an expense** (rent, bills, one total): choose who paid and who shares it, then **Split by amounts** (starts as an even split; type an amount and the people you haven't edited share what's left) or **by shares** (e.g. two shares for the bigger room). The editor shows live per-person amounts and won't save a split that doesn't add up.
+- **Split by item** (groceries, dinners): type the items in, or use **Import items from a photo** (see below), then pick a person and tap the items they had. Tax and tip are shared in proportion to what each person bought.
+- **Nothing is added until you press Save.** A new expense or receipt opens as a draft that nobody else sees and that doesn't count toward balances. **Save** publishes it, **Discard** (or leaving) throws it away, and drafts older than a day are cleaned up. Changes to an existing expense are written when you press **Save changes** (one entry in Activity per save).
+- **Reference photos:** attach up to 3 photos (say, of the receipt) to any expense. They're stored privately, visible to the group, and deleted with the expense. The photos are not read or split.
+- **Transfers:** marking a balance paid records a *transfer* in the group's list (with edit and undo for anyone). Record one by hand from the **Add** menu with *who paid* and *who received*. Each group's **Balances** tab shows how much each person is up or down, with the fewest transfers that would settle everyone.
+- Every record has a category, a payer and a date (your local date). The group shows its total cost.
 
-Both kinds live in the same group, have a category, a payer and a date, and feed the same balances.
+### People
+- Every account has a display name, a unique `@username` and a private email. Emails are never shown to a group.
+- Owners **invite by `@username`**. While an invite is pending the person can already be used in expenses; when they accept, everything they were in moves to their account.
+- **Temporary people:** for a friend who hasn't signed up, the owner can **add a temporary person by name**. They can be used in expenses like anyone else. When the friend signs up, use **Link to account** (their username) and their expenses move to their account when they accept.
+- **Receipts name people by account id, not by display name**, so two members called "Sam" stay separate. Where two names match, the app shows `Sam (@sam_k)` and `Sam (@sam_r)`.
+- **People** (top navigation) shows what you and each person owe across your shared groups, with each person's `@username`.
 
-## How it's organised
+### Personal
+A private notebook only you can see, for tracking what you paid for others outside any group. It's one page, not a group: a ledger of expenses, totals (spent, owed to you, you owe), and a **Balances | People** switch.
+- People here are **names**. Optionally add a `@username` to **link** a name to an account without inviting or notifying anyone. A linked person shows on **People** as a separate, private "Personal" line. Personal never counts toward the amounts on Home or People.
 
-- **Quick split** (no account, no group): one shareable page for splitting a single bill, e.g. at dinner. Start it from the landing page or Home, share the link (`/s/<token>`), and everyone opens it, picks a unique name and taps what they had. Anyone with the link can join and pick their own items (a private key from joining stops people tapping each other's names; lose your session and you tap your own name again to get a fresh key, honor system); anyone who has joined can add an item; only the owner can edit or delete items, change tax, tip or who paid, remove people, rename or lock it, or save it to a group, and a split nobody touches for 30 days is deleted. Splits made while signed in (or claimed with the owner key) are listed under **Personal** until they expire, and the owning account can manage them from any device. A signed-in person can import it into a group, matching each name to a member. The link's long random token is the only credential, and the tables are closed: everything goes through the `qs_*` database functions.
-- **Usernames and invites:** every account has a display name, a unique `@username` and a private email. Owners invite by `@username` only. While an invite is pending the person can already be used in expenses, and when they accept everything moves to their account under their display name. Emails are never shown to the group.
-- **People** (the old Friends page) shows what you and each person owe across your shared groups.
-- **Personal** is its own private section for tracking what you paid for others by name only. Those names are not accounts and never appear under People.
-- **Home** can search groups (by group or person), sort them (recent activity, name, balance, spend), and pin groups to the top for yourself.
-- **Feature flags** (`frontend/src/lib/flags.ts`): the Activity tab is **off** for now (the database still records it), while Quick split and Personal are on. Turn flags on or off per build with `VITE_FEATURES="activity,-personal"`, or per browser with `localStorage['splitpot:flags'] = '{"activity":true}'`. A flag only hides a feature; it never deletes data.
-- **Design:** the UI follows the v3 "Corner shop" redesign (Nunito, green brand band, pill controls, top navigation). See `docs/REDESIGN_V3.md` for what changed and what the design did not cover.
-- **Groups** are the top level (a household, a trip, ...). Create one, then invite people by email.
-- **Expenses live inside a group.** Every member can see and edit the group's receipts and bills.
-- **Invites** are matched on the invitee's login email and show up on their home screen, so no email service is needed. Invitees accept or decline. An invited person (optionally with a name) is usable in expenses right away, marked *Invited*; when they accept, everything they were in (payer, shares, transfers, receipt items) moves to their account. An invite can't be cancelled while they're in expenses.
-- The owner can invite, remove members and delete the group; any member can leave.
-- **Transfers:** marking a balance paid records a *transfer* that shows up in the group's list (with an undo). Record one by hand from the Add menu with two dropdowns, *who paid* and *who received*. Each group has a **Balances** tab that shows how much each person is up or down, with the fewest transfers that would settle everyone below.
-- **Friends** (sidebar / tab bar) shows what you owe and are owed across every group. Each receipt has a *Paid by* member; everyone else on it owes the payer their share, and you can mark payments as settled.
-- **Admin** (nav item, admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts, and force-confirms stuck signups. It runs through the `admin-users` Supabase Edge Function (`supabase/functions/admin-users`), which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
-- **Account** (sidebar / tab bar) lets you change your display name, email and password, or sign out.
+### Quick split (no account)
+One shareable page for splitting a single bill, e.g. at dinner.
+- **Start a quick split** from the landing page, Home or the nav. It opens a **draft** at `/s/new`: set it up with items and who had what, and **nothing is saved or created until you press Create**. Leaving throws the draft away.
+- **Create** makes the real split and gives you its link (`/s/<token>`). Anyone with the link can join with a unique name and tap their own items (a private key from joining stops people tapping each other's names; lose your session and tap your own name again for a fresh key, honor system). Anyone who has joined can add an item. Only the owner can edit or delete items, change tax, tip or who paid, remove people, rename or lock it, or save it to a group.
+- A split nobody touches for 30 days is deleted (a daily job removes them). Creating is limited per visitor (10 an hour, 40 a day) on top of a global cap.
+- Signed-out owners are told to sign in to keep and manage it from any device. Splits made while signed in (or claimed with the owner key) are listed on **Home** under **Your quick splits** until they expire. A signed-in owner can import one into a group, matching each name to a member.
+- The long random token in the link is the only credential. The tables are closed: everything goes through the `qs_*` database functions.
 
-## How receipt import works (grocery receipts)
+### Home, search and accounts
+- **Home** shows your overall balance, invites, your groups (search by group or person, sort by recent, balance, name or spend, pin to the top) and your quick splits.
+- **Account** lets you change your display name, username, email and password, or sign out. **Forgot password?** on the sign-in screen sends a reset link; the link opens a "Choose a new password" screen.
+- The app re-fetches shared data when you return to the tab and once a minute while you're looking at it (but not while you're typing), so other people's changes show up without a reload.
+- **Admin** (admins only) lists every user with sign-in and activity counts, force-creates confirmed accounts and force-confirms stuck signups. It runs through the `admin-users` Edge Function, which checks the caller against the `admins` table before touching the service-role key. Add the first admin with SQL: `insert into admins select id from profiles where email = '...'`.
 
-There is no built-in AI. Instead:
+### Feature flags
+`frontend/src/lib/flags.ts`: **Activity** is off for now (the database still records it); **Quick split** and **Personal** are on. Set `VITE_FEATURES="activity,-personal"` for a build, or `localStorage['splitpot:flags'] = '{"activity":true}'` for one browser (the old key name is kept so saved preferences survive the rename). A flag only hides a feature; it never deletes data.
 
-1. Open **Import Receipt** and tap **Copy prompt**.
-2. Paste the prompt into any AI chat (ChatGPT, Claude, Gemini, ...) along with a photo of your receipt.
-3. Paste the JSON it returns (or upload it as a `.json` file) and tap **Import & split**.
+## Importing a receipt (no built-in AI)
+In **Split by item**, choose **Import items from a photo**:
+1. Tap **Copy prompt** and paste it into any AI chat (ChatGPT, Claude, Gemini, ...) along with a photo of your receipt.
+2. Paste the JSON it returns (or upload it as a `.json` file) and tap **Import and split**.
 
 Expected JSON (the prompt asks the model for exactly this):
 
@@ -52,20 +63,18 @@ Expected JSON (the prompt asks the model for exactly this):
 The importer also tolerates markdown code fences, surrounding chatter, `"$3.50"` strings and a bare `[...]` array.
 
 ## Split math
-
-All money is handled in integer cents with largest-remainder allocation, so per-person totals always add up exactly. Receipts split each item among its assignees, then share tax and tip by what each person bought (`frontend/src/lib/calc.ts`). Standalone expenses use the same allocator for all four split methods (`frontend/src/lib/expenses.ts`).
-
-See [docs/ROADMAP.md](docs/ROADMAP.md) for where this is heading (a general cost-splitting app, not just groceries).
+All money is integer cents with largest-remainder allocation, so per-person totals always add up exactly. Receipts split each item among its assignees, then share tax and tip by what each person bought (`frontend/src/lib/calc.ts`). Standalone expenses use the same allocator for both split methods (`frontend/src/lib/expenses.ts`). Balances and the per-group ledger live in `lib/balances.ts` and `lib/ledger.ts`.
 
 ## Tech stack
 
-| Layer    | Technology                                                     |
-| -------- | -------------------------------------------------------------- |
-| Frontend | React + TypeScript, Vite, Tailwind (build-time), Framer Motion |
-| Auth/DB  | Supabase (Auth + Postgres with row-level security)             |
-| Hosting  | Vercel (static build)                                          |
+| Layer    | Technology                                                                           |
+| -------- | ------------------------------------------------------------------------------------ |
+| Frontend | React + TypeScript, Vite, Tailwind (build-time), Framer Motion                       |
+| Auth/DB  | Supabase (Auth, Postgres with row-level security, Storage, Edge Functions, pg_cron)  |
+| Email    | Supabase Auth through custom SMTP (e.g. Resend)                                      |
+| Hosting  | Vercel (static build)                                                                |
 
-Access is enforced in Postgres with row-level security: you can only see groups you belong to and their receipts, and only owners can invite or remove people (`profiles`, `groups`, `group_members`, `group_invites`, `sessions`, `items`, `people`).
+Access is enforced in Postgres with row-level security: you can only see groups you belong to and their records, and only owners can invite or remove people. Reference photos live in a private Storage bucket with access rules that follow group membership.
 
 ## Local development
 
@@ -75,15 +84,29 @@ cp .env.example .env.local   # fill in your Supabase URL + anon/publishable key
 npm install
 npm run dev                  # http://localhost:3000
 npm run dev:mock             # same UI with an in-memory fake backend (src/mocks): no Supabase or login needed
-npm test                     # unit + component tests (split math, balances, every screen's interactions)
+npm test                     # unit + component + accessibility tests
+npm run build                # type-check and production build
 ```
 
-`npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.
+- `npm test` includes an automated accessibility check (axe) over the main screens and tests for dialog focus. Colour contrast can't be measured without a real browser, so it's covered by the colour tokens in `tailwind.config.js` (secondary text meets 4.5:1).
+- `npm run test:integration` runs against the real Supabase project; see the header of `src/lib/__tests__/integration.test.ts` for the setup it needs.
 
-## Deploying
+## Setting up Supabase and deploying
 
-- **Supabase:** create a project and run the SQL files in `supabase/migrations/` in order. For instant sign-up without an email step, disable *Confirm email* under Authentication → Providers → Email; keep it on if you set up SMTP, because invites are matched on the login email. Also consider enabling leaked-password protection.
-- **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` then deploys to production and every PR gets a preview deployment.
+- **Database:** create a project and run the SQL files in `supabase/migrations/` in order. Migrations are **not** automated: apply new files to the Supabase project before merging a change that needs them.
+- **Edge Functions** (not deployed by CI; deploy with the Supabase CLI or dashboard when they change):
+  - `admin-users`: admin tools, checks the caller against `admins`.
+  - `sweep-photos`: deployed *without* JWT verification (it takes no credentials and throttles itself to one scan every 6 hours). It removes photo files that no photo record points to.
+- **Scheduled jobs** (created by migrations, need `pg_cron`; the photo sweep also needs `pg_net`): `quick-splits-expire` (daily) and `sweep-photos` (weekly).
+- **Auth settings** (Authentication in the Supabase dashboard):
+  - **URL Configuration:** set the Site URL to your production domain and add every app address to Redirect URLs (production, `dev.` and `http://localhost:3000`, each with `/**`). Reset-password links only work from addresses on that list.
+  - **SMTP:** set up custom SMTP (host, port, username, password, and a sender address on a verified domain). Without it Supabase's built-in mailer allows only a couple of emails an hour, and email templates can't be edited.
+  - **Email templates:** paste the files from `supabase/email-templates/` (see its README for which goes where).
+  - For instant sign-up without an email step, disable *Confirm email* under Providers, Email; keep it on if you set up SMTP. Consider enabling leaked-password protection.
+- **Vercel:** connect the GitHub repo, set the project root directory to `frontend`, and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for Production and Preview. Every push to `main` deploys to production and every other branch and PR gets a preview deployment. Add your domain under the project's Domains.
 - **CI:** `.github/workflows/ci.yml` runs the unit tests and a production build on every PR and every push to `main` or `dev`.
-- **Edge function is not deployed by CI.** Deploy `supabase/functions/admin-users` with the Supabase CLI or dashboard when it changes.
-- **Database migrations are not automated.** Apply new files in `supabase/migrations/` to the Supabase project before merging a change that needs them.
+
+## More
+
+- [docs/ROADMAP.md](docs/ROADMAP.md): where this is heading.
+- [docs/REDESIGN_V3.md](docs/REDESIGN_V3.md): the "Corner shop" visual design, what changed and what the design did not cover.
