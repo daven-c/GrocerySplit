@@ -4,7 +4,7 @@ import { useAppData } from '../lib/appData';
 import { getSession, updateSession, deleteSession, Session } from '../lib/api';
 import { allocate } from '../lib/calc';
 import { CATEGORIES, METHODS, SplitData, SplitMethod, categoryOf, convertSplit, splitExpense } from '../lib/expenses';
-import { fmt, memberTones } from '../lib/people';
+import { fmt, labelMap, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, SplitByTabs, cellCls, selectPillCls } from './ui';
 import { toast } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
@@ -51,6 +51,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     const group = groups.find(g => g.id === record?.group_id);
     const members = group?.members ?? [];
     const tones = useMemo(() => memberTones(members, me), [members, me]);
+    const labels = useMemo(() => labelMap(members), [members]);
 
     useEffect(() => {
         let cancelled = false;
@@ -218,8 +219,8 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
     if (!record || !group) return <p className="text-center text-faint py-16 animate-pulse">Loading expense…</p>;
 
     const payer = members.find(m => m.user_id === paidBy);
-    const payerLabel = payer?.name ?? 'someone';
-    const display = (_id: string, n: string) => n;
+    const payerLabel = payer ? labels[payer.user_id] : 'someone';
+    const display = (id: string, n: string) => labels[id] ?? n;
     const maxShare = Math.max(...Object.values(split.shares), 0.01);
     const hint = METHODS.find(m => m.value === method)?.hint;
 
@@ -230,7 +231,7 @@ export default function ExpenseEditor({ sessionId, narrow, onBack, onSaved, onDi
             <label className={labelCls2}>Paid by
                 <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                     {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                    {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                    {members.map(m => <option key={m.user_id} value={m.user_id}>{labels[m.user_id]}</option>)}
                 </select>
             </label>
             <label className={labelCls2}>Date

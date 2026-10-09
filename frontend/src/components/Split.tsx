@@ -6,7 +6,7 @@ import { ParsedReceipt } from '../lib/receiptImport';
 import ReceiptUpload from './ReceiptUpload';
 import { computeSplit } from '../lib/calc';
 import { CATEGORIES, SplitMethod, categoryOf, convertSplit, everyoneEqual } from '../lib/expenses';
-import { fmt, memberTones } from '../lib/people';
+import { fmt, labelMap, memberTones } from '../lib/people';
 import { Avatar, Button, Card, ChangesBar, DraftBar, Icon, cellCls, selectPillCls } from './ui';
 import { toast as notify } from './Toast';
 import ReceiptPhotos from './ReceiptPhotos';
@@ -104,8 +104,9 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
     const assignedCount = items.filter(i => i.assigned_users.some(u => names.includes(u))).length;
     const memberByName = (n: string) => members.find(m => m.name === n);
     const payer = members.find(m => m.user_id === paidBy);
-    const payerLabel = payer?.name ?? 'someone';
-    const display = (n: string) => n;
+    const labels = useMemo(() => labelMap(members), [members]);
+    const payerLabel = payer ? labels[payer.user_id] : 'someone';
+    const display = (n: string) => { const m = memberByName(n); return m ? labels[m.user_id] : n; };
 
     const setAssigned = async (itemId: string, next: string[]) => {
         const prev = items;
@@ -423,7 +424,7 @@ export default function Split({ sessionId, narrow, onBack, onImport, onSaved, on
                         <label className={labelCls2}>Paid by
                             <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className={`${selectPillCls} max-w-[190px]`}>
                                 {!members.some(m => m.user_id === paidBy) && <option value="">Unknown</option>}
-                                {members.map(m => <option key={m.user_id} value={m.user_id}>{m.name}</option>)}
+                                {members.map(m => <option key={m.user_id} value={m.user_id}>{labels[m.user_id]}</option>)}
                             </select>
                         </label>
                         <label className={labelCls2}>Date

@@ -25,6 +25,7 @@ describe('Friends', () => {
         const rows = screen.getAllByRole('button', { expanded: false });
         expect(rows[0]).toHaveTextContent('Bo');
         expect(rows[0]).toHaveTextContent('$603.97');
+        expect(rows[0]).toHaveTextContent('@bo_b'); // the username tells two people with the same name apart
         expect(rows[0]).toHaveTextContent('owes you');
         expect(rows[1]).toHaveTextContent('Amy');
         expect(rows[1]).toHaveTextContent('Roomies, Ski Trip');

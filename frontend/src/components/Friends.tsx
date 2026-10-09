@@ -20,14 +20,14 @@ export default function Friends() {
     const groupName = useMemo(() => Object.fromEntries(groups.map(g => [g.id, g.name])), [groups]);
 
     const friends = useMemo(() => {
-        const byId = new Map<string, { id: string; name: string; email: string; groupIds: string[]; tone: ReturnType<typeof memberTones>[string] }>();
+        const byId = new Map<string, { id: string; name: string; username?: string; email: string; groupIds: string[]; tone: ReturnType<typeof memberTones>[string] }>();
         for (const g of groups) {
             const tones = memberTones(g.members, me);
             for (const m of g.members) {
                 if (m.user_id === me) continue;
                 const f = byId.get(m.user_id);
                 if (f) f.groupIds.push(g.id);
-                else byId.set(m.user_id, { id: m.user_id, name: m.name, email: m.email, groupIds: [g.id], tone: tones[m.user_id] }); // color from the first shared group
+                else byId.set(m.user_id, { id: m.user_id, name: m.name, username: m.username, email: m.email, groupIds: [g.id], tone: tones[m.user_id] }); // color from the first shared group
             }
         }
         return [...byId.values()]
@@ -93,7 +93,7 @@ export default function Friends() {
                                 <motion.button {...tapFlat} onClick={() => setOpen(expanded ? null : f.id)} aria-expanded={expanded} className="w-full flex items-center gap-3.5 p-3 rounded-[18px] text-left text-ink hover:bg-wash transition-colors">
                                     <Avatar name={f.name} tone={f.tone} size={46} />
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                        <span className="text-base font-extrabold truncate">{f.name}</span>
+                                        <span className="text-base font-extrabold truncate">{f.name}{f.username && <span className="ml-1.5 text-[13.5px] font-bold text-faint">@{f.username}</span>}</span>
                                         <span className="text-[13.5px] font-semibold text-faint truncate">{f.groupIds.map(id => groupName[id]).join(', ')}</span>
                                     </span>
                                     <span className="flex flex-col items-end gap-px">

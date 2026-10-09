@@ -8,7 +8,7 @@ import { ActivityItem, describeChange, mergeActivity } from '../lib/activity';
 import { isEnabled } from '../lib/flags';
 import { computeBalances } from '../lib/balances';
 import { categoryOf, categoryTone, CATEGORIES, myShare, totalOf } from '../lib/expenses';
-import { fmt, fmtSigned, groupTile, memberTones } from '../lib/people';
+import { fmt, fmtSigned, groupTile, labelMap, memberTones } from '../lib/people';
 import { toast } from './Toast';
 import { Avatar, AvatarStack, Button, Card, Icon, cellCls, inputCls, selectPillCls } from './ui';
 
@@ -93,7 +93,8 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
     }, [groupId, isOwner]);
 
     const tones = useMemo(() => memberTones(group?.members ?? [], me), [group, me]);
-    const nameOf = (id: string | null) => (group?.members.find(m => m.user_id === id)?.name ?? 'someone');
+    const labels = useMemo(() => labelMap(group?.members ?? []), [group]);
+    const nameOf = (id: string | null) => (id ? labels[id] : undefined) ?? 'someone';
     const totalCost = useMemo(() => records.filter(r => !r.draft).reduce((a, r) => a + totalOf(r), 0), [records]);
     const net = useMemo(() => computeBalances(me, groups, sessions, settlements).byGroup[groupId] ?? 0, [me, groups, sessions, settlements, groupId]);
     const meMember = group?.members.find(m => m.user_id === me);
@@ -284,7 +285,7 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
             setSettling(false);
         }
     };
-    const who = (id: string) => (group.members.find(m => m.user_id === id)?.name ?? 'Someone');
+    const who = (id: string) => labels[id] ?? 'Someone';
 
     const confirmText = {
         delete: { title: 'Delete group?', body: `This permanently deletes "${group.name}" and all ${records.length} of its expenses for every member.`, action: 'Delete' },
