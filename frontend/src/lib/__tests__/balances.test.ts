@@ -3,8 +3,8 @@ import { computeBalances, BalanceSession } from '../balances';
 
 const group = { id: 'g1', members: [{ user_id: 'me', name: 'Me' }, { user_id: 'amy', name: 'Amy' }, { user_id: 'bo', name: 'Bo' }] };
 const receipt = (over: Partial<BalanceSession> = {}): BalanceSession => ({
-    group_id: 'g1', paid_by: 'me', tax: 0, tip: 0, participants: ['Me', 'Amy'],
-    items: [{ price: 10, assigned_users: ['Me', 'Amy'] }], ...over,
+    group_id: 'g1', paid_by: 'me', tax: 0, tip: 0, participants: ['me', 'amy'],
+    items: [{ price: 10, assigned_users: ['me', 'amy'] }], ...over,
 });
 
 describe('computeBalances', () => {
@@ -25,8 +25,8 @@ describe('computeBalances', () => {
         const g2 = { id: 'g2', members: [{ user_id: 'me', name: 'Me' }, { user_id: 'amy', name: 'Amy' }] };
         const b = computeBalances('me', [group, g2], [
             receipt(), // amy owes me 5
-            receipt({ paid_by: 'amy', items: [{ price: 4, assigned_users: ['Me', 'Amy'] }] }), // I owe amy 2
-            receipt({ group_id: 'g2', items: [{ price: 20, assigned_users: ['Me', 'Amy'] }] }), // amy owes me 10
+            receipt({ paid_by: 'amy', items: [{ price: 4, assigned_users: ['me', 'amy'] }] }), // I owe amy 2
+            receipt({ group_id: 'g2', items: [{ price: 20, assigned_users: ['me', 'amy'] }] }), // amy owes me 10
         ], []);
         expect(b.friends.amy.net).toBe(13);
         expect(b.friends.amy.byGroup).toEqual({ g1: 3, g2: 10 });
@@ -38,22 +38,34 @@ describe('computeBalances', () => {
         expect(iOwe.friends.amy.net).toBe(-3);
     });
     it('ignores debts between two other people', () => {
-        const b = computeBalances('me', [group], [receipt({ paid_by: 'bo', participants: ['Amy', 'Bo'], items: [{ price: 10, assigned_users: ['Amy', 'Bo'] }] })], []);
+        const b = computeBalances('me', [group], [receipt({ paid_by: 'bo', participants: ['amy', 'bo'], items: [{ price: 10, assigned_users: ['amy', 'bo'] }] })], []);
         expect(b.friends).toEqual({});
     });
-    it('ignores guests, unassigned items and ambiguous duplicate names', () => {
-        const dup = { id: 'g1', members: [...group.members, { user_id: 'amy2', name: 'Amy' }] };
-        expect(computeBalances('me', [dup], [receipt()], []).friends).toEqual({});
-        const guest = receipt({ participants: ['Me', 'Guest'], items: [{ price: 10, assigned_users: ['Me', 'Guest'] }] });
-        expect(computeBalances('me', [group], [guest], []).friends).toEqual({});
+    it('ignores people who are not in the group and items nobody had', () => {
+        const stranger = receipt({ participants: ['me', 'stranger'], items: [{ price: 10, assigned_users: ['me', 'stranger'] }] });
+        expect(computeBalances('me', [group], [stranger], []).friends).toEqual({});
         expect(computeBalances('me', [group], [receipt({ items: [{ price: 10, assigned_users: [] }] })], []).friends).toEqual({});
+    });
+    it('keeps two people with the same display name apart', () => {
+        const dup = { id: 'g1', members: [...group.members, { user_id: 'amy2', name: 'Amy' }] };
+        const b = computeBalances('me', [dup], [receipt({ participants: ['me', 'amy', 'amy2'], items: [{ price: 12, assigned_users: ['me', 'amy', 'amy2'] }] })], []);
+        expect(b.friends.amy.net).toBe(4);
+        expect(b.friends.amy2.net).toBe(4);
+        expect(b.byGroup.g1).toBe(8);
+    });
+    it('a temporary person (a guest id) is charged like anyone else, and someone who left is not', () => {
+        const withGuest = { id: 'g1', members: [...group.members, { user_id: 'guest-1', name: 'Cy' }] };
+        const r = receipt({ participants: ['me', 'guest-1', 'gone'], items: [{ price: 10, assigned_users: ['me', 'guest-1', 'gone'] }] });
+        const b = computeBalances('me', [withGuest], [r], []);
+        expect(b.friends['guest-1'].net).toBeCloseTo(3.33, 2);
+        expect(b.friends.gone).toBeUndefined();
     });
     it('falls back to the creator when paid_by is missing', () => {
         const b = computeBalances('me', [group], [receipt({ paid_by: null, user_id: 'me' })], []);
         expect(b.friends.amy.net).toBe(5);
     });
     it('keeps cents exact with odd splits', () => {
-        const b = computeBalances('me', [group], [receipt({ participants: ['Me', 'Amy', 'Bo'], items: [{ price: 10, assigned_users: ['Me', 'Amy', 'Bo'] }] })], []);
+        const b = computeBalances('me', [group], [receipt({ participants: ['me', 'amy', 'bo'], items: [{ price: 10, assigned_users: ['me', 'amy', 'bo'] }] })], []);
         expect(Math.round((b.friends.amy.net + b.friends.bo.net) * 100)).toBe(667);
     });
 

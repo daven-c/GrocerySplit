@@ -144,14 +144,14 @@ export default function GroupDetail({ groupId, initialTab = 'expenses', narrow, 
         return <p className="text-center text-faint py-16 animate-pulse">{loading ? 'Loading group…' : 'This group is no longer available.'}</p>;
     }
 
-    const memberNames = group.members.map(m => m.name);
+    const memberIds = group.members.map(m => m.user_id); // receipts name people by id
 
     const addReceipt = async () => {
         setAddOpen(false);
         if (creating.current) return;
         creating.current = true;
         try {
-            const id = await createSession({ groupId, name: 'Receipt', participants: memberNames, category: 'groceries', draft: true });
+            const id = await createSession({ groupId, name: 'Receipt', participants: memberIds, category: 'groceries', draft: true });
             await refresh();
             onOpenRecord(id, 'receipt', true);
         } catch (err: any) { creating.current = false; setError(err.message || 'Could not create the receipt'); }

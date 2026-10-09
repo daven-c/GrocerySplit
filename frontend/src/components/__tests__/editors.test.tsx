@@ -44,6 +44,22 @@ describe('Receipt editor (grocery split)', () => {
         expect(screen.getByText('Tax and tip are shared in proportion to what each person had. Pennies always add up.')).toBeInTheDocument();
     });
 
+    it('two members with the same display name are separate people on a receipt', async () => {
+        const u = userEvent.setup();
+        const { group, receipt } = await import('../../test/apiMock');
+        const sam = (id: string, username: string) => ({ user_id: id, joined_at: '2026-01-05T00:00:00Z', name: 'Sam', email: `${username}@x.com`, username, role: 'member' as const });
+        api.listGroups.mockResolvedValue([{ ...group, members: [group.members[0], sam('u-sk', 'sam_k'), sam('u-sr', 'sam_r')] }]);
+        api.getSession.mockResolvedValue({ ...receipt, tax: 0, participants: [ME, 'u-sk', 'u-sr'], items: [{ id: 'i1', name: 'Oat Milk', price: 10, assigned_users: [] }] });
+        renderWithData(<Split {...props} />);
+        await screen.findByText('Oat Milk');
+        await u.click(await screen.findByRole('button', { name: 'Sam (@sam_k) on Oat Milk' }));
+        expect(screen.getByRole('button', { name: 'Sam (@sam_k) on Oat Milk' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'Sam (@sam_r) on Oat Milk' })).toHaveAttribute('aria-pressed', 'false'); // the other Sam is untouched
+        expect(screen.getByText('Just Sam (@sam_k)')).toBeInTheDocument();
+        await u.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), [expect.objectContaining({ id: 'i1', assigned_users: ['u-sk'] })]));
+    });
+
     it('paint mode: pick a person, then tap rows to toggle them', async () => {
         const u = userEvent.setup();
         renderWithData(<Split {...props} />);
@@ -57,7 +73,7 @@ describe('Receipt editor (grocery split)', () => {
         expect(api.updateItem).not.toHaveBeenCalled(); // nothing is written until Save
         await u.click(screen.getByRole('button', { name: 'Save changes' }));
         await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.arrayContaining([
-            expect.objectContaining({ id: 'i3', assigned_users: ['Amy'] }), expect.objectContaining({ id: 'i2', assigned_users: ['Bo'] }),
+            expect.objectContaining({ id: 'i3', assigned_users: ['u-amy'] }), expect.objectContaining({ id: 'i2', assigned_users: ['u-bo'] }),
         ])));
         // tap the pill again to leave paint mode
         await u.click(screen.getByRole('button', { name: 'Amy', pressed: true }));
@@ -77,7 +93,7 @@ describe('Receipt editor (grocery split)', () => {
         expect(api.updateItem).not.toHaveBeenCalled();
         await u.click(screen.getByRole('button', { name: 'Save changes' }));
         await waitFor(() => expect(api.saveReceipt).toHaveBeenCalledWith('s1', expect.any(Object), expect.arrayContaining([
-            expect.objectContaining({ id: 'i2', assigned_users: ['Amy', 'Bo', 'Daven'] }), expect.objectContaining({ id: 'i3', assigned_users: [] }),
+            expect.objectContaining({ id: 'i2', assigned_users: ['u-amy', 'u-bo', ME] }), expect.objectContaining({ id: 'i3', assigned_users: [] }),
         ])));
     });
 
@@ -191,10 +207,10 @@ describe('Receipt editor (grocery split)', () => {
 
     it('syncs participants once, not again on every later refresh', async () => {
         const u = userEvent.setup();
-        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: ['Daven'] });
+        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: [ME] });
         renderWithData(<Split {...props} />);
         await screen.findByDisplayValue('Costco');
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: ['Daven', 'Amy', 'Bo'] }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: [ME, 'u-amy', 'u-bo'] }));
         await u.type(screen.getByLabelText('Tip'), '2'); // editing must not re-trigger the sync
         await new Promise(r => setTimeout(r, 300));
         const syncs = api.updateSession.mock.calls.filter(c => Object.keys(c[1]).length === 1 && 'participants' in c[1]);
@@ -223,10 +239,10 @@ describe('Receipt editor (grocery split)', () => {
     });
 
     it('keeps the stored participant list in step with the group', async () => {
-        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: ['Daven'] });
+        api.getSession.mockResolvedValue({ ...(await import('../../test/apiMock')).receipt, participants: [ME] });
         renderWithData(<Split {...props} />);
         await screen.findByDisplayValue('Costco');
-        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: ['Daven', 'Amy', 'Bo'] }));
+        await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s1', { participants: [ME, 'u-amy', 'u-bo'] }));
     });
 });
 
@@ -649,7 +665,7 @@ describe('One editor: switching how an expense is split', () => {
         expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Amounts', 'Shares']);
         await u.click(screen.getByRole('button', { name: 'Split by item' }));
         await waitFor(() => expect(api.updateSession).toHaveBeenCalledWith('s2', expect.objectContaining({
-            kind: 'receipt', name: 'October rent', category: 'rent', paid_by: ME, participants: ['Daven', 'Amy', 'Bo'],
+            kind: 'receipt', name: 'October rent', category: 'rent', paid_by: ME, participants: [ME, 'u-amy', 'u-bo'],
         })));
         await waitFor(() => expect(onSwitched).toHaveBeenCalledWith('receipt'));
     });

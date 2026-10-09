@@ -72,10 +72,10 @@ run('what users do: expenses, paying back, and more expenses', () => {
         expect((await seen(groupId)).friend(b)).toBe(30);
 
         // a NEW itemized receipt paid by A with items assigned to both
-        const r = await api.createSession({ groupId, name: 'Costco', participants: ['Test A', 'Test B'], items: [{ name: 'Milk', price: 10 }, { name: 'Eggs', price: 6 }] });
+        const r = await api.createSession({ groupId, name: 'Costco', participants: [a, b], items: [{ name: 'Milk', price: 10 }, { name: 'Eggs', price: 6 }] });
         const rec = await api.getSession(r);
-        await api.updateItem(r, rec.items[0].id, { assigned_users: ['Test A', 'Test B'] });
-        await api.updateItem(r, rec.items[1].id, { assigned_users: ['Test B'] });
+        await api.updateItem(r, rec.items[0].id, { assigned_users: [a, b] });
+        await api.updateItem(r, rec.items[1].id, { assigned_users: [b] });
         expect((await seen(groupId)).friend(b)).toBe(30 + 5 + 6);
 
         // B sees the mirror image
@@ -104,19 +104,19 @@ run('what users do: expenses, paying back, and more expenses', () => {
     it('a receipt paid by B where only B has items does not charge A, even with tax and nothing else assigned', async () => {
         await as('b');
         const before = (await seen(groupId)).friend(a);
-        const r = await api.createSession({ groupId, name: "B's shop", participants: ['Test A', 'Test B'], tax: 2, items: [{ name: 'Soup', price: 10 }, { name: 'Bread', price: 4 }] });
+        const r = await api.createSession({ groupId, name: "B's shop", participants: [a, b], tax: 2, items: [{ name: 'Soup', price: 10 }, { name: 'Bread', price: 4 }] });
         const rec = await api.getSession(r);
         // nothing assigned yet: nobody owes anything (tax belongs to items that nobody has claimed)
         expect((await seen(groupId)).friend(a)).toBe(before);
-        await api.updateItem(r, rec.items[0].id, { assigned_users: ['Test B'] });
-        await api.updateItem(r, rec.items[1].id, { assigned_users: ['Test B'] });
+        await api.updateItem(r, rec.items[0].id, { assigned_users: [b] });
+        await api.updateItem(r, rec.items[1].id, { assigned_users: [b] });
         expect((await seen(groupId)).friend(a)).toBe(before); // all B's: A owes nothing
     });
 
     it('an expense can be switched to itemized and back without losing its details', async () => {
         await as('a');
         const id = await api.createSession({ groupId, kind: 'expense', draft: true, name: 'Switch me', category: 'groceries', amount: 20, splitMethod: 'equal', splitData: everyoneEqual([a, b]) });
-        await api.updateSession(id, { kind: 'receipt', participants: ['Test A', 'Test B'] });
+        await api.updateSession(id, { kind: 'receipt', participants: [a, b] });
         expect(await api.getSession(id)).toMatchObject({ kind: 'receipt', name: 'Switch me', category: 'groceries' });
         await api.updateSession(id, { kind: 'expense', amount: 20, split_method: 'equal', split_data: everyoneEqual([a, b]) });
         expect(await api.getSession(id)).toMatchObject({ kind: 'expense', name: 'Switch me', amount: 20, split_method: 'equal' });
@@ -158,17 +158,17 @@ run('what users do: expenses, paying back, and more expenses', () => {
 
     it('saving a receipt is one atomic step and one log entry, with an item-level diff', async () => {
         await as('a');
-        const rid = await api.createSession({ groupId, name: 'Costco', category: 'groceries', participants: ['Test A', 'Test B'], items: [{ name: 'Milk', price: 4 }, { name: 'Eggs', price: 3 }] });
+        const rid = await api.createSession({ groupId, name: 'Costco', category: 'groceries', participants: [a, b], items: [{ name: 'Milk', price: 4 }, { name: 'Eggs', price: 3 }] });
         const rec = await api.getSession(rid);
         const milk = rec.items.find(i => i.name === 'Milk')!;
         await api.saveReceipt(rid, { name: 'Costco run', tax: 1 }, [
-            { id: milk.id, name: 'Milk', price: 5, assigned_users: ['Test A'] },
+            { id: milk.id, name: 'Milk', price: 5, assigned_users: [a] },
             { name: 'Bread', price: 2, assigned_users: [] },
         ]);
         const after = await api.getSession(rid);
         expect(after.name).toBe('Costco run');
         expect(after.items.map(i => i.name).sort()).toEqual(['Bread', 'Milk']);
-        expect(after.items.find(i => i.name === 'Milk')).toMatchObject({ price: 5, assigned_users: ['Test A'] });
+        expect(after.items.find(i => i.name === 'Milk')).toMatchObject({ price: 5, assigned_users: [a] });
         const edits = (await api.listExpenseLog(groupId)).filter(l => l.session_id === rid && l.action === 'edited');
         expect(edits).toHaveLength(1);
         expect(edits[0].total).toBe(8); // 5 + 2 + tax 1

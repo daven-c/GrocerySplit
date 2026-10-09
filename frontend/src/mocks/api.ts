@@ -19,13 +19,13 @@ let groups: Group[] = [
     ] },
 ];
 let sessions: Session[] = [
-    { id: 's1', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Costco', session_date: '2026-10-01', tax: 3.2, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-01T10:00:00Z', items: [
-        { id: 'i1', name: 'Oat Milk', price: 8, assigned_users: ['Daven', 'Amy'] },
-        { id: 'i2', name: 'Eggs', price: 6.5, assigned_users: ['Amy', 'Bo'] },
+    { id: 's1', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Costco', session_date: '2026-10-01', tax: 3.2, tip: 0, participants: [ME, 'u-amy', 'u-bo'], updated_at: '2026-10-01T10:00:00Z', items: [
+        { id: 'i1', name: 'Oat Milk', price: 8, assigned_users: [ME, 'u-amy'] },
+        { id: 'i2', name: 'Eggs', price: 6.5, assigned_users: ['u-amy', 'u-bo'] },
         { id: 'i3', name: 'Chicken Breast', price: 22.4, assigned_users: [] },
     ] },
-    { id: 's2', group_id: 'g1', user_id: 'u-amy', paid_by: 'u-amy', kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Trader Joe\'s', session_date: '2026-10-03', tax: 1, tip: 0, participants: ['Daven', 'Amy', 'Bo'], updated_at: '2026-10-03T10:00:00Z', items: [
-        { id: 'i4', name: 'Pasta', price: 4, assigned_users: ['Daven', 'Amy', 'Bo'] },
+    { id: 's2', group_id: 'g1', user_id: 'u-amy', paid_by: 'u-amy', kind: 'receipt', draft: false, category: 'groceries', amount: null, split_method: null, split_data: {}, name: 'Trader Joe\'s', session_date: '2026-10-03', tax: 1, tip: 0, participants: [ME, 'u-amy', 'u-bo'], updated_at: '2026-10-03T10:00:00Z', items: [
+        { id: 'i4', name: 'Pasta', price: 4, assigned_users: [ME, 'u-amy', 'u-bo'] },
     ] },
     { id: 's3', group_id: 'g1', user_id: ME, paid_by: ME, kind: 'expense', draft: false, category: 'rent', amount: 2400, split_method: 'shares', split_data: { [ME]: 2, 'u-amy': 1, 'u-bo': 1 }, name: 'October rent', session_date: '2026-10-01', tax: 0, tip: 0, participants: [], updated_at: '2026-10-01T09:00:00Z', items: [] },
 ];

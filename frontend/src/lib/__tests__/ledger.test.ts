@@ -52,8 +52,8 @@ describe('groupLedger: who is up or down', () => {
     });
     it('receipts: matched by name, tax shared by what was bought; unassigned items change nothing', () => {
         const receipt: LedgerRecord = {
-            group_id: 'g1', paid_by: 'amy', tax: 2, tip: 0, participants: ['Me', 'Amy', 'Bo'],
-            items: [{ price: 10, assigned_users: ['Me'] }, { price: 10, assigned_users: ['Amy'] }, { price: 99, assigned_users: [] }],
+            group_id: 'g1', paid_by: 'amy', tax: 2, tip: 0, participants: ['me', 'amy', 'bo'],
+            items: [{ price: 10, assigned_users: ['me'] }, { price: 10, assigned_users: ['amy'] }, { price: 99, assigned_users: [] }],
         };
         const l = groupLedger(group, [receipt], []);
         expect(net(l, 'me')).toBe(-11); // 10 + half of 2 tax

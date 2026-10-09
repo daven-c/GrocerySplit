@@ -42,6 +42,18 @@ async function handle(u: 'a' | 'b' | 'c') {
     return handles[u];
 }
 
+/** Receipts name people by id, so tests need each test user's id. */
+const userIds: Record<string, string> = {};
+async function uid(u: 'a' | 'b' | 'c') {
+    if (!userIds[u]) {
+        const was = current;
+        await as(u);
+        userIds[u] = (await supabase.auth.getUser()).data.user!.id;
+        if (was && was !== u) await as(was);
+    }
+    return userIds[u];
+}
+
 run('shared groups integration', () => {
     let groupId = '';
     let sessionId = '';
@@ -64,7 +76,7 @@ run('shared groups integration', () => {
 
     it('imports a JSON receipt into the group', async () => {
         const r = parseReceiptJson(EXAMPLE_RECEIPT_JSON);
-        sessionId = await api.createSession({ groupId, name: r.store!, date: r.date, tax: r.tax, tip: r.tip, items: r.items, participants: ['Test A'] });
+        sessionId = await api.createSession({ groupId, name: r.store!, date: r.date, tax: r.tax, tip: r.tip, items: r.items, participants: [await uid('a')] });
         const s = await api.getSession(sessionId);
         expect(s.group_id).toBe(groupId);
         expect(s.items.map(i => i.price).sort((a, b) => a - b)).toEqual([5.99, 7.5, 12.4]);
@@ -117,12 +129,12 @@ run('shared groups integration', () => {
     });
 
     it('any member can edit receipts, and the split matches a hand calculation', async () => {
-        await api.updateSession(sessionId, { participants: ['Test A', 'Test B'] });
+        await api.updateSession(sessionId, { participants: [await uid('a'), await uid('b')] });
         let s = await api.getSession(sessionId);
         const by = Object.fromEntries(s.items.map(i => [i.name, i]));
-        await api.updateItem(sessionId, by['Organic Honeycrisp Apples'].id, { assigned_users: ['Test A'] });
-        await api.updateItem(sessionId, by['Oat Milk'].id, { assigned_users: ['Test A', 'Test B'] });
-        await api.updateItem(sessionId, by['Free Range Eggs'].id, { assigned_users: ['Test B'] });
+        await api.updateItem(sessionId, by['Organic Honeycrisp Apples'].id, { assigned_users: [await uid('a')] });
+        await api.updateItem(sessionId, by['Oat Milk'].id, { assigned_users: [await uid('a'), await uid('b')] });
+        await api.updateItem(sessionId, by['Free Range Eggs'].id, { assigned_users: [await uid('b')] });
         const extra = await api.addItem(sessionId, 'Manual', 1);
         await api.deleteItem(sessionId, extra.id);
         const second = await api.createSession({ groupId, name: 'B added this', items: [{ name: 'Chips', price: 3 }] });
@@ -131,7 +143,7 @@ run('shared groups integration', () => {
         s = await api.getSession(sessionId);
         const { totals } = computeSplit(s.items, s.participants, s.tax, s.tip);
         // A: 12.40 + 3.75 = 16.15, B: 3.75 + 5.99 = 9.74, tax 1.25 split by item cost
-        expect(Object.fromEntries(totals)).toEqual({ 'Test A': 16.15 + 0.78, 'Test B': 9.74 + 0.47 });
+        expect(Object.fromEntries(totals)).toEqual({ [await uid('a')]: 16.15 + 0.78, [await uid('b')]: 9.74 + 0.47 }); // people are keyed by id
         expect((await api.listSessions(groupId)).map(x => x.id).sort()).toEqual([sessionId, second].sort());
     });
 
@@ -153,10 +165,10 @@ run('shared groups integration', () => {
         const [a, b, c] = [await uid('a'), await uid('b'), await uid('c')];
 
         await as('a');
-        const rec = await api.createSession({ groupId, name: 'Dinner', items: [{ name: 'Pizza', price: 20 }], participants: ['Test A', 'Test B'] });
+        const rec = await api.createSession({ groupId, name: 'Dinner', items: [{ name: 'Pizza', price: 20 }], participants: [await uid('a'), await uid('b')] });
         let s = await api.getSession(rec);
         expect(s.paid_by).toBe(a); // defaults to whoever added it
-        await api.updateItem(rec, s.items[0].id, { assigned_users: ['Test A', 'Test B'] });
+        await api.updateItem(rec, s.items[0].id, { assigned_users: [await uid('a'), await uid('b')] });
         await expect(api.updateSession(rec, { paid_by: c })).rejects.toThrow(); // outsider cannot be the payer
 
         const g = await api.getGroup(groupId);

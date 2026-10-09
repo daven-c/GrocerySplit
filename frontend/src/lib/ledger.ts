@@ -50,8 +50,6 @@ export interface GroupLedger {
 export function groupLedger(group: LedgerGroup, records: LedgerRecord[], settlements: LedgerSettlement[]): GroupLedger {
     const net = new Map<string, number>(group.members.map(m => [m.user_id, 0])); // cents
     const ids = new Set(group.members.map(m => m.user_id));
-    const byName = new Map<string, string | null>();
-    for (const m of group.members) byName.set(m.name, byName.has(m.name) ? null : m.user_id);
     const move = (id: string, c: number) => net.set(id, (net.get(id) ?? 0) + c);
 
     for (const r of records) {
@@ -61,7 +59,9 @@ export function groupLedger(group: LedgerGroup, records: LedgerRecord[], settlem
         const shares: [string | null | undefined, number][] =
             r.kind === 'expense'
                 ? Object.entries(splitExpense(r.amount ?? 0, r.split_method ?? 'equal', r.split_data ?? {}).shares).filter(([id]) => ids.has(id))
-                : computeSplit(r.items, r.participants, r.tax, r.tip).totals.map(([name, amt]) => [byName.get(name), amt] as [string | null | undefined, number]);
+                : // Receipts name people by id too, so two people with the same display name stay apart. Someone who has
+                  // left the group can't be settled with, so they are not charged.
+                  computeSplit(r.items, r.participants, r.tax, r.tip).totals.filter(([id]) => ids.has(id));
         for (const [debtor, amt] of shares) {
             if (!debtor || debtor === payer || amt <= 0) continue;
             const c = Math.round(amt * 100);
