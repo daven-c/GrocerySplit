@@ -95,7 +95,16 @@ export const ensurePersonalGroup = async () => {
     let p = groups.find(g => g.personal);
     if (!p) {
         p = { id: 'gp', name: 'Personal', owner_id: ME, created_at: '2026-01-01', personal: true, members: [{ user_id: ME, joined_at: '2026-01-01T00:00:00Z', name: 'Daven', email: 'me@example.com', username: 'daven', role: 'owner' }] };
+        // A little sample data so the Personal page can be looked at in mock mode.
+        p.members.push(
+            { user_id: 'g-bobby', joined_at: '2026-10-02T00:00:00Z', name: 'Bobby', email: '', role: 'member', pending: true, linked_user: 'u-bo', linked_username: 'bo_b' },
+            { user_id: 'g-cy', joined_at: '2026-10-03T00:00:00Z', name: 'Cy', email: '', role: 'member', pending: true },
+        );
         groups = [...groups, p];
+        sessions = [
+            { id: 'sp1', group_id: 'gp', user_id: ME, paid_by: ME, kind: 'expense', draft: false, category: 'dining', amount: 48, split_method: 'exact', split_data: { [ME]: 12, 'g-bobby': 20, 'g-cy': 16 }, name: 'Dinner out', session_date: '2026-10-04', tax: 0, tip: 0, participants: [], updated_at: '2026-10-04T20:00:00Z', items: [] },
+            ...sessions,
+        ];
     }
     return wait(p.id);
 };
