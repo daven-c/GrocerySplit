@@ -7,17 +7,26 @@
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="#FFFFFF" />
-		<meta name="description" content="Settled: split groceries, rent, bills and trips with the people you share them with." />
+		<meta name="description" content="Settled splits shared costs down to the penny. Tap who had what on a grocery receipt, split rent by room, or share a dinner bill with a link. Free to start." />
+		<meta name="robots" content="index, follow, max-image-preview:large" />
 		<link rel="canonical" href="https://settled.davenc.dev/" />
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="Settled" />
-		<meta property="og:title" content="Settled" />
-		<meta property="og:description" content="Split groceries, rent, bills and trips with the people you share them with." />
+		<meta property="og:title" content="Settled: split groceries, rent and bills fairly" />
+		<meta property="og:description" content="Settled splits shared costs down to the penny. Tap who had what on a grocery receipt, split rent by room, or share a dinner bill with a link. Free to start." />
 		<meta property="og:url" content="https://settled.davenc.dev/" />
-		<meta property="og:image" content="https://settled.davenc.dev/icon-512.png" />
-		<meta name="twitter:card" content="summary" />
+		<meta property="og:image" content="https://settled.davenc.dev/og-image.png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="Settled: split any shared cost, down to the penny." />
+		<meta property="og:locale" content="en_US" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Settled: split groceries, rent and bills fairly" />
+		<meta name="twitter:description" content="Settled splits shared costs down to the penny. Tap who had what on a grocery receipt, split rent by room, or share a dinner bill with a link. Free to start." />
+		<meta name="twitter:image" content="https://settled.davenc.dev/og-image.png" />
 		<link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
-		<title>Settled</title>
+		<title>Settled: split groceries, rent and bills fairly</title>
+		<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "Settled", "url": "https://settled.davenc.dev/", "description": "Settled splits shared costs down to the penny. Tap who had what on a grocery receipt, split rent by room, or share a dinner bill with a link. Free to start.", "applicationCategory": "FinanceApplication", "operatingSystem": "Any (web browser)", "browserRequirements": "Requires JavaScript", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "image": "https://settled.davenc.dev/og-image.png"}</script>
 
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,7 +40,16 @@
 		/>
 	</head>
 	<body>
-		<div id="root"></div>
+		<div id="root">
+			<!-- What a crawler (or a visitor before the script loads) sees. React replaces all of this when the app starts. -->
+			<main style="font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;max-width:640px;margin:12vh auto 0;padding:0 24px;color:#26221E;line-height:1.5">
+				<p style="margin:0 0 24px;font-weight:900;font-size:22px;letter-spacing:-.02em">settled</p>
+				<h1 style="margin:0 0 16px;font-size:40px;line-height:1.1;letter-spacing:-.03em">Split the groceries down to the penny.</h1>
+				<p style="margin:0 0 24px;font-size:18px;color:#5E564E">Snap the receipt, tap who had what, and Settled works out everyone's share with tax and tip included. Rent and bills too, and balances carry across every group you're in. Start a quick split with no account, or create a free group.</p>
+				<p style="font-size:16px"><a href="/s/new">Start a quick split</a> &middot; <a href="/guides/split-groceries-with-roommates">Split groceries with roommates</a> &middot; <a href="/guides/split-rent-fairly">Split rent fairly</a> &middot; <a href="/guides/split-a-restaurant-bill">Split a restaurant bill</a></p>
+			</main>
+		</div>
+		<noscript><p style="text-align:center;font-family:system-ui,sans-serif">Settled needs JavaScript. The <a href="/guides">guides</a> work without it.</p></noscript>
 		<script type="module" src="/src/index.tsx"></script>
 	</body>
 </html>

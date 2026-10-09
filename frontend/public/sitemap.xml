@@ -2,5 +2,27 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<url>
 		<loc>https://settled.davenc.dev/</loc>
+		<lastmod>2026-10-09</lastmod>
+		<priority>1.0</priority>
+	</url>
+	<url>
+		<loc>https://settled.davenc.dev/guides</loc>
+		<lastmod>2026-10-09</lastmod>
+		<priority>0.8</priority>
+	</url>
+	<url>
+		<loc>https://settled.davenc.dev/guides/split-groceries-with-roommates</loc>
+		<lastmod>2026-10-09</lastmod>
+		<priority>0.8</priority>
+	</url>
+	<url>
+		<loc>https://settled.davenc.dev/guides/split-rent-fairly</loc>
+		<lastmod>2026-10-09</lastmod>
+		<priority>0.8</priority>
+	</url>
+	<url>
+		<loc>https://settled.davenc.dev/guides/split-a-restaurant-bill</loc>
+		<lastmod>2026-10-09</lastmod>
+		<priority>0.8</priority>
 	</url>
 </urlset>

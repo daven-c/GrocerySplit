@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+# Quick split links are private (the link is the only key), so keep them out of search.
+Disallow: /s/
 
 Sitemap: https://settled.davenc.dev/sitemap.xml
