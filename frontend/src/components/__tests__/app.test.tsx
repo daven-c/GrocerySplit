@@ -110,6 +110,19 @@ describe('Auth', () => {
         expect(await screen.findByText(/Overall you're/)).toBeInTheDocument(); // back in the app
     });
 
+    it('sign-up for an address that already has an account says so, instead of promising an email', async () => {
+        const u = userEvent.setup();
+        authMock.signUp.mockResolvedValueOnce({ data: { session: null, user: { identities: [] } as any }, error: null });
+        render(<Auth initialMode="signup" onLogin={vi.fn()} />);
+        await u.type(screen.getByLabelText('Your name'), 'Sam');
+        await u.type(screen.getByLabelText('Username'), 'sam_99');
+        await u.type(screen.getByLabelText('Email'), 'sam@x.com');
+        await u.type(screen.getByLabelText('Password'), 'secret12');
+        await u.click(screen.getByRole('button', { name: 'Create account' }));
+        expect(await screen.findByText(/That email already has an account/)).toBeInTheDocument();
+        expect(screen.queryByText(/Account created/)).not.toBeInTheDocument();
+    });
+
     it('toggles password visibility', async () => {
         const u = userEvent.setup();
         render(<Auth onLogin={vi.fn()} />);

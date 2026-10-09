@@ -56,6 +56,11 @@ export default function Auth({ initialMode = 'login', onLogin, onBack }: AuthPro
                     options: { data: { name: name.trim(), username: handle } },
                 });
                 if (error) throw error;
+                // For an address that already has an account, Supabase pretends it worked and sends nothing (the user it
+                // returns has no identities). Say so, instead of promising an email that will never come.
+                if (!data.session && data.user && data.user.identities?.length === 0) {
+                    throw new Error('That email already has an account. Sign in instead, or use "Forgot password?" if you can\'t remember the password.');
+                }
                 if (data.session) onLogin();
                 else setNotice('Account created! Check your email for a confirmation link, then sign in.');
             }
